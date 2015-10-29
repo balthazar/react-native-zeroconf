@@ -1,0 +1,27 @@
+{
+  "name": "react-native-zeroconf",
+  "version": "0.1.0",
+  "description": "A Zeroconf discovery utility for react-native",
+  "main": "Zeroconf.js",
+  "scripts": {},
+  "keywords": [
+    "react-component",
+    "react-native",
+    "zeroconf",
+    "bonjour",
+    "avahi",
+    "ios",
+    "network",
+    "lan",
+    "network-discovery",
+    "discovery"
+  ],
+  "author": "Balthazar Gronon <bgronon@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "events": "^1.1.0"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.5"
+  }
+}
