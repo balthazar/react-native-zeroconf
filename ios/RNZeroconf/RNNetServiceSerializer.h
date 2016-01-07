@@ -12,7 +12,6 @@ FOUNDATION_EXPORT const NSString *kRNServiceKeysName;
 FOUNDATION_EXPORT const NSString *kRNServiceKeysFullName;
 FOUNDATION_EXPORT const NSString *kRNServiceKeysAddresses;
 FOUNDATION_EXPORT const NSString *kRNServiceKeysHost;
-FOUNDATION_EXPORT const NSString *kRNServiceKeysNetworkInterface;
 FOUNDATION_EXPORT const NSString *kRNServiceKeysPort;
 
 @interface RNNetServiceSerializer : NSObject

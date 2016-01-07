@@ -13,7 +13,6 @@ const NSString *kRNServiceKeysName = @"name";
 const NSString *kRNServiceKeysFullName = @"fullName";
 const NSString *kRNServiceKeysAddresses = @"addresses";
 const NSString *kRNServiceKeysHost = @"host";
-const NSString *kRNServiceKeysNetworkInterface = @"networkInterface";
 const NSString *kRNServiceKeysPort = @"port";
 
 @implementation RNNetServiceSerializer
@@ -26,7 +25,10 @@ const NSString *kRNServiceKeysPort = @"port";
 
     if (resolved)
     {
+        serviceInfo[kRNServiceKeysFullName] = [NSString stringWithFormat:@"%@%@", service.hostName, service.type];
+        serviceInfo[kRNServiceKeysAddresses] = [self addressesFromService:service];
         serviceInfo[kRNServiceKeysHost] = service.hostName;
+        serviceInfo[kRNServiceKeysPort] = @(service.port);
     }
 
     return [NSDictionary dictionaryWithDictionary:serviceInfo];
@@ -35,8 +37,6 @@ const NSString *kRNServiceKeysPort = @"port";
 + (NSArray<NSString *> *) addressesFromService:(NSNetService *)service
 {
     NSMutableArray<NSString *> *addresses = [[NSMutableArray alloc] init];
-
-    NSLog(@"%@", service.name);
 
     // source: http://stackoverflow.com/a/4976808/2715
     char addressBuffer[INET6_ADDRSTRLEN];
@@ -65,7 +65,6 @@ const NSString *kRNServiceKeysPort = @"port";
             {
                 NSString *address = [NSString stringWithUTF8String:addressStr];
                 [addresses addObject:address];
-                NSLog(@"%@", address);
             }
         }
     }
