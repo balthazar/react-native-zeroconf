@@ -67,7 +67,6 @@ RCT_EXPORT_METHOD(stop)
 - (instancetype) init
 {
     self = [super init];
-    self.hosts = [NSMutableDictionary dictionary];
     
     self.browser = [[NSNetServiceBrowser alloc] init];
     [self.browser setDelegate:self];

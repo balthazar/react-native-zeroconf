@@ -13,7 +13,6 @@
 
 @interface RNZeroconf : NSObject <RCTBridgeModule>
 
-@property (nonatomic, strong) NSMutableDictionary *hosts;
 @property (nonatomic, strong) NSNetServiceBrowser *browser;
 
 @end
