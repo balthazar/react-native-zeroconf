@@ -3,7 +3,7 @@
 //  RNZeroconf
 //
 //  Created by Balthazar on 25/10/2015.
-//  Copyright © 2015 Balthazar. All rights reserved.
+//  Copyright © 2016 Balthazar MIT
 //
 
 #import <Foundation/Foundation.h>
