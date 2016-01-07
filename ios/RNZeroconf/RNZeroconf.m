@@ -7,6 +7,7 @@
 //
 
 #import "RNZeroconf.h"
+#import "RNNetServiceSerializer.h"
 
 @implementation RNZeroconf
 
@@ -34,7 +35,11 @@ RCT_EXPORT_METHOD(stop)
             didFindService:(NSNetService *)service
                 moreComing:(BOOL)moreComing
 {
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfFound" body:service.name];
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfFound" body:serviceInfo];
+
+    service.delegate = self;
+    [service resolveWithTimeout:5.0];
 }
 
 // When a service is removed.
@@ -42,7 +47,8 @@ RCT_EXPORT_METHOD(stop)
           didRemoveService:(NSNetService*)service
                 moreComing:(BOOL)moreComing
 {
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfRemove" body:service.name];
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfRemove" body:serviceInfo];
 }
 
 // When the search fails.
@@ -62,6 +68,26 @@ RCT_EXPORT_METHOD(stop)
 - (void) netServiceBrowserWillSearch:(NSNetServiceBrowser *)browser
 {
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfStart" body:nil];
+}
+
+#pragma mark - NSNetServiceDelegate
+
+// When the service has resolved it's network data (IP addresses, etc)
+- (void) netServiceDidResolveAddress:(NSNetService *)sender
+{
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:sender resolved:YES];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfResolved" body:serviceInfo];
+
+    sender.delegate = nil;
+}
+
+// When the service has failed to resolve it's network data (IP addresses, etc)
+- (void) netService:(NSNetService *)sender
+      didNotResolve:(NSDictionary *)errorDict
+{
+    [self reportError:errorDict];
+
+    sender.delegate = nil;
 }
 
 #pragma mark - Class methods
