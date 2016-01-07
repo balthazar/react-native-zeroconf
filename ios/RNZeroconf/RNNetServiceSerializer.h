@@ -1,8 +1,8 @@
 //
-//  RNZeroconf.h
+//  RNNetService.h
 //  RNZeroconf
 //
-//  Created by Balthazar on 25/10/2015.
+//  Created by Jeremy White on 1/7/16.
 //  Copyright (c) 2016 Balthazar
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
@@ -20,12 +20,16 @@
 //
 
 #import <Foundation/Foundation.h>
-#import "RCTBridge.h"
-#import "RCTBridgeModule.h"
-#import "RCTEventDispatcher.h"
 
-@interface RNZeroconf : NSObject <RCTBridgeModule, NSNetServiceBrowserDelegate, NSNetServiceDelegate>
+FOUNDATION_EXPORT const NSString *kRNServiceKeysName;
+FOUNDATION_EXPORT const NSString *kRNServiceKeysFullName;
+FOUNDATION_EXPORT const NSString *kRNServiceKeysAddresses;
+FOUNDATION_EXPORT const NSString *kRNServiceKeysHost;
+FOUNDATION_EXPORT const NSString *kRNServiceKeysPort;
 
-@property (nonatomic, strong) NSNetServiceBrowser *browser;
+@interface RNNetServiceSerializer : NSObject
+
++ (NSDictionary *) serializeServiceToDictionary:(NSNetService *)service
+                                        resolved:(BOOL)resolved;
 
 @end

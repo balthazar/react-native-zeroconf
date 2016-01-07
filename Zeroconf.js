@@ -10,7 +10,7 @@ export default class Zeroconf extends EventEmitter {
   constructor (props) {
     super(props);
 
-    this._services = [];
+    this._services = {};
 
     DeviceEventEmitter.addListener('RNZeroconfStart', () => {
       this.emit('start');
@@ -24,17 +24,37 @@ export default class Zeroconf extends EventEmitter {
       this.emit('error', err);
     });
 
-    DeviceEventEmitter.addListener('RNZeroconfFound', name => {
+    DeviceEventEmitter.addListener('RNZeroconfFound', service => {
+      if (!service) { return; }
+
+      const name = service["name"];
       if (!name) { return; }
-      this._services.push(name)
-      this.emit('found', name);
+
+      this._services[name] = service;
+      this.emit('found', service);
       this.emit('update');
     });
 
-    DeviceEventEmitter.addListener('RNZeroconfRemove', name => {
-      const index = this._services.indexOf(name);
-      if (index !== -1) { this._services.splice(index, 1); }
-      this.emit('remove', name);
+    DeviceEventEmitter.addListener('RNZeroconfRemove', service => {
+      if (!service) { return; }
+
+      const name = service["name"];
+      if (!name) { return; }
+
+      delete this.services[name];
+      
+      this.emit('remove', service);
+      this.emit('update');
+    });
+
+    DeviceEventEmitter.addListener('RNZeroconfResolved', service => {
+      if (!service) { return; }
+
+      const name = service["name"];
+      if (!name) { return; }
+
+      this._services[name] = service;
+      this.emit('resolved', service);
       this.emit('update');
     });
 
@@ -52,7 +72,7 @@ export default class Zeroconf extends EventEmitter {
    * Defaults to _http._tcp. on local domain
    */
   scan (type = 'http', protocol = 'tcp', domain = 'local.') {
-    this._services = [];
+    this._services = {};
     this.emit('update');
     RNZeroconf.scan(type, protocol, domain);
   }
