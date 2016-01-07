@@ -49,11 +49,7 @@ RCT_EXPORT_METHOD(stop)
 - (void) netServiceBrowser:(NSNetServiceBrowser *)browser
               didNotSearch:(NSDictionary *)errorDict
 {
-    for (int a = 0; a < errorDict.count; ++a) {
-        NSString *key = [[errorDict allKeys] objectAtIndex:a];
-        NSString *val = [errorDict objectForKey:key];
-        [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:val];
-    }
+    [self reportError:errorDict];
 }
 
 // When the search stops.
@@ -68,7 +64,7 @@ RCT_EXPORT_METHOD(stop)
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfStart" body:nil];
 }
 
-#pragma mark - Initialize
+#pragma mark - Class methods
 
 - (instancetype) init
 {
@@ -78,6 +74,15 @@ RCT_EXPORT_METHOD(stop)
     [self.browser setDelegate:self];
     
     return self;
+}
+
+- (void) reportError:(NSDictionary *)errorDict
+{
+    for (int a = 0; a < errorDict.count; ++a) {
+        NSString *key = [[errorDict allKeys] objectAtIndex:a];
+        NSString *val = [errorDict objectForKey:key];
+        [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:val];
+    }
 }
 
 @end
