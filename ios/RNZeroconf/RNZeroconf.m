@@ -12,6 +12,8 @@
 
 @synthesize bridge = _bridge;
 
+#pragma mark - React Bridge Methods
+
 RCT_EXPORT_MODULE()
 
 RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain)
@@ -24,6 +26,8 @@ RCT_EXPORT_METHOD(stop)
 {
     [self.browser stop];
 }
+
+#pragma mark - NSNetServiceBrowserDelegate
 
 // When a service is discovered.
 - (void) netServiceBrowser:(NSNetServiceBrowser *)browser
@@ -63,6 +67,8 @@ RCT_EXPORT_METHOD(stop)
 {
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfStart" body:nil];
 }
+
+#pragma mark - Initialize
 
 - (instancetype) init
 {
