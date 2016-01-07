@@ -19,7 +19,7 @@ RCT_EXPORT_MODULE()
 
 RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain)
 {
-    [self.browser stop];
+    [self stop];
     [self.browser searchForServicesOfType:[NSString stringWithFormat:@"_%@._%@.", type, protocol] inDomain:domain];
 }
 
@@ -98,6 +98,12 @@ RCT_EXPORT_METHOD(stop)
     
     self.browser = [[NSNetServiceBrowser alloc] init];
     [self.browser setDelegate:self];
+
+    if (self)
+    {
+        _browser = [[NSNetServiceBrowser alloc] init];
+        [_browser setDelegate:self];
+    }
     
     return self;
 }
