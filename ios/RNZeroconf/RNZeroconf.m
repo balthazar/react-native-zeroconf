@@ -9,6 +9,12 @@
 #import "RNZeroconf.h"
 #import "RNNetServiceSerializer.h"
 
+@interface RNZeroconf ()
+
+@property (nonatomic, strong) NSMutableDictionary *resolvingServices;
+
+@end
+
 @implementation RNZeroconf
 
 @synthesize bridge = _bridge;
@@ -26,6 +32,7 @@ RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NS
 RCT_EXPORT_METHOD(stop)
 {
     [self.browser stop];
+    [self.resolvingServices removeAllObjects];
 }
 
 #pragma mark - NSNetServiceBrowserDelegate
@@ -37,6 +44,11 @@ RCT_EXPORT_METHOD(stop)
 {
     NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfFound" body:serviceInfo];
+
+    // resolving services must be strongly referenced or they will be garbage collected
+    // and will never resolve or timeout.
+    // source: http://stackoverflow.com/a/16130535/2715
+    self.resolvingServices[service.name] = service;
 
     service.delegate = self;
     [service resolveWithTimeout:5.0];
@@ -79,6 +91,7 @@ RCT_EXPORT_METHOD(stop)
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfResolved" body:serviceInfo];
 
     sender.delegate = nil;
+    [self.resolvingServices removeObjectForKey:sender.name];
 }
 
 // When the service has failed to resolve it's network data (IP addresses, etc)
@@ -88,6 +101,7 @@ RCT_EXPORT_METHOD(stop)
     [self reportError:errorDict];
 
     sender.delegate = nil;
+    [self.resolvingServices removeObjectForKey:sender.name];
 }
 
 #pragma mark - Class methods
@@ -95,12 +109,11 @@ RCT_EXPORT_METHOD(stop)
 - (instancetype) init
 {
     self = [super init];
-    
-    self.browser = [[NSNetServiceBrowser alloc] init];
-    [self.browser setDelegate:self];
 
     if (self)
     {
+        _resolvingServices = [[NSMutableDictionary alloc] init];
+
         _browser = [[NSNetServiceBrowser alloc] init];
         [_browser setDelegate:self];
     }
