@@ -11,7 +11,7 @@
 #import "RCTBridgeModule.h"
 #import "RCTEventDispatcher.h"
 
-@interface RNZeroconf : NSObject <RCTBridgeModule>
+@interface RNZeroconf : NSObject <RCTBridgeModule, NSNetServiceBrowserDelegate>
 
 @property (nonatomic, strong) NSNetServiceBrowser *browser;
 
