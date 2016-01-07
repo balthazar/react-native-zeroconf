@@ -39,11 +39,28 @@ Will return all names of services that have been resolved.
 ###### `stop` Triggered on scan stop
 ###### `found` Triggered when a service is found
 
-Broadcast the service name.
+Broadcast a service info object containing the service name as soon as it is found.
+
+###### `resolved` Triggered when a service is resolved
+
+Broadcast a service info object containing the service name, addresses, port, full name, and hostname.
+
+Example:
+
+    {
+      "host":"XeroxPrinter.local.",
+      "addresses":[ // can be either IPv4 or IPv6
+        "192.168.1.23",
+        "fe80::aebc:123:ffff:abcd"
+      ],
+      "name":"Xerox Printer",
+      "fullName":"XeroxPrinter.local._http._tcp.",
+      "port":8080
+    }
 
 ###### `remove` Triggered when a service is removed
 
-Broadcast the service name.
+Broadcast a service info object containing the service name.
 
 ###### `update` Triggered either when a service is found or removed
 ###### `error` Triggered when an error occurs

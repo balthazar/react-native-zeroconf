@@ -7,6 +7,13 @@
 //
 
 #import "RNZeroconf.h"
+#import "RNNetServiceSerializer.h"
+
+@interface RNZeroconf ()
+
+@property (nonatomic, strong, readonly) NSMutableDictionary *resolvingServices;
+
+@end
 
 @implementation RNZeroconf
 
@@ -16,13 +23,14 @@ RCT_EXPORT_MODULE()
 
 RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain)
 {
-    [self.browser stop];
+    [self stop];
     [self.browser searchForServicesOfType:[NSString stringWithFormat:@"_%@._%@.", type, protocol] inDomain:domain];
 }
 
 RCT_EXPORT_METHOD(stop)
 {
     [self.browser stop];
+    [self.resolvingServices removeAllObjects];
 }
 
 // When a service is discovered.
@@ -30,7 +38,16 @@ RCT_EXPORT_METHOD(stop)
             didFindService:(NSNetService *)service
                 moreComing:(BOOL)moreComing
 {
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfFound" body:service.name];
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfFound" body:serviceInfo];
+
+    // resolving services must be strongly referenced or they will be garbage collected
+    // and will never resolve or timeout.
+    // source: http://stackoverflow.com/a/16130535/2715
+    self.resolvingServices[service.name] = service;
+
+    service.delegate = self;
+    [service resolveWithTimeout:5.0];
 }
 
 // When a service is removed.
@@ -38,18 +55,15 @@ RCT_EXPORT_METHOD(stop)
           didRemoveService:(NSNetService*)service
                 moreComing:(BOOL)moreComing
 {
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfRemove" body:service.name];
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfRemove" body:serviceInfo];
 }
 
 // When the search fails.
 - (void) netServiceBrowser:(NSNetServiceBrowser *)browser
               didNotSearch:(NSDictionary *)errorDict
 {
-    for (int a = 0; a < errorDict.count; ++a) {
-        NSString *key = [[errorDict allKeys] objectAtIndex:a];
-        NSString *val = [errorDict objectForKey:key];
-        [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:val];
-    }
+    [self reportError:errorDict];
 }
 
 // When the search stops.
@@ -64,15 +78,52 @@ RCT_EXPORT_METHOD(stop)
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfStart" body:nil];
 }
 
+#pragma mark - NSNetServiceDelegate
+
+// When the service has resolved it's network data (IP addresses, etc)
+- (void) netServiceDidResolveAddress:(NSNetService *)sender
+{
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:sender resolved:YES];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfResolved" body:serviceInfo];
+
+    sender.delegate = nil;
+    [self.resolvingServices removeObjectForKey:sender.name];
+}
+
+// When the service has failed to resolve it's network data (IP addresses, etc)
+- (void) netService:(NSNetService *)sender
+      didNotResolve:(NSDictionary *)errorDict
+{
+    [self reportError:errorDict];
+
+    sender.delegate = nil;
+    [self.resolvingServices removeObjectForKey:sender.name];
+}
+
+#pragma mark - Class methods
+
 - (instancetype) init
 {
     self = [super init];
-    self.hosts = [NSMutableDictionary dictionary];
-    
-    self.browser = [[NSNetServiceBrowser alloc] init];
-    [self.browser setDelegate:self];
+
+    if (self)
+    {
+        _resolvingServices = [[NSMutableDictionary alloc] init];
+
+        _browser = [[NSNetServiceBrowser alloc] init];
+        [_browser setDelegate:self];
+    }
     
     return self;
+}
+
+- (void) reportError:(NSDictionary *)errorDict
+{
+    for (int a = 0; a < errorDict.count; ++a) {
+        NSString *key = [[errorDict allKeys] objectAtIndex:a];
+        NSString *val = [errorDict objectForKey:key];
+        [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:val];
+    }
 }
 
 @end

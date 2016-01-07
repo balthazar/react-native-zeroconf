@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0DE485C11BDD49E400020698 /* RNZeroconf.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 0DE485C01BDD49E400020698 /* RNZeroconf.h */; };
 		0DE485C31BDD49E400020698 /* RNZeroconf.m in Sources */ = {isa = PBXBuildFile; fileRef = 0DE485C21BDD49E400020698 /* RNZeroconf.m */; };
+		F87C07121C3EF51A006811AF /* RNNetServiceSerializer.m in Sources */ = {isa = PBXBuildFile; fileRef = F87C07111C3EF51A006811AF /* RNNetServiceSerializer.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -28,6 +29,8 @@
 		0DE485BD1BDD49E400020698 /* libRNZeroconf.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libRNZeroconf.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		0DE485C01BDD49E400020698 /* RNZeroconf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RNZeroconf.h; sourceTree = "<group>"; };
 		0DE485C21BDD49E400020698 /* RNZeroconf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RNZeroconf.m; sourceTree = "<group>"; };
+		F87C07101C3EF51A006811AF /* RNNetServiceSerializer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNNetServiceSerializer.h; sourceTree = "<group>"; };
+		F87C07111C3EF51A006811AF /* RNNetServiceSerializer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNNetServiceSerializer.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +65,8 @@
 			children = (
 				0DE485C01BDD49E400020698 /* RNZeroconf.h */,
 				0DE485C21BDD49E400020698 /* RNZeroconf.m */,
+				F87C07101C3EF51A006811AF /* RNNetServiceSerializer.h */,
+				F87C07111C3EF51A006811AF /* RNNetServiceSerializer.m */,
 			);
 			path = RNZeroconf;
 			sourceTree = "<group>";
@@ -124,6 +129,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0DE485C31BDD49E400020698 /* RNZeroconf.m in Sources */,
+				F87C07121C3EF51A006811AF /* RNNetServiceSerializer.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
