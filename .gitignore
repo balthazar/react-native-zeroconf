@@ -15,3 +15,5 @@ xcuserdata
 profile
 *.moved-aside
 DerivedData
+
+local.properties
