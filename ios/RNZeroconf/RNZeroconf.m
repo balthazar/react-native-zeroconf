@@ -33,6 +33,8 @@ RCT_EXPORT_METHOD(stop)
     [self.resolvingServices removeAllObjects];
 }
 
+#pragma mark - NSNetServiceBrowserDelegate
+
 // When a service is discovered.
 - (void) netServiceBrowser:(NSNetServiceBrowser *)browser
             didFindService:(NSNetService *)service
