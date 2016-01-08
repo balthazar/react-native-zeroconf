@@ -24,18 +24,20 @@ export default class Zeroconf extends EventEmitter {
 
     DeviceEventEmitter.addListener('RNZeroconfFound', service => {
       if (!service || !service.name) { return }
+      const { name } = service
 
-      this._services[service.name] = service
-      this.emit('found', service)
+      this._services[name] = service
+      this.emit('found', name)
       this.emit('update')
     })
 
     DeviceEventEmitter.addListener('RNZeroconfRemove', service => {
       if (!service || !service.name) { return }
+      const { name } = service
 
-      delete this.services[service.name]
+      delete this.services[name]
 
-      this.emit('remove', service)
+      this.emit('remove', name)
       this.emit('update')
     })
 
