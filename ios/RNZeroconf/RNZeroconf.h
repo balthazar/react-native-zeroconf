@@ -2,8 +2,8 @@
 //  RNZeroconf.h
 //  RNZeroconf
 //
-//  Created by Balthazar on 25/10/2015.
-//  Copyright © 2016 Balthazar MIT
+//  Created by Balthazar Gronon on 25/10/2015.
+//  Copyright © 2016 Balthazar Gronon MIT
 //
 
 #import <Foundation/Foundation.h>

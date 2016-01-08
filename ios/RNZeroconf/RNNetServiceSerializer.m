@@ -3,7 +3,7 @@
 //  RNZeroconf
 //
 //  Created by Jeremy White on 7/1/2016.
-//  Copyright © 2016 Balthazar MIT
+//  Copyright © 2016 Balthazar Gronon MIT
 //
 
 #import "RNNetServiceSerializer.h"
@@ -23,8 +23,7 @@ const NSString *kRNServiceKeysPort = @"port";
     NSMutableDictionary *serviceInfo = [[NSMutableDictionary alloc] init];
     serviceInfo[kRNServiceKeysName] = service.name;
 
-    if (resolved)
-    {
+    if (resolved) {
         serviceInfo[kRNServiceKeysFullName] = [NSString stringWithFormat:@"%@%@", service.hostName, service.type];
         serviceInfo[kRNServiceKeysAddresses] = [self addressesFromService:service];
         serviceInfo[kRNServiceKeysHost] = service.hostName;
@@ -41,8 +40,7 @@ const NSString *kRNServiceKeysPort = @"port";
     // source: http://stackoverflow.com/a/4976808/2715
     char addressBuffer[INET6_ADDRSTRLEN];
 
-    for (NSData *data in service.addresses)
-    {
+    for (NSData *data in service.addresses) {
         memset(addressBuffer, 0, INET6_ADDRSTRLEN);
 
         typedef union {
@@ -53,16 +51,15 @@ const NSString *kRNServiceKeysPort = @"port";
 
         ip_socket_address *socketAddress = (ip_socket_address *)[data bytes];
 
-        if (socketAddress && (socketAddress->sa.sa_family == AF_INET || socketAddress->sa.sa_family == AF_INET6))
-        {
+        if (socketAddress && (socketAddress->sa.sa_family == AF_INET || socketAddress->sa.sa_family == AF_INET6)) {
             const char *addressStr = inet_ntop(
-                                               socketAddress->sa.sa_family,
-                                               (socketAddress->sa.sa_family == AF_INET ? (void *)&(socketAddress->ipv4.sin_addr) : (void *)&(socketAddress->ipv6.sin6_addr)),
-                                               addressBuffer,
-                                               sizeof(addressBuffer));
+                socketAddress->sa.sa_family,
+                (socketAddress->sa.sa_family == AF_INET ? (void *)&(socketAddress->ipv4.sin_addr) : (void *)&(socketAddress->ipv6.sin6_addr)),
+                addressBuffer,
+                sizeof(addressBuffer)
+            );
 
-            if (addressStr)
-            {
+            if (addressStr) {
                 NSString *address = [NSString stringWithUTF8String:addressStr];
                 [addresses addObject:address];
             }

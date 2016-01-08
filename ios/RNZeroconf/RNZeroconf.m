@@ -2,8 +2,8 @@
 //  RNZeroconf.m
 //  RNZeroconf
 //
-//  Created by Balthazar on 25/10/2015.
-//  Copyright © 2016 Balthazar MIT
+//  Created by Balthazar Gronon on 25/10/2015.
+//  Copyright © 2016 Balthazar Gronon MIT
 //
 
 #import "RNZeroconf.h"
@@ -106,14 +106,12 @@ RCT_EXPORT_METHOD(stop)
 {
     self = [super init];
 
-    if (self)
-    {
+    if (self) {
         _resolvingServices = [[NSMutableDictionary alloc] init];
-
         _browser = [[NSNetServiceBrowser alloc] init];
         [_browser setDelegate:self];
     }
-    
+
     return self;
 }
 
