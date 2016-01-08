@@ -25,35 +25,26 @@ export default class Zeroconf extends EventEmitter {
     });
 
     DeviceEventEmitter.addListener('RNZeroconfFound', service => {
-      if (!service) { return; }
+      if (!service || !service.name) { return; }
 
-      const name = service["name"];
-      if (!name) { return; }
-
-      this._services[name] = service;
+      this._services[service.name] = service;
       this.emit('found', service);
       this.emit('update');
     });
 
     DeviceEventEmitter.addListener('RNZeroconfRemove', service => {
-      if (!service) { return; }
+      if (!service || !service.name) { return; }
 
-      const name = service["name"];
-      if (!name) { return; }
+      delete this.services[service.name];
 
-      delete this.services[name];
-      
       this.emit('remove', service);
       this.emit('update');
     });
 
     DeviceEventEmitter.addListener('RNZeroconfResolved', service => {
-      if (!service) { return; }
+      if (!service || !service.name) { return; }
 
-      const name = service["name"];
-      if (!name) { return; }
-
-      this._services[name] = service;
+      this._services[service.name] = service;
       this.emit('resolved', service);
       this.emit('update');
     });
