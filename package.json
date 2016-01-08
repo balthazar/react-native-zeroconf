@@ -3,6 +3,9 @@
   "version": "0.1.3",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "Zeroconf.js",
+  "scripts": {
+    "lint": "eslint Zeroconf.js"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/Apercu/react-native-zeroconf.git"
@@ -26,5 +29,10 @@
   },
   "peerDependencies": {
     "react-native": ">=0.5"
+  },
+  "devDependencies": {
+    "babel-eslint": "^4.1.6",
+    "eslint": "^1.10.3",
+    "eslint-config-zavatta": "^2.0.2"
   }
 }
