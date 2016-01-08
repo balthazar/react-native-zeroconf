@@ -51,7 +51,7 @@ Broadcast a service object once it is fully resolved
         '192.168.1.23',
         'fe80::aebc:123:ffff:abcd'
       ],
-      name:'Xerox Printer,
+      name: 'Xerox Printer',
       fullName: 'XeroxPrinter.local._http._tcp.',
       port: 8080
     }
