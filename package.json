@@ -1,6 +1,6 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "Zeroconf.js",
   "scripts": {
@@ -16,9 +16,10 @@
     "zeroconf",
     "bonjour",
     "avahi",
-    "ios",
     "network",
     "lan",
+    "ios",
+    "android",
     "network-discovery",
     "discovery"
   ],
