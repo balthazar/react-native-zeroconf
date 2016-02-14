@@ -35,7 +35,7 @@ export default class Zeroconf extends EventEmitter {
       if (!service || !service.name) { return }
       const { name } = service
 
-      delete this.services[name]
+      delete this._services[name]
 
       this.emit('remove', name)
       this.emit('update')
