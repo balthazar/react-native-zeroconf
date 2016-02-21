@@ -1,4 +1,4 @@
-# react-native-zeroconf [![Week Stars](http://starveller.bangular.io/api/repos/Apercu/react-native-zeroconf/badge)](http://starveller.bangular.io/Apercu/react-native-zeroconf)
+# react-native-zeroconf [![Week Stars](http://starveller.sigsev.io/api/repos/Apercu/react-native-zeroconf/badge)](http://starveller.sigsev.io/Apercu/react-native-zeroconf)
 
 > Basic Zeroconf implementation for React-native
 
