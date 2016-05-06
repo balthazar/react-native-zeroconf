@@ -16,21 +16,21 @@ Get running services advertizing themselves using Zeroconf implementations like 
 
 ##### Android
 
-1. Add the following line to the bottom of your project's `settings.gradle` file.
+ - Add the following line to the bottom of your project's `settings.gradle` file.
 
-    project(':react-native-zeroconf').projectDir = new File(settingsDir, '../node_modules/react-native-zeroconf/android')
+    `project(':react-native-zeroconf').projectDir = new File(settingsDir, '../node_modules/react-native-zeroconf/android')`
 
-2. Change the `include` line of your project's `settings.gradle` to include the `:react-native-zeroconf` project. Example:
+ - Change the `include` line of your project's `settings.gradle` to include the `:react-native-zeroconf` project. Example:
 
-    include ':react-native-zeroconf', ':app'
+    `include ':react-native-zeroconf', ':app'`
 
-3. Open your app's `build.gradle` file and add the following line to the `dependencies` block.
+ - Open your app's `build.gradle` file and add the following line to the `dependencies` block.
 
-    compile project(":react-native-zeroconf")
+    `compile project(":react-native-zeroconf")`
 
-4. In your app's `MainActivity.java` file, include this line as part of the `ReactInstanceManager.builder()` lines.
+ - In your app's `MainActivity.java` file, include this line as part of the `ReactInstanceManager.builder()` lines.
 
-    .addPackage(new ReactVideoPackage())
+    `.addPackage(new ZeroconfReactPackage())`
 
 ### API
 
