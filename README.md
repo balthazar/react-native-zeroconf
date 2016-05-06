@@ -20,7 +20,7 @@ Get running services advertizing themselves using Zeroconf implementations like 
 
     `project(':react-native-zeroconf').projectDir = new File(settingsDir, '../node_modules/react-native-zeroconf/android')`
 
- - Change the `include` line of your project's `settings.gradle` to include the `:react-native-zeroconf` project. Example:
+ - Change the `include` line of your project's `settings.gradle` to include the `:react-native-zeroconf` project.
 
     `include ':react-native-zeroconf', ':app'`
 
@@ -34,8 +34,8 @@ Get running services advertizing themselves using Zeroconf implementations like 
 
 ### API
 
-    import Zeroconf from 'react-native-zeroconf';
-    const zeroconf = new Zeroconf();
+    import Zeroconf from 'react-native-zeroconf'
+    const zeroconf = new Zeroconf()
 
 ##### Methods
 
@@ -53,7 +53,7 @@ Will return all names of services that have been resolved.
 
 ##### Events
 
-    zeroconf.on('start', () => { console.log('The scan has started.'); });
+    zeroconf.on('start', () => console.log('The scan has started.'))
 
 ###### `start` Triggered on scan start
 ###### `stop` Triggered on scan stop
