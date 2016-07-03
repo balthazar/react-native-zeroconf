@@ -82,7 +82,3 @@ Broadcast a service name removed from the network.
 
 ###### `update` Triggered either when a service is found or removed
 ###### `error` Triggered when an error occurs
-
-### Webpack
-
-This component uses ES6. If using webpack you should launch `babel` on the `Zeroconf.js` file.

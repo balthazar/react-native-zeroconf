@@ -1,6 +1,7 @@
 node_modules/
+dist/
+*.log
 
-build/
 *.pbxuser
 !default.pbxuser
 *.mode1v3
