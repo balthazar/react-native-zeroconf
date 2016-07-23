@@ -39,5 +39,11 @@
     "babel-preset-stage-0": "^6.5.0",
     "eslint": "^3.0.0",
     "eslint-config-zavatta": "^3.0.3"
+  },
+  "eslintConfig": {
+    "extends": ["zavatta"]
+  },
+  "babel": {
+    "presets": ["es2015", "stage-0"]
   }
 }
