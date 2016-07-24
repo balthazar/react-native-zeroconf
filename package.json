@@ -1,8 +1,9 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "dist",
+  "files": ["dist"],
   "scripts": {
     "lint": "eslint src/*.js",
     "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js"
@@ -28,9 +29,6 @@
   "license": "MIT",
   "dependencies": {
     "events": "^1.1.0"
-  },
-  "peerDependencies": {
-    "react-native": ">=0.5"
   },
   "devDependencies": {
     "babel-cli": "^6.10.1",
