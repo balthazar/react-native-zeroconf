@@ -8,7 +8,7 @@ export default class Zeroconf extends EventEmitter {
     constructor(props) {
         super(props)
         this._services = {}
-        this._listeners = {}
+        this._deviceListeners = {}
         this._onStart = this._onStart.bind(this)
         this._onStop = this._onStop.bind(this)
         this._onError = this._onError.bind(this)
@@ -20,12 +20,12 @@ export default class Zeroconf extends EventEmitter {
     /**
      * Remove all listeners
      */
-    removeListener(event) {
-        this._listeners[event].remove()
+    removeDeviceListener(event) {
+        this._deviceListeners[event].remove()
     }
 
-    removeAllListeners() {
-        Object.keys(this._listeners).map(e => this._listeners[e].remove())
+    removeAllDeviceListeners() {
+        Object.keys(this._deviceListeners).map(e => this._deviceListeners[e].remove())
     }
 
     /**
@@ -33,12 +33,12 @@ export default class Zeroconf extends EventEmitter {
      * Defaults to _http._tcp. on local domain
      */
     scan(type = 'http', protocol = 'tcp', domain = 'local.') {
-        this._listeners.start = DeviceEventEmitter.addListener('RNZeroconfStart', this._onStart)
-        this._listeners.stop = DeviceEventEmitter.addListener('RNZeroconfStop', this._onStop)
-        this._listeners.remove = DeviceEventEmitter.addListener('RNZeroconfStop', this._onRemove)
-        this._listeners.found = DeviceEventEmitter.addListener('RNZeroconfFound', this._onFound)
-        this._listeners.resolve = DeviceEventEmitter.addListener('RNZeroconfResolved', this._onResolved)
-        this._listeners.error = DeviceEventEmitter.addListener('RNZeroconfError', this._onError)
+        this._deviceListeners.start = DeviceEventEmitter.addListener('RNZeroconfStart', this._onStart)
+        this._deviceListeners.stop = DeviceEventEmitter.addListener('RNZeroconfStop', this._onStop)
+        this._deviceListeners.remove = DeviceEventEmitter.addListener('RNZeroconfStop', this._onRemove)
+        this._deviceListeners.found = DeviceEventEmitter.addListener('RNZeroconfFound', this._onFound)
+        this._deviceListeners.resolve = DeviceEventEmitter.addListener('RNZeroconfResolved', this._onResolved)
+        this._deviceListeners.error = DeviceEventEmitter.addListener('RNZeroconfError', this._onError)
 
         this._services = {}
         this.emit('update')
