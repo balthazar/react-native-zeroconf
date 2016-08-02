@@ -50,7 +50,7 @@ export default class Zeroconf extends EventEmitter {
      */
     stop() {
         RNZeroconf.stop()
-        this.removeAllListeners()
+        this.removeAllDeviceListeners()
     }
 
     /**
