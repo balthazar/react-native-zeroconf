@@ -1,70 +1,131 @@
-import { NativeModules, DeviceEventEmitter } from 'react-native'
-import { EventEmitter } from 'events'
+import {NativeModules, DeviceEventEmitter} from 'react-native'
+import {EventEmitter} from 'events'
 
 const RNZeroconf = NativeModules.RNZeroconf
 
 export default class Zeroconf extends EventEmitter {
 
-  constructor (props) {
-    super(props)
+    constructor(props) {
+        super(props)
+        this._services = {}
+        this._listeners = {}
+        this._onStart = this._onStart.bind(this)
+        this._onStop = this._onStop.bind(this)
+        this._onError = this._onError.bind(this)
+        this._onFound = this._onFound.bind(this)
+        this._onResolved = this._onResolved.bind(this)
+        this._onRemove = this._onRemove.bind(this)
+    }
 
-    this._services = {}
+    /**
+     * Remove all listeners
+     */
+    removeListener(event) {
+        this._listeners[event].remove()
+    }
 
-    DeviceEventEmitter.addListener('RNZeroconfStart', () => this.emit('start'))
-    DeviceEventEmitter.addListener('RNZeroconfStop', () => this.emit('stop'))
-    DeviceEventEmitter.addListener('RNZeroconfError', err => this.emit('error', err))
+    removeAllListeners() {
+        Object.keys(this._listeners).map(e => this._listeners[e].remove())
+    }
 
-    DeviceEventEmitter.addListener('RNZeroconfFound', service => {
-      if (!service || !service.name) { return }
-      const { name } = service
+    /**
+     * Scan for Zeroconf services,
+     * Defaults to _http._tcp. on local domain
+     */
+    scan(type = 'http', protocol = 'tcp', domain = 'local.') {
+        this._listeners.start = DeviceEventEmitter.addListener('RNZeroconfStart', this._onStart)
+        this._listeners.stop = DeviceEventEmitter.addListener('RNZeroconfStop', this._onStop)
+        this._listeners.remove = DeviceEventEmitter.addListener('RNZeroconfStop', this._onRemove)
+        this._listeners.found = DeviceEventEmitter.addListener('RNZeroconfFound', this._onFound)
+        this._listeners.resolve = DeviceEventEmitter.addListener('RNZeroconfResolved', this._onResolved)
+        this._listeners.error = DeviceEventEmitter.addListener('RNZeroconfError', this._onError)
 
-      this._services[name] = service
-      this.emit('found', name)
-      this.emit('update')
-    })
+        this._services = {}
+        this.emit('update')
+        RNZeroconf.scan(type, protocol, domain)
+    }
 
-    DeviceEventEmitter.addListener('RNZeroconfRemove', service => {
-      if (!service || !service.name) { return }
-      const { name } = service
+    /**
+     * Stop current scan if any
+     */
+    stop() {
+        RNZeroconf.stop()
+        this.removeAllListeners()
+    }
 
-      delete this._services[name]
+    /**
+     * Get all the services already resolved
+     */
+    getServices() {
+        return this._services
+    }
 
-      this.emit('remove', name)
-      this.emit('update')
-    })
 
-    DeviceEventEmitter.addListener('RNZeroconfResolved', service => {
-      if (!service || !service.name) { return }
+    /**
+     * On start
+     * @private
+     */
+    _onStart() {
+        this.emit('start')
+    }
 
-      this._services[service.name] = service
-      this.emit('resolved', service)
-      this.emit('update')
-    })
+    /**
+     * On stop
+     * @private
+     */
+    _onStop() {
+        this.emit('stop')
+    }
 
-  }
+    /**
+     * On service found
+     * @private
+     */
+    _onFound(service) {
+        if (!service || !service.name) {
+            return
+        }
+        const {name} = service
 
-  /**
-   * Get all the services already resolved
-   */
-  getServices () {
-    return this._services
-  }
+        this._services[name] = service
+        this.emit('found', name)
+        this.emit('update')
+    }
 
-  /**
-   * Scan for Zeroconf services,
-   * Defaults to _http._tcp. on local domain
-   */
-  scan (type = 'http', protocol = 'tcp', domain = 'local.') {
-    this._services = {}
-    this.emit('update')
-    RNZeroconf.scan(type, protocol, domain)
-  }
+    /**
+     * On service resolved
+     * @private
+     */
+    _onResolved(service) {
+        if (!service || !service.name) {
+            return
+        }
+        this._services[service.name] = service
+        this.emit('resolved', service)
+        this.emit('update')
+    }
 
-  /**
-   * Stop current scan if any
-   */
-  stop () {
-    RNZeroconf.stop()
-  }
+    /**
+     * On service removed
+     * @private
+     */
+    _onRemove(service) {
+        if (!service || !service.name) {
+            return
+        }
+        const {name} = service
 
+        delete this._services[name]
+
+        this.emit('remove', name)
+        this.emit('update')
+    }
+
+    /**
+     * On error
+     * @private
+     */
+    _onError(err) {
+        this.emit('error', err)
+    }
 }
