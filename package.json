@@ -34,8 +34,8 @@
     "babel-cli": "^6.10.1",
     "babel-eslint": "^6.1.0",
     "babel-preset-react-native": "^1.9.0",
-    "eslint": "^3.0.0",
-    "eslint-config-zavatta": "^3.0.3"
+    "eslint": "^3.3.0",
+    "eslint-config-zavatta": "^4.2.0"
   },
   "eslintConfig": {
     "extends": [
