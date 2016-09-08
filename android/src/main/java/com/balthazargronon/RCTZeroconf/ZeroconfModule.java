@@ -1,4 +1,4 @@
-package com.balthazargronon.react;
+package com.balthazargronon.RCTZeroconf;
 
 import android.content.Context;
 import android.net.nsd.NsdManager;

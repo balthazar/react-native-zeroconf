@@ -1,4 +1,4 @@
-package com.balthazargronon.react;
+package com.balthazargronon.RCTZeroconf;
 
 import com.facebook.react.ReactPackage;
 import com.facebook.react.bridge.JavaScriptModule;
