@@ -7,7 +7,8 @@ Get running services advertizing themselves using Zeroconf implementations like 
 ### Install
 
     npm i -S react-native-zeroconf
-    rnpm link react-native-zeroconf
+    react-native install react-native-zeroconf
+    react-native link react-native-zeroconf
 
 You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki) if you prefer a manual install.
 
