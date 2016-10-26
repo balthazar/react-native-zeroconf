@@ -37,7 +37,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     protected NsdManager mNsdManager;
     protected NsdManager.DiscoveryListener mDiscoveryListener;
-    protected NsdManager.ResolveListener mResolveListener;
 
     public ZeroconfModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -85,7 +84,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
 
                 sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
-                mNsdManager.resolveService(serviceInfo, mResolveListener);
+                mNsdManager.resolveService(serviceInfo, new ZeroResolveListener());
             }
 
             @Override
@@ -93,30 +92,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 WritableMap service = new WritableNativeMap();
                 service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
                 sendEvent(getReactApplicationContext(), EVENT_REMOVE, service);
-            }
-        };
-
-        mResolveListener = new NsdManager.ResolveListener() {
-            @Override
-            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                String error = "Resolving service failed with code: " + errorCode;
-                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
-            }
-
-            @Override
-            public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                WritableMap service = new WritableNativeMap();
-                service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
-                service.putString(KEY_SERVICE_FULL_NAME, serviceInfo.getHost().getHostName() + serviceInfo.getServiceType());
-                service.putString(KEY_SERVICE_HOST, serviceInfo.getHost().getHostName());
-                service.putInt(KEY_SERVICE_PORT, serviceInfo.getPort());
-
-                WritableArray addresses = new WritableNativeArray();
-                addresses.pushString(serviceInfo.getHost().getHostAddress());
-
-                service.putArray(KEY_SERVICE_ADDRESSES, addresses);
-
-                sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
             }
         };
 
@@ -129,8 +104,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         if (mDiscoveryListener != null) {
             mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
-
-        mResolveListener = null;
         mDiscoveryListener = null;
     }
 
@@ -141,4 +114,28 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
     }
+
+    private class ZeroResolveListener implements NsdManager.ResolveListener {
+        @Override
+        public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+            String error = "Resolving service failed with code: " + errorCode;
+            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+        }
+
+        @Override
+        public void onServiceResolved(NsdServiceInfo serviceInfo) {
+            WritableMap service = new WritableNativeMap();
+            service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
+            service.putString(KEY_SERVICE_FULL_NAME, serviceInfo.getHost().getHostName() + serviceInfo.getServiceType());
+            service.putString(KEY_SERVICE_HOST, serviceInfo.getHost().getHostName());
+            service.putInt(KEY_SERVICE_PORT, serviceInfo.getPort());
+
+            WritableArray addresses = new WritableNativeArray();
+            addresses.pushString(serviceInfo.getHost().getHostAddress());
+
+            service.putArray(KEY_SERVICE_ADDRESSES, addresses);
+
+            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
+        }
+    };
 }
