@@ -108,8 +108,8 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     protected void sendEvent(ReactContext reactContext,
-                           String eventName,
-                           @Nullable Object params) {
+                             String eventName,
+                             @Nullable Object params) {
         reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
@@ -137,5 +137,11 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
             sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
         }
-    };
+    }
+
+    @Override
+    public void onCatalystInstanceDestroy() {
+        super.onCatalystInstanceDestroy();
+        stop();
+    }
 }
