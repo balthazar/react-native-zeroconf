@@ -14,6 +14,8 @@ import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.youview.tinydnssd.MDNSDiscover;
 
+import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -34,6 +36,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_HOST = "host";
     public static final String KEY_SERVICE_PORT = "port";
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
+    public static final String KEY_SERVICE_TXT = "txt";
 
     protected DiscoverResolver mDiscoverResolver;
 
@@ -114,6 +117,13 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
             service.putString(KEY_SERVICE_HOST, serviceResult.srv.target);
             service.putInt(KEY_SERVICE_PORT, serviceResult.srv.port);
+
+            WritableMap txt = new WritableNativeMap();
+            for (Map.Entry<String, String> entry : serviceResult.txt.dict.entrySet()) {
+               txt.putString(entry.getKey(), entry.getValue());
+            }
+            
+            service.putMap(KEY_SERVICE_TXT, txt);
 
             WritableArray addresses = new WritableNativeArray();
             addresses.pushString(serviceResult.a.ipaddr);
