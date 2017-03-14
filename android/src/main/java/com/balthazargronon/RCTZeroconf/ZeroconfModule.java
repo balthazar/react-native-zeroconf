@@ -15,6 +15,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.youview.tinydnssd.MDNSDiscover;
 
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
@@ -57,8 +59,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             mDiscoverResolver = new MyDiscoverResolver(getReactApplicationContext(), serviceType, 1000);
         }
 
-        this.stop();
-
         mDiscoverResolver.start();
     }
 
@@ -77,6 +77,19 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
+    }
+
+    private String getServiceName(String fqdn) {
+        String pattern = "^[^.]*";
+        Pattern r = Pattern.compile(pattern);
+
+        Matcher m = r.matcher(fqdn);
+
+        if (m.find()) {
+            return m.group(0);
+        }
+
+        return fqdn;
     }
 
     private class MyDiscoverResolver extends DiscoverResolver {
@@ -103,17 +116,17 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         }
 
         @Override
-        public void onServiceLost(String serviceName, MDNSDiscover.Result serviceResult) {
+        public void onServiceLost(MDNSDiscover.Result serviceResult) {
             WritableMap service = new WritableNativeMap();
-            service.putString(KEY_SERVICE_NAME, serviceName);
+            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
             service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
             sendEvent(getReactApplicationContext(), EVENT_REMOVE, service);
         }
 
         @Override
-        public void onServiceResolved(String serviceName, MDNSDiscover.Result serviceResult) {
+        public void onServiceResolved(MDNSDiscover.Result serviceResult) {
             WritableMap service = new WritableNativeMap();
-            service.putString(KEY_SERVICE_NAME, serviceName);
+            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
             service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
             service.putString(KEY_SERVICE_HOST, serviceResult.srv.target);
             service.putInt(KEY_SERVICE_PORT, serviceResult.srv.port);
@@ -131,6 +144,12 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             service.putArray(KEY_SERVICE_ADDRESSES, addresses);
 
             sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
+        }
+
+        @Override
+        public void onResolveFailed(String errorMessage) {
+            String error = "Resolving service failed with message: " + errorMessage;
+            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
         }
 
         @Override

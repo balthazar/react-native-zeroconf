@@ -18,7 +18,7 @@ import com.youview.tinydnssd.MDNSDiscover;
  */
 
 public abstract class DiscoverResolver {
-    private static final int RESOLVE_TIMEOUT = 1000;
+    private static final int RESOLVE_TIMEOUT = 5000;
 
     private final MapDebouncer<String, Object> mDebouncer;
     private final Context mContext;
@@ -52,7 +52,7 @@ public abstract class DiscoverResolver {
                         if (mStarted) {
                             MDNSDiscover.Result service = mServices.remove(name);
                             if (service != null) {
-                                onServiceLost(name, service);
+                                onServiceLost(service);
                             }
                         }
                     }
@@ -63,7 +63,7 @@ public abstract class DiscoverResolver {
 
     public synchronized void start() {
         if (mStarted) {
-            throw new IllegalStateException();
+            return;
         }
         if (!mTransitioning) {
             discoverServices(mServiceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
@@ -74,7 +74,7 @@ public abstract class DiscoverResolver {
 
     public synchronized void stop() {
         if (!mStarted) {
-            throw new IllegalStateException();
+            return;
         }
         if (!mTransitioning) {
             stopServiceDiscovery(mDiscoveryListener);
@@ -93,8 +93,9 @@ public abstract class DiscoverResolver {
     public abstract void onDiscoveryStarted();
     public abstract void onDiscoveryStopped();
     public abstract void onServiceFound(NsdServiceInfo serviceInfo);
-    public abstract void onServiceLost(String serviceName, MDNSDiscover.Result serviceResult);
-    public abstract void onServiceResolved(String serviceName, MDNSDiscover.Result serviceResult);
+    public abstract void onServiceLost(MDNSDiscover.Result serviceResult);
+    public abstract void onServiceResolved(MDNSDiscover.Result serviceResult);
+    public abstract void onResolveFailed(String errorMessage);
 
     private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
         @Override
@@ -169,16 +170,19 @@ public abstract class DiscoverResolver {
                     serviceName = it.next();
                     it.remove();
                 }
+
                 try {
                     MDNSDiscover.Result result = resolve(serviceName, RESOLVE_TIMEOUT);
                     synchronized (DiscoverResolver.this) {
                         if (mStarted) {
                             mServices.put(serviceName, result);
-                            onServiceResolved(serviceName, result);
+                            onServiceResolved(result);
+                        } else {
+                            onResolveFailed("Discovery is not running anymore");
                         }
                     }
                 } catch(IOException e) {
-                    e.printStackTrace();
+                    onResolveFailed(e.getMessage());
                 }
             }
             return null;
