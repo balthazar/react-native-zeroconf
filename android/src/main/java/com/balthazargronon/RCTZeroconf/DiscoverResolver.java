@@ -182,7 +182,7 @@ public abstract class DiscoverResolver {
                         }
                     }
                 } catch(IOException e) {
-                    onResolveFailed(e.getMessage());
+                    onResolveFailed("" + e);
                 }
             }
             return null;
