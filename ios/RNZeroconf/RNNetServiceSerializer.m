@@ -14,7 +14,7 @@ const NSString *kRNServiceKeysFullName = @"fullName";
 const NSString *kRNServiceKeysAddresses = @"addresses";
 const NSString *kRNServiceKeysHost = @"host";
 const NSString *kRNServiceKeysPort = @"port";
-const NSString *kRNServiceTxtRecords = @"txtRecords";
+const NSString *kRNServiceTxtRecords = @"txt";
 
 @implementation RNNetServiceSerializer
 
@@ -33,12 +33,11 @@ const NSString *kRNServiceTxtRecords = @"txtRecords";
         NSDictionary<NSString *, NSData *> *txtRecordDict = [NSNetService dictionaryFromTXTRecordData:service.TXTRecordData];
         
         NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
-        for(NSString *key in txtRecordDict) {
-            dict[key] =  [[NSString alloc]
+        for (NSString *key in txtRecordDict) {
+            dict[key] = [[NSString alloc]
                           initWithData:txtRecordDict[key]
                           encoding:NSASCIIStringEncoding];
         }
-        
         serviceInfo[kRNServiceTxtRecords] = dict;
     }
 
