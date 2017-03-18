@@ -1,6 +1,7 @@
 package com.balthazargronon.RCTZeroconf;
 
 import android.content.Context;
+import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -14,6 +15,7 @@ import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.youview.tinydnssd.MDNSDiscover;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,7 +42,10 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
     public static final String KEY_SERVICE_TXT = "txt";
 
-    protected DiscoverResolver mDiscoverResolver;
+    public static final int RESOLVE_TIMEOUT = 0; // Will wait forever
+
+    protected NsdManager mNsdManager;
+    protected NsdManager.DiscoveryListener mDiscoveryListener;
 
     public ZeroconfModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -53,22 +58,95 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void scan(String type, String protocol, String domain) {
-        String serviceType = String.format("_%s._%s.", type, protocol);
-
-        if (mDiscoverResolver == null) {
-            mDiscoverResolver = new MyDiscoverResolver(getReactApplicationContext(), serviceType, 1000);
+        if (mNsdManager == null) {
+            mNsdManager = (NsdManager) getReactApplicationContext().getSystemService(Context.NSD_SERVICE);
         }
 
-        mDiscoverResolver.start();
+        this.stop();
+
+        mDiscoveryListener = new NsdManager.DiscoveryListener() {
+            @Override
+            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+                String error = "Starting service discovery failed with code: " + errorCode;
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+            }
+
+            @Override
+            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
+                String error = "Stopping service discovery failed with code: " + errorCode;
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+            }
+
+            @Override
+            public void onDiscoveryStarted(String serviceType) {
+                sendEvent(getReactApplicationContext(), EVENT_START, null);
+            }
+
+            @Override
+            public void onDiscoveryStopped(String serviceType) {
+                sendEvent(getReactApplicationContext(), EVENT_STOP, null);
+            }
+
+            @Override
+            public void onServiceFound(NsdServiceInfo serviceInfo) {
+                WritableMap service = new WritableNativeMap();
+                service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
+
+                sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
+
+                String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                resolve(name);
+            }
+
+            @Override
+            public void onServiceLost(NsdServiceInfo serviceInfo) {
+                WritableMap service = new WritableNativeMap();
+                service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
+                sendEvent(getReactApplicationContext(), EVENT_REMOVE, service);
+            }
+        };
+
+        String serviceType = String.format("_%s._%s.", type, protocol);
+        mNsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+    }
+
+    protected void resolve(String serviceName) {
+        WritableMap service = new WritableNativeMap();
+
+        try {
+            MDNSDiscover.Result serviceResult = MDNSDiscover.resolve(serviceName, RESOLVE_TIMEOUT);
+
+            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
+            service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
+            service.putString(KEY_SERVICE_HOST, serviceResult.srv.target);
+            service.putInt(KEY_SERVICE_PORT, serviceResult.srv.port);
+
+            WritableMap txt = new WritableNativeMap();
+            for (Map.Entry<String, String> entry : serviceResult.txt.dict.entrySet()) {
+                txt.putString(entry.getKey(), entry.getValue());
+            }
+
+            service.putMap(KEY_SERVICE_TXT, txt);
+
+            WritableArray addresses = new WritableNativeArray();
+            addresses.pushString(serviceResult.a.ipaddr);
+
+            service.putArray(KEY_SERVICE_ADDRESSES, addresses);
+
+            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
+        } catch (IOException e) {
+            String error = "Resolving service failed with message: " + e;
+            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+        }
     }
 
     @ReactMethod
     public void stop() {
-        if (mDiscoverResolver != null) {
-            mDiscoverResolver.stop();
+        if (mDiscoveryListener != null) {
+            mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
 
-        mDiscoverResolver = null;
+        mDiscoveryListener = null;
     }
 
     protected void sendEvent(ReactContext reactContext,
@@ -90,80 +168,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         }
 
         return fqdn;
-    }
-
-    private class MyDiscoverResolver extends DiscoverResolver {
-        MyDiscoverResolver(Context context, String serviceType, int debounceMillis) {
-            super(context, serviceType, debounceMillis);
-        }
-
-        @Override
-        public void onDiscoveryStarted() {
-            sendEvent(getReactApplicationContext(), EVENT_START, null);
-        }
-
-        @Override
-        public void onDiscoveryStopped() {
-            sendEvent(getReactApplicationContext(), EVENT_STOP, null);
-        }
-
-        @Override
-        public void onServiceFound(NsdServiceInfo serviceInfo) {
-            WritableMap service = new WritableNativeMap();
-            service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
-
-            sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
-        }
-
-        @Override
-        public void onServiceLost(MDNSDiscover.Result serviceResult) {
-            WritableMap service = new WritableNativeMap();
-            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
-            service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
-            sendEvent(getReactApplicationContext(), EVENT_REMOVE, service);
-        }
-
-        @Override
-        public void onServiceResolved(MDNSDiscover.Result serviceResult) {
-            WritableMap service = new WritableNativeMap();
-            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
-            service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
-            service.putString(KEY_SERVICE_HOST, serviceResult.srv.target);
-            service.putInt(KEY_SERVICE_PORT, serviceResult.srv.port);
-
-            WritableMap txt = new WritableNativeMap();
-            for (Map.Entry<String, String> entry : serviceResult.txt.dict.entrySet()) {
-               txt.putString(entry.getKey(), entry.getValue());
-            }
-            
-            service.putMap(KEY_SERVICE_TXT, txt);
-
-            WritableArray addresses = new WritableNativeArray();
-            addresses.pushString(serviceResult.a.ipaddr);
-
-            service.putArray(KEY_SERVICE_ADDRESSES, addresses);
-
-            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
-        }
-
-        @Override
-        public void onResolveFailed(String errorMessage) {
-            String error = "Resolving service failed with message: " + errorMessage;
-            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
-        }
-
-        @Override
-        public void onStartDiscoveryFailed(int errorCode) {
-            String error = "Starting service discovery failed with code: " + errorCode;
-            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
-        }
-
-        @Override
-        public void onStopDiscoveryFailed(int errorCode) {
-            String error = "Stopping service discovery failed with code: " + errorCode;
-            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
-        }
-
     }
 
     @Override
