@@ -33,6 +33,14 @@ If any scan is running, stop it. Otherwise do nothing.
 
 Will return all names of services that have been resolved.
 
+###### `removeDeviceListeners()` Remove listeners
+
+Allow you to clean the listeners, avoiding potential memory leaks (#33).
+
+###### `addDeviceListeners()` Add listeners
+
+If you cleaned the listeners and need to get them back on.
+
 ##### Events
 
 ```javascript
