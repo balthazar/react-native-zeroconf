@@ -35,7 +35,7 @@ Will return all names of services that have been resolved.
 
 ###### `removeDeviceListeners()` Remove listeners
 
-Allow you to clean the listeners, avoiding potential memory leaks (#33).
+Allow you to clean the listeners, avoiding potential memory leaks ([#33](https://github.com/Apercu/react-native-zeroconf/issues/33)).
 
 ###### `addDeviceListeners()` Add listeners
 
