@@ -31,4 +31,5 @@ repositories {
 
 dependencies {
     compile 'com.facebook.react:react-native:+'
+    compile 'com.youview:tinydnssd:1.2.7'
 }
