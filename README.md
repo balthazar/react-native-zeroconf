@@ -12,6 +12,8 @@ Get running services advertizing themselves using Zeroconf implementations like 
 
 You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki) if you prefer a manual install.
 
+If you get errors on the Android build, please try the `0.7.1` version.
+
 ### API
 
 ```javascript
