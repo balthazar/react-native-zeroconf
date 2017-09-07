@@ -13,12 +13,6 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
-import com.youview.tinydnssd.MDNSDiscover;
-
-import java.io.IOException;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
@@ -40,9 +34,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_HOST = "host";
     public static final String KEY_SERVICE_PORT = "port";
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
-    public static final String KEY_SERVICE_TXT = "txt";
-
-    public static final int RESOLVE_TIMEOUT = 0; // Will wait forever
 
     protected NsdManager mNsdManager;
     protected NsdManager.DiscoveryListener mDiscoveryListener;
@@ -93,9 +84,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
 
                 sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
-
-                String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                resolve(name);
+                mNsdManager.resolveService(serviceInfo, new ZeroResolveListener());
             }
 
             @Override
@@ -110,42 +99,11 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         mNsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
     }
 
-    protected void resolve(String serviceName) {
-        WritableMap service = new WritableNativeMap();
-
-        try {
-            MDNSDiscover.Result serviceResult = MDNSDiscover.resolve(serviceName, RESOLVE_TIMEOUT);
-
-            service.putString(KEY_SERVICE_NAME, getServiceName(serviceResult.srv.fqdn));
-            service.putString(KEY_SERVICE_FULL_NAME, serviceResult.srv.fqdn);
-            service.putString(KEY_SERVICE_HOST, serviceResult.srv.target);
-            service.putInt(KEY_SERVICE_PORT, serviceResult.srv.port);
-
-            WritableMap txt = new WritableNativeMap();
-            for (Map.Entry<String, String> entry : serviceResult.txt.dict.entrySet()) {
-                txt.putString(entry.getKey(), entry.getValue());
-            }
-
-            service.putMap(KEY_SERVICE_TXT, txt);
-
-            WritableArray addresses = new WritableNativeArray();
-            addresses.pushString(serviceResult.a.ipaddr);
-
-            service.putArray(KEY_SERVICE_ADDRESSES, addresses);
-
-            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
-        } catch (IOException e) {
-            String error = "Resolving service failed with message: " + e;
-            sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
-        }
-    }
-
     @ReactMethod
     public void stop() {
         if (mDiscoveryListener != null) {
             mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
-
         mDiscoveryListener = null;
     }
 
@@ -157,17 +115,32 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 .emit(eventName, params);
     }
 
-    private String getServiceName(String fqdn) {
-        String pattern = "^[^.]*";
-        Pattern r = Pattern.compile(pattern);
-
-        Matcher m = r.matcher(fqdn);
-
-        if (m.find()) {
-            return m.group(0);
+    private class ZeroResolveListener implements NsdManager.ResolveListener {
+        @Override
+        public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+            if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
+                mNsdManager.resolveService(serviceInfo, this);
+            } else {
+                String error = "Resolving service failed with code: " + errorCode;
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+            }
         }
 
-        return fqdn;
+        @Override
+        public void onServiceResolved(NsdServiceInfo serviceInfo) {
+            WritableMap service = new WritableNativeMap();
+            service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
+            service.putString(KEY_SERVICE_FULL_NAME, serviceInfo.getHost().getHostName() + serviceInfo.getServiceType());
+            service.putString(KEY_SERVICE_HOST, serviceInfo.getHost().getHostName());
+            service.putInt(KEY_SERVICE_PORT, serviceInfo.getPort());
+
+            WritableArray addresses = new WritableNativeArray();
+            addresses.pushString(serviceInfo.getHost().getHostAddress());
+
+            service.putArray(KEY_SERVICE_ADDRESSES, addresses);
+
+            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
+        }
     }
 
     @Override
