@@ -16,6 +16,10 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import javax.annotation.Nullable;
 
+import java.util.Locale;
+import java.util.Map;
+import java.io.UnsupportedEncodingException;
+
 /**
  * Created by Jeremy White on 8/1/2016.
  * Copyright © 2016 Balthazar Gronon MIT
@@ -34,6 +38,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_HOST = "host";
     public static final String KEY_SERVICE_PORT = "port";
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
+    public static final String KEY_SERVICE_TXT = "txt";
 
     protected NsdManager mNsdManager;
     protected NsdManager.DiscoveryListener mDiscoveryListener;
@@ -133,6 +138,21 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             service.putString(KEY_SERVICE_FULL_NAME, serviceInfo.getHost().getHostName() + serviceInfo.getServiceType());
             service.putString(KEY_SERVICE_HOST, serviceInfo.getHost().getHostName());
             service.putInt(KEY_SERVICE_PORT, serviceInfo.getPort());
+
+			WritableMap txtRecords = new WritableNativeMap();
+
+			Map<String, byte[]> attributes = serviceInfo.getAttributes();
+			for (String key : attributes.keySet()) {
+				try {
+					byte[] recordValue = attributes.get(key);
+					txtRecords.putString(String.format(Locale.US, "%s", key), String.format(Locale.US, "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
+				} catch (UnsupportedEncodingException e) {
+					String error = "Failed to encode txtRecord: " + e;
+                	sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+				}
+			}
+
+            service.putMap(KEY_SERVICE_TXT, txtRecords);
 
             WritableArray addresses = new WritableNativeArray();
             addresses.pushString(serviceInfo.getHost().getHostAddress());
