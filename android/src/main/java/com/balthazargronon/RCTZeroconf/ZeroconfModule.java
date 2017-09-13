@@ -145,7 +145,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 			for (String key : attributes.keySet()) {
 				try {
 					byte[] recordValue = attributes.get(key);
-					txtRecords.putString(String.format(Locale.US, "%s", key), String.format(Locale.US, "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
+					txtRecords.putString(String.format(Locale.getDefault(), "%s", key), String.format(Locale.getDefault(), "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
 				} catch (UnsupportedEncodingException e) {
 					String error = "Failed to encode txtRecord: " + e;
                 	sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
