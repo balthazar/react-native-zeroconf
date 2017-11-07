@@ -12,6 +12,8 @@ Get running services advertizing themselves using Zeroconf implementations like 
 
 You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki) if you prefer a manual install.
 
+TXT records will be available on iOS and Android >= 7.
+
 ### API
 
 ```javascript
@@ -32,6 +34,14 @@ If any scan is running, stop it. Otherwise do nothing.
 ###### `getServices()` Returns resolved services
 
 Will return all names of services that have been resolved.
+
+###### `removeDeviceListeners()` Remove listeners
+
+Allow you to clean the listeners, avoiding potential memory leaks ([#33](https://github.com/Apercu/react-native-zeroconf/issues/33)).
+
+###### `addDeviceListeners()` Add listeners
+
+If you cleaned the listeners and need to get them back on.
 
 ##### Events
 

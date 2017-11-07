@@ -40,6 +40,10 @@ RCT_EXPORT_METHOD(stop)
             didFindService:(NSNetService *)service
                 moreComing:(BOOL)moreComing
 {
+    if (service == nil) {
+      return;
+    }
+
     NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfFound" body:serviceInfo];
 
@@ -57,6 +61,10 @@ RCT_EXPORT_METHOD(stop)
           didRemoveService:(NSNetService*)service
                 moreComing:(BOOL)moreComing
 {
+    if (service == nil) {
+      return;
+    }
+
     NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfRemove" body:serviceInfo];
 }
