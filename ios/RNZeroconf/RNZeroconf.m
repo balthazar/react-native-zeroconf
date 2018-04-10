@@ -33,6 +33,11 @@ RCT_EXPORT_METHOD(stop)
     [self.resolvingServices removeAllObjects];
 }
 
++ (BOOL)requiresMainQueueSetup
+{
+    return YES;
+}
+
 #pragma mark - NSNetServiceBrowserDelegate
 
 // When a service is discovered.
