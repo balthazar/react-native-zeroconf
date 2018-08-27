@@ -12,6 +12,7 @@
 @interface RNZeroconf ()
 
 @property (nonatomic, strong, readonly) NSMutableDictionary *resolvingServices;
+@property (nonatomic, strong, readonly) NSMutableDictionary *publishedServices;
 
 @end
 
@@ -31,6 +32,29 @@ RCT_EXPORT_METHOD(stop)
 {
     [self.browser stop];
     [self.resolvingServices removeAllObjects];
+}
+
+RCT_EXPORT_METHOD(registerService:(NSString *)domain
+                  type:(NSString *)type
+                  name:(NSString *)name
+                  port:(int)port)
+{
+    const NSNetService *svc = [[NSNetService alloc] initWithDomain:domain type:type name:name port:port];
+    [svc setDelegate:self];
+    [svc scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+
+    [svc publish];
+    self.publishedServices[svc.name] = svc;
+    NSLog(@"zeroconf publish called");
+}
+
+RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
+{
+    NSNetService *svc = self.publishedServices[serviceName];
+    
+    if (svc) {
+        [svc stop];
+    }
 }
 
 #pragma mark - NSNetServiceBrowserDelegate
@@ -110,6 +134,44 @@ RCT_EXPORT_METHOD(stop)
     [self.resolvingServices removeObjectForKey:sender.name];
 }
 
+- (void)netServiceWillPublish:(NSNetService *)sender
+{
+    NSLog(@"zeroconf netServiceWillPublish");
+}
+
+// When a service is successfully published
+- (void)netServiceDidPublish:(NSNetService *)sender
+{
+    NSLog(@"zeroconf netServiceDidPublish");
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:sender resolved:YES];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfServiceRegister" body:serviceInfo];
+
+    self.publishedServices[sender.name] = sender;
+
+}
+
+- (void)netService:(NSNetService *)sender
+     didNotPublish:(NSDictionary<NSString *,NSNumber *> *)errorDict
+{
+    NSLog(@"zeroconf netServiceDidNotPublish");
+
+    [self reportError:errorDict];
+    NSLog(@"zeroconf %@", errorDict);
+    sender.delegate = nil;
+    [self.publishedServices removeObjectForKey:sender.name];
+
+}
+
+- (void)netServiceDidStop:(NSNetService *)sender
+{
+    sender.delegate = nil;
+    [self.publishedServices removeObjectForKey:sender.name];
+    
+    NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:sender resolved:YES];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfServiceUnregistered" body:serviceInfo];
+
+}
+
 #pragma mark - Class methods
 
 - (instancetype) init
@@ -118,6 +180,7 @@ RCT_EXPORT_METHOD(stop)
 
     if (self) {
         _resolvingServices = [[NSMutableDictionary alloc] init];
+        _publishedServices = [[NSMutableDictionary alloc] init];
         _browser = [[NSNetServiceBrowser alloc] init];
         [_browser setDelegate:self];
     }

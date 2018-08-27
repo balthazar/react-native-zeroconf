@@ -29,6 +29,10 @@
   "dependencies": {
     "events": "^1.1.0"
   },
+  "peerDependencies": {
+    "react": "^16.1.1",
+    "react-native": "^0.50.3"
+  },
   "devDependencies": {
     "babel-cli": "^6.10.1",
     "babel-eslint": "^6.1.0",
