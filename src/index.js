@@ -9,6 +9,7 @@ export default class Zeroconf extends EventEmitter {
     super(props)
 
     this._services = {}
+    this._publishedServices = {}
     this._dListeners = {}
 
     this.addDeviceListeners()
@@ -54,6 +55,22 @@ export default class Zeroconf extends EventEmitter {
       this.emit('update')
     })
 
+    this._dListeners.published = DeviceEventEmitter.addListener('RNZeroconfServiceRegistered', service => {
+      if (!service || !service.name) { return }
+
+      this._publishedServices[service.name] = service
+      this.emit('registered', service)
+      this.emit('update')
+    })
+
+    this._dListeners.unpublished = DeviceEventEmitter.addListener('RNZeroconfServiceUnregistered', service => {
+      if (!service || !service.name) { return }
+
+      delete this._publishedservices[service.name]
+      this.emit('unregistered', service)
+      this.emit('update')
+    })
+      
   }
 
   /**
@@ -88,4 +105,20 @@ export default class Zeroconf extends EventEmitter {
     RNZeroconf.stop()
   }
 
+  /**
+   * Publish a service
+   */
+   registerService(domain = 'local.', type, name, port) {
+     this.emit('update')    
+       RNZeroconf.registerService(domain, type, name, port)
+   }
+
+   /**
+    * Unpublish a service
+    */
+    unregisterService(name) {
+      this.emit('update')
+      RNZeroconf.unregisterService(name)
+    }
+    
 }
