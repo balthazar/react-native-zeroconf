@@ -156,6 +156,12 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
             WritableArray addresses = new WritableNativeArray();
             addresses.pushString(serviceInfo.getHost().getHostAddress());
+            
+            if (serviceInfo.getHost().getHostAddress().equals("")) { 
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, "Empty serviceName");
+                mNsdManager.resolveService(serviceInfo, this);
+                return;
+            }
 
             service.putArray(KEY_SERVICE_ADDRESSES, addresses);
 
