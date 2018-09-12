@@ -122,9 +122,12 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
         }else{
+            WritableMap payload = new WritableNativeMap();
+            // Put data to map
+            payload.putString("error", errorString);
             reactContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-            .emit(eventName, errorString);
+            .emit(eventName, payload);
         }
 
     }
