@@ -83,4 +83,4 @@ Broadcast a service name removed from the network.
 ###### `update` 
 Triggered either when a service is found, resolved or removed. It returns the service that has been updated. 
 
-###### `error` Triggered when an error occurs
+###### `errorEvent` Triggered when an error occurs. It returns the error code as object (Android) or int(iOS)
