@@ -179,11 +179,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
 	            @Override
 	            public void onServiceFound(ServiceInfo serviceInfo) {
-//	                WritableMap service = new WritableNativeMap();
-//	                service.putString(KEY_SERVICE_NAME, serviceInfo.getType());
-//	                sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
-
-		            try {
+					try {
 			            JSONObject serviceJSON = jsonifyService(serviceInfo);
 			            WritableMap service = convertJsonToMap(serviceJSON);
 			            Log.d(TAG, "service " + service.toString());
@@ -430,7 +426,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 			String name = names.nextElement();
 			props.put(name, service.getPropertyString(name));
 		}
-		obj.put("txtRecord", props);
+		obj.put("txt", props);
 
 		return obj;
 
