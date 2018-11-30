@@ -30,5 +30,7 @@ repositories {
 }
 
 dependencies {
+	compile 'org.jmdns:jmdns:3.5.4'
+
     compile 'com.facebook.react:react-native:+'
 }
