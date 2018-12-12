@@ -64,23 +64,23 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             @Override
             public void onStartDiscoveryFailed(String serviceType, int errorCode) {
                 String error = "Starting service discovery failed with code: " + errorCode;
-                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, null, error);
             }
 
             @Override
             public void onStopDiscoveryFailed(String serviceType, int errorCode) {
                 String error = "Stopping service discovery failed with code: " + errorCode;
-                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, null, error);
             }
 
             @Override
             public void onDiscoveryStarted(String serviceType) {
-                sendEvent(getReactApplicationContext(), EVENT_START, null);
+                sendEvent(getReactApplicationContext(), EVENT_START, null, null);
             }
 
             @Override
             public void onDiscoveryStopped(String serviceType) {
-                sendEvent(getReactApplicationContext(), EVENT_STOP, null);
+                sendEvent(getReactApplicationContext(), EVENT_STOP, null, null);
             }
 
             @Override
@@ -88,7 +88,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 WritableMap service = new WritableNativeMap();
                 service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
 
-                sendEvent(getReactApplicationContext(), EVENT_FOUND, service);
+                sendEvent(getReactApplicationContext(), EVENT_FOUND, service, null);
                 mNsdManager.resolveService(serviceInfo, new ZeroResolveListener());
             }
 
@@ -96,7 +96,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             public void onServiceLost(NsdServiceInfo serviceInfo) {
                 WritableMap service = new WritableNativeMap();
                 service.putString(KEY_SERVICE_NAME, serviceInfo.getServiceName());
-                sendEvent(getReactApplicationContext(), EVENT_REMOVE, service);
+                sendEvent(getReactApplicationContext(), EVENT_REMOVE, service, null);
             }
         };
 
@@ -114,10 +114,22 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     protected void sendEvent(ReactContext reactContext,
                              String eventName,
-                             @Nullable Object params) {
-        reactContext
+                             @Nullable Object params,
+                             @Nullable String errorString
+                             ) {
+        if (errorString == null){
+                    reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
+        }else{
+            WritableMap payload = new WritableNativeMap();
+            // Put data to map
+            payload.putString("error", errorString);
+            reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+            .emit(eventName, payload);
+        }
+
     }
 
     private class ZeroResolveListener implements NsdManager.ResolveListener {
@@ -127,7 +139,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 mNsdManager.resolveService(serviceInfo, this);
             } else {
                 String error = "Resolving service failed with code: " + errorCode;
-                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, null, error);
             }
         }
 
@@ -148,7 +160,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 txtRecords.putString(String.format(Locale.getDefault(), "%s", key), String.format(Locale.getDefault(), "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
               } catch (UnsupportedEncodingException e) {
                 String error = "Failed to encode txtRecord: " + e;
-                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, null, error);
               }
             }
 
@@ -156,10 +168,17 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
             WritableArray addresses = new WritableNativeArray();
             addresses.pushString(serviceInfo.getHost().getHostAddress());
+            
+            if (serviceInfo.getHost().getHostAddress().equals("")) { 
+                String notIpErrorString = "Ip not resolved";
+                sendEvent(getReactApplicationContext(), EVENT_ERROR, null, notIpErrorString);
+                mNsdManager.resolveService(serviceInfo, this);
+                return;
+            }
 
             service.putArray(KEY_SERVICE_ADDRESSES, addresses);
 
-            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service);
+            sendEvent(getReactApplicationContext(), EVENT_RESOLVE, service, null);
         }
     }
 

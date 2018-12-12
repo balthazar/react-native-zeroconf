@@ -32,11 +32,15 @@ This will initialize the scan from the `Zeroconf` instance. Will stop another sc
 
 ###### `stop()` Stop the scan
 
-If any scan is running, stop it. Otherwise do nothing.
+If any scan is running, stop it. Otherwise do nothing. Be sure to do this when the apps go to background, avoids potential memory leaks.
 
 ###### `getServices()` Returns resolved services
 
-Will return all names of services that have been resolved.
+Will return all names of services that have been found or resolved.
+
+###### `getResolvedServices()` Returns resolved services
+
+Will return all names of services that have been fully resolved.
 
 ###### `removeDeviceListeners()` Remove listeners
 
@@ -79,5 +83,7 @@ Broadcast a service object once it is fully resolved
 
 Broadcast a service name removed from the network.
 
-###### `update` Triggered either when a service is found or removed
-###### `error` Triggered when an error occurs
+###### `update` 
+Triggered either when a service is found, resolved or removed. It returns the service that has been updated. 
+
+###### `errorEvent` Triggered when an error occurs. It returns the error code as object (Android) or int(iOS)
