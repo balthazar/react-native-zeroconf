@@ -3,6 +3,7 @@ package com.balthazargronon.RCTZeroconf;
 import android.content.Context;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
+import android.net.wifi.WifiManager;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
@@ -42,6 +43,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     protected NsdManager mNsdManager;
     protected NsdManager.DiscoveryListener mDiscoveryListener;
+    protected WifiManager.MulticastLock multicastLock;
 
     public ZeroconfModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -59,6 +61,13 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         }
 
         this.stop();
+
+        if(multicastLock == null) {
+            WifiManager wifi = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            multicastLock = wifi.createMulticastLock("multicastLock");
+            multicastLock.setReferenceCounted(true);
+            multicastLock.acquire();
+        }
 
         mDiscoveryListener = new NsdManager.DiscoveryListener() {
             @Override
@@ -109,7 +118,11 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         if (mDiscoveryListener != null) {
             mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
+        if(multicastLock != null) {
+            multicastLock.release();
+        }
         mDiscoveryListener = null;
+        multicastLock = null;
     }
 
     protected void sendEvent(ReactContext reactContext,
