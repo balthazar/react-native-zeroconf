@@ -13,6 +13,14 @@ You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki)
 
 TXT records will be available on iOS and Android >= 7.
 
+For Android please ensure your manifest is requesting all necessary permissions.
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+```
+
 ### Example
 
 Take a look at the [example folder](./example). Install the dependencies, run `node server.js` and launch the project.
