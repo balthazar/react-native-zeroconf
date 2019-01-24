@@ -11,6 +11,11 @@
     "type": "git",
     "url": "git://github.com/Apercu/react-native-zeroconf.git"
   },
+  "files": [
+    "dist",
+    "android",
+    "ios"
+  ],
   "keywords": [
     "react-component",
     "react-native",
