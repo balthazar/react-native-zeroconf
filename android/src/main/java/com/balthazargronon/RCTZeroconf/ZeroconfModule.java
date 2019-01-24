@@ -62,7 +62,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
         this.stop();
 
-        if(multicastLock == null) {
+        if (multicastLock == null) {
             WifiManager wifi = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
             multicastLock = wifi.createMulticastLock("multicastLock");
             multicastLock.setReferenceCounted(true);
@@ -118,7 +118,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         if (mDiscoveryListener != null) {
             mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
-        if(multicastLock != null) {
+        if (multicastLock != null) {
             multicastLock.release();
         }
         mDiscoveryListener = null;
