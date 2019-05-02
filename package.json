@@ -1,6 +1,6 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "src",
   "scripts": {
@@ -12,9 +12,9 @@
     "url": "git://github.com/Apercu/react-native-zeroconf.git"
   },
   "files": [
-    "dist",
     "android",
-    "ios"
+    "ios",
+    "src"
   ],
   "keywords": [
     "react-component",
