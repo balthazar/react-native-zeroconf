@@ -13,7 +13,8 @@
   },
   "files": [
     "android",
-    "ios"
+    "ios",
+    "src"
   ],
   "keywords": [
     "react-component",
