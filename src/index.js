@@ -65,7 +65,7 @@ export default class Zeroconf extends EventEmitter {
     this._dListeners.unpublished = DeviceEventEmitter.addListener('RNZeroconfServiceUnregistered', service => {
       if (!service || !service.name) { return }
 
-      delete this._publishedservices[service.name]
+      delete this._publishedServices[service.name]
       this.emit('unregistered', service)
     })
 
