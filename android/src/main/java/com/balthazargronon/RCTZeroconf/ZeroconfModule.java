@@ -195,8 +195,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             addresses.pushString(host.getHostAddress());
 
             service.putArray(KEY_SERVICE_ADDRESSES, addresses);
-
-
         }
         service.putString(KEY_SERVICE_FULL_NAME, fullServiceName);
         service.putInt(KEY_SERVICE_PORT, serviceInfo.getPort());
@@ -216,7 +214,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
         service.putMap(KEY_SERVICE_TXT, txtRecords);
 
-
         return service;
     }
 
@@ -230,7 +227,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
                 sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
             }
         }
-
 
         @Override
         public void onServiceResolved(NsdServiceInfo serviceInfo) {
