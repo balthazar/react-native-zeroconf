@@ -106,14 +106,14 @@ export default class Zeroconf extends EventEmitter {
   /**
    * Publish a service
    */
-  registerService(domain = 'local.', type, name, port) {
+  publishService(domain = 'local.', type, name, port) {
     RNZeroconf.registerService(domain, type, name, port)
   }
 
   /**
    * Unpublish a service
    */
-  unregisterService(name) {
+  unpublishService(name) {
     RNZeroconf.unregisterService(name)
   }
 
