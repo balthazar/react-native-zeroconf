@@ -70,7 +70,7 @@ export default class Zeroconf extends EventEmitter {
       this.emit('unregistered', service)
       this.emit('update')
     })
-      
+
   }
 
   /**
@@ -108,17 +108,17 @@ export default class Zeroconf extends EventEmitter {
   /**
    * Publish a service
    */
-   registerService(domain = 'local.', type, name, port) {
-     this.emit('update')    
-       RNZeroconf.registerService(domain, type, name, port)
-   }
+  registerService(domain = 'local.', type, name, port) {
+    this.emit('update')
+    RNZeroconf.registerService(domain, type, name, port)
+  }
 
-   /**
-    * Unpublish a service
-    */
-    unregisterService(name) {
-      this.emit('update')
-      RNZeroconf.unregisterService(name)
-    }
-    
+  /**
+   * Unpublish a service
+   */
+  unregisterService(name) {
+    this.emit('update')
+    RNZeroconf.unregisterService(name)
+  }
+
 }
