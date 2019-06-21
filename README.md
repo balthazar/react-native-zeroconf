@@ -63,6 +63,12 @@ This adds a service for the current device to the discoverable services on the n
 `name` should be unique to the device, often the device name
 `port` should be an integer
 
+###### `unpublishService(name)` Unpublish a service
+
+This removes a service from those discoverable on the network.
+
+`name` should be the name used when publishing the service
+
 ##### Events
 
 ```javascript
