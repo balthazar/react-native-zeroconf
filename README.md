@@ -54,6 +54,15 @@ Allow you to clean the listeners, avoiding potential memory leaks ([#33](https:/
 
 If you cleaned the listeners and need to get them back on.
 
+###### `publishService(domain, type, name, port)` Publish a service
+
+This adds a service for the current device to the discoverable services on the network.
+
+`domain` should be the domain the service is sitting on, dot suffixed, for example `'local.'`
+`type` should be both type and protocol, underscore prefixed, for example `'_http._tcp'`
+`name` should be unique to the device, often the device name
+`port` should be an integer
+
 ##### Events
 
 ```javascript
