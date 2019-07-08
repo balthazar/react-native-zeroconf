@@ -39,12 +39,13 @@ RCT_EXPORT_METHOD(stop)
     return YES;
 }
 
-RCT_EXPORT_METHOD(registerService:(NSString *)domain
-                  type:(NSString *)type
+RCT_EXPORT_METHOD(registerService:(NSString *)type
+                  protocol:(NSString *)protocol
+                  domain:(NSString *)domain
                   name:(NSString *)name
                   port:(int)port)
 {
-    const NSNetService *svc = [[NSNetService alloc] initWithDomain:domain type:type name:name port:port];
+    const NSNetService *svc = [[NSNetService alloc] initWithDomain:domain type:[NSString stringWithFormat:@"_%@._%@.", type, protocol] name:name port:port];
     [svc setDelegate:self];
     [svc scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
 

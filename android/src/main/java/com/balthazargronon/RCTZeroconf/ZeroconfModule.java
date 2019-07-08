@@ -145,12 +145,13 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void registerService(String domain, String type, String name, int port) {
+    public void registerService(String type, String protocol, String domain, String name, int port) {
+        String serviceType = String.format("_%s._%s.", type, protocol);
 
         final NsdManager nsdManager = this.getNsdManager();
         NsdServiceInfo serviceInfo  = new NsdServiceInfo();
         serviceInfo.setServiceName(name);
-        serviceInfo.setServiceType(type);
+        serviceInfo.setServiceType(serviceType);
         serviceInfo.setPort(port);
 
         nsdManager.registerService(
