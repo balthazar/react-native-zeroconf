@@ -32,22 +32,25 @@
   "author": "Balthazar Gronon <bgronon@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "events": "^1.1.0"
+    "events": "^3.0.0"
   },
   "peerDependencies": {
     "react": "^16.1.1",
     "react-native": "^0.50.3"
   },
   "devDependencies": {
-    "babel-cli": "^6.10.1",
-    "babel-eslint": "^6.1.0",
-    "babel-preset-react-native": "^1.9.0",
-    "eslint": "^3.3.0",
-    "eslint-config-zavatta": "^4.2.0"
+    "babel-cli": "^6.26.0",
+    "babel-eslint": "^10.0.2",
+    "babel-preset-react-native": "^4.0.1",
+    "eslint": "^6.0.1",
+    "eslint-config-prettier": "^6.0.0",
+    "eslint-config-zavatta": "^6.0.3",
+    "prettier": "^1.18.2"
   },
   "eslintConfig": {
     "extends": [
-      "zavatta"
+      "zavatta",
+      "prettier"
     ]
   },
   "babel": {
