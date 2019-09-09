@@ -2,17 +2,17 @@
   "name": "react-native-zeroconf",
   "version": "0.11.1",
   "description": "A Zeroconf discovery utility for react-native",
-  "main": "dist",
+  "main": "src",
   "scripts": {
     "lint": "eslint src/*.js",
-    "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js"
+    "build": "rm -rf src && mkdir src && babel src -o src/index.js"
   },
   "repository": {
     "type": "git",
     "url": "git://github.com/Apercu/react-native-zeroconf.git"
   },
   "files": [
-    "dist",
+    "src",
     "android",
     "ios"
   ],
