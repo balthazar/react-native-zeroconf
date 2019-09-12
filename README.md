@@ -7,7 +7,10 @@ Get running services advertizing themselves using Zeroconf implementations like 
 ### Install
 
     yarn add react-native-zeroconf
+    # for react-native < 0.60 only (all platforms):
     react-native link
+    # for ios (when using CocoaPods): 
+    (cd ios && pod install)
 
 You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki) if you prefer a manual install.
 

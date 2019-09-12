@@ -14,7 +14,8 @@
   "files": [
     "dist",
     "android",
-    "ios"
+    "ios",
+    "react-native-zeroconf.podspec"
   ],
   "keywords": [
     "react-component",
@@ -30,6 +31,7 @@
     "discovery"
   ],
   "author": "Balthazar Gronon <bgronon@gmail.com>",
+  "homepage": "https://github.com/balthazar/react-native-zeroconf",
   "license": "MIT",
   "dependencies": {
     "events": "^3.0.0"
