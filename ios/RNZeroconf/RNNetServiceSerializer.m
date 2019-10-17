@@ -34,9 +34,14 @@ const NSString *kRNServiceTxtRecords = @"txt";
         
         NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
         for (NSString *key in txtRecordDict) {
-            dict[key] = [[NSString alloc]
-                          initWithData:txtRecordDict[key]
-                          encoding:NSASCIIStringEncoding];
+            @try{
+                dict[key] = [[NSString alloc]
+                            initWithData:txtRecordDict[key]
+                            encoding:NSASCIIStringEncoding];
+            }
+            @catch(NSException *exception){
+                NSLog(@"%@", exception);
+            }
         }
         serviceInfo[kRNServiceTxtRecords] = dict;
     }
