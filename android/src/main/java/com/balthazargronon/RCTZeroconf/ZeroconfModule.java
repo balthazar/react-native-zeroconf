@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 
 import com.facebook.react.bridge.NativeMap;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -201,14 +202,16 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
         WritableMap txtRecords = new WritableNativeMap();
 
-        Map<String, byte[]> attributes = serviceInfo.getAttributes();
-        for (String key : attributes.keySet()) {
-            try {
-                byte[] recordValue = attributes.get(key);
-                txtRecords.putString(String.format(Locale.getDefault(), "%s", key), String.format(Locale.getDefault(), "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
-            } catch (UnsupportedEncodingException e) {
-                String error = "Failed to encode txtRecord: " + e;
-                sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Map<String, byte[]> attributes = serviceInfo.getAttributes();
+            for (String key : attributes.keySet()) {
+                try {
+                    byte[] recordValue = attributes.get(key);
+                    txtRecords.putString(String.format(Locale.getDefault(), "%s", key), String.format(Locale.getDefault(), "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
+                } catch (UnsupportedEncodingException e) {
+                    String error = "Failed to encode txtRecord: " + e;
+                    sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+                }
             }
         }
 
