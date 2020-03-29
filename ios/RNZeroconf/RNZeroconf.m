@@ -155,7 +155,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 {
     NSLog(@"zeroconf netServiceDidPublish");
     NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:sender resolved:YES];
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfServiceRegister" body:serviceInfo];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfServiceRegistered" body:serviceInfo];
 
     self.publishedServices[sender.name] = sender;
 
