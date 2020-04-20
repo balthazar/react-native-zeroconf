@@ -57,7 +57,7 @@ Allow you to clean the listeners, avoiding potential memory leaks ([#33](https:/
 
 If you cleaned the listeners and need to get them back on.
 
-###### `publishService(type, protocol, domain, name, port)` Publish a service
+###### `publishService(type, protocol, domain, name, port, txt)` Publish a service
 
 This adds a service for the current device to the discoverable services on the network.
 
@@ -65,6 +65,7 @@ This adds a service for the current device to the discoverable services on the n
 `type` should be both type and protocol, underscore prefixed, for example `'_http._tcp'`
 `name` should be unique to the device, often the device name
 `port` should be an integer
+`txt` should be a hash, for example `{"foo": "bar"}`
 
 ###### `unpublishService(name)` Unpublish a service
 

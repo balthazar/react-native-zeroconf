@@ -15,6 +15,8 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableMapKeySetIterator;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import javax.annotation.Nullable;
@@ -145,7 +147,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void registerService(String type, String protocol, String domain, String name, int port) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt) {
         String serviceType = String.format("_%s._%s.", type, protocol);
 
         final NsdManager nsdManager = this.getNsdManager();
@@ -153,6 +155,12 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         serviceInfo.setServiceName(name);
         serviceInfo.setServiceType(serviceType);
         serviceInfo.setPort(port);
+
+        ReadableMapKeySetIterator iterator = txt.keySetIterator();
+        while (iterator.hasNextKey()) {
+            String key = iterator.nextKey();
+            serviceInfo.setAttribute(key, txt.getString(key));
+        }
 
         nsdManager.registerService(
                 serviceInfo, NsdManager.PROTOCOL_DNS_SD, new ServiceRegistrationListener());
