@@ -128,7 +128,11 @@ export default class Zeroconf extends EventEmitter {
    * Publish a service
    */
   publishService(type, protocol, domain = 'local.', name, port, txt = {}) {
-    RNZeroconf.registerService(type, protocol, domain, name, port, txt)
+    if (Object.keys(txt).length !== 0) {
+      Object.entries(txt).map(([key, value]) => txt[key] = value.toString());
+    }
+
+    RNZeroconf.registerService(type, protocol, domain, name, port, txt);
   }
 
   /**
