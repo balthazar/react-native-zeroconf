@@ -34,11 +34,15 @@
   "homepage": "https://github.com/balthazar/react-native-zeroconf",
   "license": "MIT",
   "dependencies": {
-    "events": "^3.0.0"
+    "events": "^3.0.0",
+    "react": "^16.10.2",
+    "react-native": "0.61",
+    "react-native-windows": "0.61"
   },
   "peerDependencies": {
     "react": "^16.10.2",
-    "react-native": "^0.60.2"
+    "react-native": "0.61",
+    "react-native-windows": "0.61"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
@@ -47,7 +51,8 @@
     "eslint": "^6.7.2",
     "eslint-config-prettier": "^6.7.0",
     "eslint-config-zavatta": "^6.0.3",
-    "prettier": "^1.19.1"
+    "prettier": "^1.19.1",
+    "react-native": "0.61"
   },
   "eslintConfig": {
     "extends": [
