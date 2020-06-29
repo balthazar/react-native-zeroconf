@@ -5,7 +5,8 @@
   "main": "dist",
   "scripts": {
     "lint": "eslint src/*.js",
-    "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js"
+    "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js",
+    "windows": "react-native run-windows"
   },
   "repository": {
     "type": "git",
@@ -34,10 +35,10 @@
   "homepage": "https://github.com/balthazar/react-native-zeroconf",
   "license": "MIT",
   "dependencies": {
-    "events": "^3.0.0",
+    "events": "^3.1.0",
     "react": "^16.10.2",
-    "react-native": "0.61",
-    "react-native-windows": "0.61"
+    "react-native-windows": "^0.62.0-0",
+    "react-native": "^0.62.0-0"
   },
   "peerDependencies": {
     "react": "^16.10.2",
@@ -46,13 +47,13 @@
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
-    "babel-eslint": "^10.0.3",
+    "babel-eslint": "^10.1.0",
     "babel-preset-react-native": "^4.0.1",
-    "eslint": "^6.7.2",
-    "eslint-config-prettier": "^6.7.0",
+    "eslint": "^6.8.0",
+    "eslint-config-prettier": "^6.11.0",
     "eslint-config-zavatta": "^6.0.3",
     "prettier": "^1.19.1",
-    "react-native": "0.61"
+    "react-native": "^0.62.2"
   },
   "eslintConfig": {
     "extends": [
