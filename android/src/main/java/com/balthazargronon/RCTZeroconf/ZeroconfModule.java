@@ -51,6 +51,8 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     // I have added it as a constant. Will leave this to @balthazar
     private String IMPL_TYPE = DNSSD_IMPL;
 
+
+
     public ZeroconfModule(ReactApplicationContext reactContext) {
         super(reactContext);
         zeroconfMap = new HashMap<>();
@@ -64,13 +66,13 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void scan(String type, String protocol, String domain) {
-        getZeroconfImpl(IMPL_TYPE).scan(type, protocol, domain);
+    public void scan(String type, String protocol, String domain, String implType) {
+        getZeroconfImpl(implType).scan(type, protocol, domain);
     }
 
     @ReactMethod
-    public void stop() {
-        getZeroconfImpl(IMPL_TYPE).stop();
+    public void stop(String implType) {
+        getZeroconfImpl(implType).stop();
     }
 
     private Zeroconf getZeroconfImpl(String implType) {
@@ -83,13 +85,13 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt) {
-        getZeroconfImpl(IMPL_TYPE).registerService(type, protocol, domain, name, port, txt);
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt, String implType) {
+        getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
     }
 
     @ReactMethod
-    public void unregisterService(String serviceName) {
-        getZeroconfImpl(IMPL_TYPE).unregisterService(serviceName);
+    public void unregisterService(String serviceName, String implType) {
+        getZeroconfImpl(implType).unregisterService(serviceName);
     }
 
     public void sendEvent(ReactContext reactContext,
@@ -103,6 +105,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     @Override
     public void onCatalystInstanceDestroy() {
         super.onCatalystInstanceDestroy();
-        stop();
+        stop(NSD_IMPL);
+        stop(DNSSD_IMPL);
     }
 }
