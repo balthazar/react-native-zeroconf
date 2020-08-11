@@ -2,12 +2,8 @@ package com.balthazargronon.RCTZeroconf.rx2dnssd;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.net.nsd.NsdManager;
-import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
-import android.os.Build;
 import android.util.Log;
-import android.util.Pair;
 
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
@@ -18,21 +14,19 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
+import com.github.druk.rx2dnssd.BonjourService;
+import com.github.druk.rx2dnssd.Rx2Dnssd;
+import com.github.druk.rx2dnssd.Rx2DnssdBindable;
+
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import com.github.druk.rx2dnssd.BonjourService;
-import com.github.druk.rx2dnssd.Rx2Dnssd;
-import com.github.druk.rx2dnssd.Rx2DnssdBindable;
-
-
 import javax.annotation.Nullable;
 
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
-
 import io.reactivex.schedulers.Schedulers;
 
 public class DnssdImpl implements Zeroconf {
@@ -72,7 +66,6 @@ public class DnssdImpl implements Zeroconf {
             multicastLock.acquire();
         }
 
-
         browseDisposable = rxDnssd.browse(getServiceType(type, protocol), "local.")
                 .compose(rxDnssd.resolve())
                 .compose(rxDnssd.queryRecords())
@@ -86,7 +79,6 @@ public class DnssdImpl implements Zeroconf {
                     Log.e(getClass().getName(), "Error resolving service: ", throwable);
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, throwable.getMessage());
                 });
-
     }
 
     private String getServiceType(String type, String protocol) {
@@ -101,7 +93,7 @@ public class DnssdImpl implements Zeroconf {
         if (host == null) {
             fullServiceName = serviceInfo.getServiceName();
         } else {
-            Log.d("TAG",serviceInfo.getServiceName());
+            Log.d("TAG", serviceInfo.getServiceName());
             fullServiceName = serviceInfo.getServiceName();
             service.putString(ZeroconfModule.KEY_SERVICE_HOST, fullServiceName);
 
@@ -143,13 +135,13 @@ public class DnssdImpl implements Zeroconf {
     public void unregisterService(String serviceName) {
 
         BonjourService bs = mPublishedServices.get(serviceName);
-        if(bs != null) {
+        if (bs != null) {
             zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_UNREGISTERED, serviceInfoToMap(bs));
             mPublishedServices.remove(serviceName);
         }
 
         Disposable registerDisposable = mRegisteredDisposables.get(serviceName);
-        if(registerDisposable != null && !registerDisposable.isDisposed()) {
+        if (registerDisposable != null && !registerDisposable.isDisposed()) {
             registerDisposable.dispose();
             mRegisteredDisposables.remove(serviceName);
         }

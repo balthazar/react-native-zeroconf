@@ -1,8 +1,7 @@
 package com.balthazargronon.RCTZeroconf;
 
 
-import com.balthazargronon.RCTZeroconf.nsd.NsdServiceImpl;
-import com.balthazargronon.RCTZeroconf.rx2dnssd.DnssdImpl;
+import android.util.Log;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
@@ -11,11 +10,7 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
-import org.apache.commons.lang3.StringUtils;
-
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Map;
 
 
 /**
@@ -41,23 +36,11 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
     public static final String KEY_SERVICE_TXT = "txt";
 
-    private static final String NSD_IMPL = "NSD";
-
-    private static final String DNSSD_IMPL = "DNSSD";
-
-    private Map<String, Zeroconf> zeroconfMap;
-
-    // TBD: I do not have sufficient expertise on IOS and hence didn't add this as a new parameter
-    // I have added it as a constant. Will leave this to @balthazar
-    private String IMPL_TYPE = DNSSD_IMPL;
-
-
+    private ZeroConfImplFactory zeroConfFactory;
 
     public ZeroconfModule(ReactApplicationContext reactContext) {
         super(reactContext);
-        zeroconfMap = new HashMap<>();
-        zeroconfMap.put(NSD_IMPL, new NsdServiceImpl(this, getReactApplicationContext()));
-        zeroconfMap.put(DNSSD_IMPL, new DnssdImpl(this, getReactApplicationContext()));
+        zeroConfFactory = new ZeroConfImplFactory(this, getReactApplicationContext());
     }
 
     @Override
@@ -67,31 +50,46 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void scan(String type, String protocol, String domain, String implType) {
-        getZeroconfImpl(implType).scan(type, protocol, domain);
+        try {
+            getZeroconfImpl(implType).scan(type, protocol, domain);
+        } catch (Exception e) {
+            Log.e(getClass().getName(), e.getMessage(), e);
+            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Scan: " + e.getMessage());
+        }
     }
 
     @ReactMethod
     public void stop(String implType) {
-        getZeroconfImpl(implType).stop();
+        try {
+            getZeroconfImpl(implType).stop();
+        } catch (Exception e) {
+            Log.e(getClass().getName(), e.getMessage(), e);
+            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Stop: " + e.getMessage());
+        }
     }
 
     private Zeroconf getZeroconfImpl(String implType) {
-        if (StringUtils.isBlank(implType)) implType = NSD_IMPL;
-
-        Zeroconf zeroconf = zeroconfMap.get(implType);
-        if (zeroconf == null)
-            throw new IllegalArgumentException(String.format("%s implType is not supported. Only %s and %s are supported", implType, NSD_IMPL, DNSSD_IMPL));
-        return zeroconf;
+        return zeroConfFactory.getZeroconf(implType);
     }
 
     @ReactMethod
     public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt, String implType) {
-        getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
+        try {
+            getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
+        } catch (Exception e) {
+            Log.e(getClass().getName(), e.getMessage(), e);
+            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Register Service: " + e.getMessage());
+        }
     }
 
     @ReactMethod
     public void unregisterService(String serviceName, String implType) {
-        getZeroconfImpl(implType).unregisterService(serviceName);
+        try {
+            getZeroconfImpl(implType).unregisterService(serviceName);
+        } catch (Exception e) {
+            Log.e(getClass().getName(), e.getMessage(), e);
+            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Unregister Service: " + e.getMessage());
+        }
     }
 
     public void sendEvent(ReactContext reactContext,
@@ -105,7 +103,12 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     @Override
     public void onCatalystInstanceDestroy() {
         super.onCatalystInstanceDestroy();
-        stop(NSD_IMPL);
-        stop(DNSSD_IMPL);
+        try {
+            stop(ZeroConfImplFactory.NSD_IMPL);
+            stop(ZeroConfImplFactory.DNSSD_IMPL);
+        } catch (Exception e) {
+            Log.e(getClass().getName(), e.getMessage(), e);
+            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Catalyst Destroy: " + e.getMessage());
+        }
     }
 }
