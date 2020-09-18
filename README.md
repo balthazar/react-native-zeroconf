@@ -24,6 +24,20 @@ For Android please ensure your manifest is requesting all necessary permissions.
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 ```
 
+### IOS 14 Permissions
+IOS 14 requires you to specify the services you want to scan for and a description for what you're using them.
+
+In your `info.plist` add the following strings:
+```xml
+<key>NSBonjourServices</key>
+	<array>
+		<string>my_service._tcp.</string>
+		<string>my_other_service._tcp.</string>
+	</array>
+<key>NSLocalNetworkUsageDescription</key>
+<string>Describe why you want to use local network discovery here</string>
+```
+
 ### Example
 
 Take a look at the [example folder](./example). Install the dependencies, run `node server.js` and launch the project.
