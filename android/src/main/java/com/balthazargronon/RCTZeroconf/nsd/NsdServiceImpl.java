@@ -25,17 +25,11 @@ import java.util.Locale;
 import java.util.Map;
 
 public class NsdServiceImpl implements Zeroconf {
-
     private NsdManager mNsdManager;
-
     private NsdManager.DiscoveryListener mDiscoveryListener;
-
     private WifiManager.MulticastLock multicastLock;
-
     private Map<String, NsdManager.RegistrationListener> mPublishedServices;
-
     private ZeroconfModule zeroconfModule;
-
     private ReactApplicationContext reactApplicationContext;
 
     public NsdServiceImpl(ZeroconfModule zeroconfModule, ReactApplicationContext reactApplicationContext) {
@@ -43,7 +37,6 @@ public class NsdServiceImpl implements Zeroconf {
         this.reactApplicationContext = reactApplicationContext;
         mPublishedServices = new HashMap<String, NsdManager.RegistrationListener>();
     }
-
 
     @Override
     public void scan(String type, String protocol, String domain) {
@@ -166,7 +159,6 @@ public class NsdServiceImpl implements Zeroconf {
         return reactApplicationContext;
     }
 
-
     private class ZeroResolveListener implements NsdManager.ResolveListener {
         @Override
         public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
@@ -257,5 +249,4 @@ public class NsdServiceImpl implements Zeroconf {
 
         return service;
     }
-
 }

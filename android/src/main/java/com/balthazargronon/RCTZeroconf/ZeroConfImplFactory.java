@@ -11,9 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ZeroConfImplFactory {
-
     public static final String NSD_IMPL = "NSD";
-
     public static final String DNSSD_IMPL = "DNSSD";
 
     private Map<String, Zeroconf> zeroconfMap = new HashMap<>();

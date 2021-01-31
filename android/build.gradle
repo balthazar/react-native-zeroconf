@@ -28,6 +28,7 @@ android {
             abiFilters "armeabi-v7a", "x86"
         }
     }
+
     compileOptions {
         sourceCompatibility = 1.8
         targetCompatibility = 1.8
@@ -45,6 +46,4 @@ dependencies {
     api group: 'com.github.andriydruk', name: 'rx2dnssd', version: '0.9.13'
     // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
     api group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
-
-
 }

@@ -30,20 +30,17 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 
 public class DnssdImpl implements Zeroconf {
-
     private Rx2Dnssd rxDnssd;
 
     @Nullable
     private Disposable browseDisposable;
 
     private Map<String, BonjourService> mPublishedServices;
-
     private Map<String, Disposable> mRegisteredDisposables;
 
     private ZeroconfModule zeroconfModule;
 
     private ReactApplicationContext reactApplicationContext;
-
     private WifiManager.MulticastLock multicastLock;
 
     public DnssdImpl(ZeroconfModule zeroconfModule, ReactApplicationContext reactApplicationContext) {
@@ -53,7 +50,6 @@ public class DnssdImpl implements Zeroconf {
         mRegisteredDisposables = new HashMap<String, Disposable>();
         rxDnssd = new Rx2DnssdBindable(reactApplicationContext);
     }
-
 
     @Override
     public void scan(String type, String protocol, String domain) {

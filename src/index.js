@@ -4,14 +4,11 @@ import { EventEmitter } from 'events'
 const RNZeroconf = NativeModules.RNZeroconf
 
 export const ImplType = {
-  NSD: "NSD",
-  DNSSD: "DNSSD"
-};
+  NSD: 'NSD',
+  DNSSD: 'DNSSD',
+}
 
 export default class Zeroconf extends EventEmitter {
-
-
-
   constructor(props) {
     super(props)
 
@@ -145,12 +142,12 @@ export default class Zeroconf extends EventEmitter {
    */
   publishService(type, protocol, domain = 'local.', name, port, txt = {}, implType = ImplType.NSD) {
     if (Object.keys(txt).length !== 0) {
-      Object.entries(txt).map(([key, value]) => txt[key] = value.toString());
+      Object.entries(txt).map(([key, value]) => (txt[key] = value.toString()))
     }
     if (Platform.OS === 'android') {
-      RNZeroconf.registerService(type, protocol, domain, name, port, txt, implType);
+      RNZeroconf.registerService(type, protocol, domain, name, port, txt, implType)
     } else {
-      RNZeroconf.registerService(type, protocol, domain, name, port, txt);
+      RNZeroconf.registerService(type, protocol, domain, name, port, txt)
     }
   }
 
@@ -159,9 +156,9 @@ export default class Zeroconf extends EventEmitter {
    */
   unpublishService(name, implType = ImplType.NSD) {
     if (Platform.OS === 'android') {
-      RNZeroconf.unregisterService(name, implType);
+      RNZeroconf.unregisterService(name, implType)
     } else {
-      RNZeroconf.unregisterService(name);
+      RNZeroconf.unregisterService(name)
     }
   }
 }
