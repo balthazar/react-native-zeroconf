@@ -1,4 +1,4 @@
-import { NativeModules, DeviceEventEmitter } from 'react-native'
+import { Platform, NativeModules, DeviceEventEmitter } from 'react-native'
 import { EventEmitter } from 'events'
 
 const RNZeroconf = NativeModules.RNZeroconf
