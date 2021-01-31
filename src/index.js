@@ -3,7 +3,15 @@ import { EventEmitter } from 'events'
 
 const RNZeroconf = NativeModules.RNZeroconf
 
+export const ImplType = {
+  NSD: "NSD",
+  DNSSD: "DNSSD"
+};
+
 export default class Zeroconf extends EventEmitter {
+
+
+
   constructor(props) {
     super(props)
 
@@ -111,34 +119,49 @@ export default class Zeroconf extends EventEmitter {
    * Scan for Zeroconf services,
    * Defaults to _http._tcp. on local domain
    */
-  scan(type = 'http', protocol = 'tcp', domain = 'local.') {
+  scan(type = 'http', protocol = 'tcp', domain = 'local.', implType = ImplType.NSD) {
     this._services = {}
     this.emit('update')
-    RNZeroconf.scan(type, protocol, domain)
+    if (Platform.OS === 'android') {
+      RNZeroconf.scan(type, protocol, domain, implType)
+    } else {
+      RNZeroconf.scan(type, protocol, domain)
+    }
   }
 
   /**
    * Stop current scan if any
    */
-  stop() {
-    RNZeroconf.stop()
+  stop(implType = ImplType.NSD) {
+    if (Platform.OS === 'android') {
+      RNZeroconf.stop(implType)
+    } else {
+      RNZeroconf.stop()
+    }
   }
 
   /**
    * Publish a service
    */
-  publishService(type, protocol, domain = 'local.', name, port, txt = {}) {
+  publishService(type, protocol, domain = 'local.', name, port, txt = {}, implType = ImplType.NSD) {
     if (Object.keys(txt).length !== 0) {
       Object.entries(txt).map(([key, value]) => txt[key] = value.toString());
     }
-
-    RNZeroconf.registerService(type, protocol, domain, name, port, txt);
+    if (Platform.OS === 'android') {
+      RNZeroconf.registerService(type, protocol, domain, name, port, txt, implType);
+    } else {
+      RNZeroconf.registerService(type, protocol, domain, name, port, txt);
+    }
   }
 
   /**
    * Unpublish a service
    */
-  unpublishService(name) {
-    RNZeroconf.unregisterService(name)
+  unpublishService(name, implType = ImplType.NSD) {
+    if (Platform.OS === 'android') {
+      RNZeroconf.unregisterService(name, implType);
+    } else {
+      RNZeroconf.unregisterService(name);
+    }
   }
 }
