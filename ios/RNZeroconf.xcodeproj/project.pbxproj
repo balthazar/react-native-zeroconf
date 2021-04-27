@@ -108,6 +108,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = 58B511D21A9E6C8500147676;
@@ -217,7 +218,10 @@
 		58B511F01A9E6C8500147676 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/../../React/**";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../React/**",
+					"${SRCROOT}/../../../ios/Pods/Headers/Public/React-Core",
+				);
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = RNZeroconf;
 				SKIP_INSTALL = YES;
@@ -227,7 +231,10 @@
 		58B511F11A9E6C8500147676 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/../../React/**";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../React/**",
+					"${SRCROOT}/../../../ios/Pods/Headers/Public/React-Core",
+				);
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = RNZeroconf;
 				SKIP_INSTALL = YES;
