@@ -7,7 +7,10 @@ Get running services advertizing themselves using Zeroconf implementations like 
 ### Install
 
     yarn add react-native-zeroconf
+    # for react-native < 0.60 only (all platforms):
     react-native link
+    # for ios (when using CocoaPods): 
+    (cd ios && pod install)
 
 You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki) if you prefer a manual install.
 
@@ -19,6 +22,20 @@ For Android please ensure your manifest is requesting all necessary permissions.
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+```
+
+### IOS 14 Permissions
+IOS 14 requires you to specify the services you want to scan for and a description for what you're using them.
+
+In your `info.plist` add the following strings:
+```xml
+<key>NSBonjourServices</key>
+	<array>
+		<string>my_service._tcp.</string>
+		<string>my_other_service._tcp.</string>
+	</array>
+<key>NSLocalNetworkUsageDescription</key>
+<string>Describe why you want to use local network discovery here</string>
 ```
 
 ### Example
@@ -53,6 +70,22 @@ Allow you to clean the listeners, avoiding potential memory leaks ([#33](https:/
 ###### `addDeviceListeners()` Add listeners
 
 If you cleaned the listeners and need to get them back on.
+
+###### `publishService(type, protocol, domain, name, port, txt)` Publish a service
+
+This adds a service for the current device to the discoverable services on the network.
+
+`domain` should be the domain the service is sitting on, dot suffixed, for example `'local.'`
+`type` should be both type and protocol, underscore prefixed, for example `'_http._tcp'`
+`name` should be unique to the device, often the device name
+`port` should be an integer
+`txt` should be a hash, for example `{"foo": "bar"}`
+
+###### `unpublishService(name)` Unpublish a service
+
+This removes a service from those discoverable on the network.
+
+`name` should be the name used when publishing the service
 
 ##### Events
 

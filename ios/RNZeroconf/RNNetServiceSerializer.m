@@ -21,32 +21,32 @@ const NSString *kRNServiceTxtRecords = @"txt";
 + (NSDictionary *) serializeServiceToDictionary:(NSNetService *)service
 									   resolved:(BOOL)resolved
 {
-	NSMutableDictionary *serviceInfo = [[NSMutableDictionary alloc] init];
-	serviceInfo[kRNServiceKeysName] = service.name;
+    NSMutableDictionary *serviceInfo = [[NSMutableDictionary alloc] init];
+    serviceInfo[kRNServiceKeysName] = service.name;
 
-	if (resolved) {
-		serviceInfo[kRNServiceKeysFullName] = [NSString stringWithFormat:@"%@%@", service.hostName, service.type];
-		serviceInfo[kRNServiceKeysAddresses] = [self addressesFromService:service];
-		serviceInfo[kRNServiceKeysHost] = service.hostName;
-		serviceInfo[kRNServiceKeysPort] = @(service.port);
+    if (resolved) {
+        serviceInfo[kRNServiceKeysFullName] = [NSString stringWithFormat:@"%@%@", service.hostName, service.type];
+        serviceInfo[kRNServiceKeysAddresses] = [self addressesFromService:service];
+        serviceInfo[kRNServiceKeysHost] = service.hostName;
+        serviceInfo[kRNServiceKeysPort] = @(service.port);
+        
+        NSDictionary<NSString *, NSData *> *txtRecordDict = [NSNetService dictionaryFromTXTRecordData:service.TXTRecordData];
+        
+        NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
+        for (NSString *key in txtRecordDict) {
+            @try{
+                dict[key] = [[NSString alloc]
+                            initWithData:txtRecordDict[key]
+                            encoding:NSASCIIStringEncoding];
+            }
+            @catch(NSException *exception){
+                NSLog(@"%@", exception);
+            }
+        }
+        serviceInfo[kRNServiceTxtRecords] = dict;
+    }
 
-		NSDictionary<NSString *, NSData *> *txtRecordDict = [NSNetService dictionaryFromTXTRecordData:service.TXTRecordData];
-
-		NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
-		for (NSString *key in txtRecordDict) {
-			@try{
-				dict[key] = [[NSString alloc]
-							initWithData:txtRecordDict[key]
-							encoding:NSASCIIStringEncoding];
-			}
-			@catch(NSException *exception){
-				NSLog(@"%@", exception);
-			}
-		}
-		serviceInfo[kRNServiceTxtRecords] = dict;
-	}
-
-	return [NSDictionary dictionaryWithDictionary:serviceInfo];
+    return [NSDictionary dictionaryWithDictionary:serviceInfo];
 }
 
 + (NSArray<NSString *> *) addressesFromService:(NSNetService *)service
