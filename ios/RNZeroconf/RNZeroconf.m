@@ -207,11 +207,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 
 - (void) reportError:(NSDictionary *)errorDict
 {
-    for (int a = 0; a < errorDict.count; ++a) {
-        NSString *key = [[errorDict allKeys] objectAtIndex:a];
-        NSString *val = [errorDict objectForKey:key];
-        [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:val];
-    }
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:[NSString stringWithFormat:@"%@",errorDict]];
 }
 
 @end
