@@ -37,7 +37,7 @@
     "events": "^3.0.0"
   },
   "peerDependencies": {
-    "react-native": ">=0.60 <0.64"
+    "react-native": ">=0.60"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
