@@ -103,14 +103,14 @@ public class NsdServiceImpl implements Zeroconf {
 
     @Override
     public void stop() {
-        System.out.println("I'm Cumming again"+mDiscoveryListener);
         if (mDiscoveryListener != null) {
             mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
+
         if (multicastLock != null) {
             multicastLock.release();
         }
-        System.out.println("I'm Came again"+multicastLock);
+
         mDiscoveryListener = null;
         multicastLock = null;
     }
