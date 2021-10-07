@@ -35,9 +35,11 @@ export default class Zeroconf extends EventEmitter {
       this.emit('stop'),
     )
 
-    this._dListeners.error = DeviceEventEmitter.addListener('RNZeroconfError', err =>
-      this.emit('error', err),
-    )
+    this._dListeners.error = DeviceEventEmitter.addListener('RNZeroconfError', err => {
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', new Error(err))
+      }
+    })
 
     this._dListeners.found = DeviceEventEmitter.addListener('RNZeroconfFound', service => {
       if (!service || !service.name) {
