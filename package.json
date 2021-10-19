@@ -1,6 +1,6 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "dist",
   "scripts": {
