@@ -87,20 +87,16 @@ public class DnssdImpl implements Zeroconf {
         service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
         final List<InetAddress> hostList = serviceInfo.getInetAddresses();
         final String fullServiceName;
-        if (hostList == null) {
-            fullServiceName = serviceInfo.getServiceName();
-        } else {
-            Log.d("TAG", serviceInfo.getServiceName());
-            fullServiceName = serviceInfo.getServiceName();
-            service.putString(ZeroconfModule.KEY_SERVICE_HOST, fullServiceName);
+        Log.d("TAG", serviceInfo.getServiceName());
+        fullServiceName = serviceInfo.getServiceName();
+        service.putString(ZeroconfModule.KEY_SERVICE_HOST, fullServiceName);
 
-            WritableArray addresses = new WritableNativeArray();
-            for (InetAddress host : hostList) {
-				addresses.pushString(host.getHostAddress());					
-			}
-
-            service.putArray(ZeroconfModule.KEY_SERVICE_ADDRESSES, addresses);
+        WritableArray addresses = new WritableNativeArray();
+        for (InetAddress host : hostList) {
+            addresses.pushString(host.getHostAddress());
         }
+
+        service.putArray(ZeroconfModule.KEY_SERVICE_ADDRESSES, addresses);
         service.putString(ZeroconfModule.KEY_SERVICE_FULL_NAME, fullServiceName);
         service.putInt(ZeroconfModule.KEY_SERVICE_PORT, serviceInfo.getPort());
 
