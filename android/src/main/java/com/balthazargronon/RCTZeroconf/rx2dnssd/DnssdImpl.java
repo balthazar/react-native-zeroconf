@@ -22,6 +22,7 @@ import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.List;
 
 import javax.annotation.Nullable;
 
@@ -84,20 +85,18 @@ public class DnssdImpl implements Zeroconf {
     private WritableMap serviceInfoToMap(BonjourService serviceInfo) {
         WritableMap service = new WritableNativeMap();
         service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
-        final InetAddress host = serviceInfo.getInet4Address();
+        final List<InetAddress> hostList = serviceInfo.getInetAddresses();
         final String fullServiceName;
-        if (host == null) {
-            fullServiceName = serviceInfo.getServiceName();
-        } else {
-            Log.d("TAG", serviceInfo.getServiceName());
-            fullServiceName = serviceInfo.getServiceName();
-            service.putString(ZeroconfModule.KEY_SERVICE_HOST, fullServiceName);
+        Log.d("TAG", serviceInfo.getServiceName());
+        fullServiceName = serviceInfo.getServiceName();
+        service.putString(ZeroconfModule.KEY_SERVICE_HOST, fullServiceName);
 
-            WritableArray addresses = new WritableNativeArray();
+        WritableArray addresses = new WritableNativeArray();
+        for (InetAddress host : hostList) {
             addresses.pushString(host.getHostAddress());
-
-            service.putArray(ZeroconfModule.KEY_SERVICE_ADDRESSES, addresses);
         }
+
+        service.putArray(ZeroconfModule.KEY_SERVICE_ADDRESSES, addresses);
         service.putString(ZeroconfModule.KEY_SERVICE_FULL_NAME, fullServiceName);
         service.putInt(ZeroconfModule.KEY_SERVICE_PORT, serviceInfo.getPort());
 
