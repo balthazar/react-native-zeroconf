@@ -12,6 +12,7 @@
 const NSString *kRNServiceKeysName = @"name";
 const NSString *kRNServiceKeysFullName = @"fullName";
 const NSString *kRNServiceKeysAddresses = @"addresses";
+const NSString *kRNServiceKeysAddressesDict = @"addressesDict";
 const NSString *kRNServiceKeysHost = @"host";
 const NSString *kRNServiceKeysPort = @"port";
 const NSString *kRNServiceTxtRecords = @"txt";
@@ -27,6 +28,7 @@ const NSString *kRNServiceTxtRecords = @"txt";
     if (resolved) {
         serviceInfo[kRNServiceKeysFullName] = [NSString stringWithFormat:@"%@%@", service.hostName, service.type];
         serviceInfo[kRNServiceKeysAddresses] = [self addressesFromService:service];
+        serviceInfo[kRNServiceKeysAddressesDict] = [self addressesDictFromService:service];
         serviceInfo[kRNServiceKeysHost] = service.hostName;
         serviceInfo[kRNServiceKeysPort] = @(service.port);
         
@@ -83,6 +85,42 @@ const NSString *kRNServiceTxtRecords = @"txt";
     }
 
     return [NSArray arrayWithArray:addresses];
+}
+
++ (NSDictionary<NSString *, NSString *> *) addressesDictFromService:(NSNetService *)service
+{
+    NSMutableDictionary<NSString *, NSString *> *addressesDict = [NSMutableDictionary dictionary];
+
+    // source: http://stackoverflow.com/a/4976808/2715
+    char addressBuffer[INET6_ADDRSTRLEN];
+
+    for (NSData *data in service.addresses) {
+        memset(addressBuffer, 0, INET6_ADDRSTRLEN);
+
+        typedef union {
+            struct sockaddr sa;
+            struct sockaddr_in ipv4;
+            struct sockaddr_in6 ipv6;
+        } ip_socket_address;
+
+        ip_socket_address *socketAddress = (ip_socket_address *)[data bytes];
+
+        if (socketAddress && (socketAddress->sa.sa_family == AF_INET || socketAddress->sa.sa_family == AF_INET6)) {
+            const char *addressStr = inet_ntop(
+                socketAddress->sa.sa_family,
+                (socketAddress->sa.sa_family == AF_INET ? (void *)&(socketAddress->ipv4.sin_addr) : (void *)&(socketAddress->ipv6.sin6_addr)),
+                addressBuffer,
+                sizeof(addressBuffer)
+            );
+
+            if (addressStr) {
+                NSString *key = socketAddress->sa.sa_family == AF_INET ? @"IPv4" : @"IPv6";
+                addressesDict[key] = [NSString stringWithUTF8String:addressStr];
+            }
+        }
+    }
+
+    return [addressesDict copy];
 }
 
 @end
