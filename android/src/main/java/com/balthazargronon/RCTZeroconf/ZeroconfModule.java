@@ -106,7 +106,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         try {
             stop(ZeroConfImplFactory.NSD_IMPL);
             stop(ZeroConfImplFactory.DNSSD_IMPL);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Catalyst Destroy: " + e.getMessage());
         }
