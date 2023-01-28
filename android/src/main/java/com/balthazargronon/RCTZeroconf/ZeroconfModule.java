@@ -52,7 +52,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public void scan(String type, String protocol, String domain, String implType) {
         try {
             getZeroconfImpl(implType).scan(type, protocol, domain);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Scan: " + e.getMessage());
         }
@@ -62,7 +62,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public void stop(String implType) {
         try {
             getZeroconfImpl(implType).stop();
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Stop: " + e.getMessage());
         }
@@ -76,7 +76,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt, String implType) {
         try {
             getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Register Service: " + e.getMessage());
         }
@@ -86,7 +86,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public void unregisterService(String serviceName, String implType) {
         try {
             getZeroconfImpl(implType).unregisterService(serviceName);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Unregister Service: " + e.getMessage());
         }
