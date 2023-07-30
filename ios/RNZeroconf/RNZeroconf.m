@@ -9,6 +9,9 @@
 #import "RNZeroconf.h"
 #import "RNNetServiceSerializer.h"
 
+#import <UIKit/UIKit.h>
+#import <CoreFoundation/CoreFoundation.h>
+
 @interface RNZeroconf ()
 
 @property (nonatomic, strong, readonly) NSMutableDictionary *resolvingServices;
@@ -25,6 +28,18 @@ RCT_EXPORT_MODULE()
 RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain)
 {
     [self stop];
+
+    if (@available(iOS 14.0, *)) {
+        if (CLLocationManager.locationServicesEnabled) {
+            CLAuthorizationStatus status = [CLLocationManager authorizationStatus];
+            if (status != kCLAuthorizationStatusAuthorizedAlways && status != kCLAuthorizationStatusAuthorizedWhenInUse) {
+                NSString *error = @"Local network permission is not granted. Please request the necessary permission.";
+                [self reportError:@{@"message": error}];
+                return;
+            }
+        } 
+    }
+
     [self.browser searchForServicesOfType:[NSString stringWithFormat:@"_%@._%@.", type, protocol] inDomain:domain];
 }
 
