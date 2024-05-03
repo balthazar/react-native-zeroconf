@@ -101,7 +101,7 @@ export default class App extends Component {
               <Text style={styles.closeButton}>{'CLOSE'}</Text>
             </TouchableOpacity>
 
-            <Text style={styles.json}>{JSON.stringify(services, null, 2)}</Text>
+            <Text style={styles.json}>{JSON.stringify(service, null, 2)}</Text>
           </SafeAreaView>
         </SafeAreaProvider>
       )
@@ -133,6 +133,7 @@ export default class App extends Component {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    marginLeft: 10
   },
   closeButton: {
     padding: 20,
