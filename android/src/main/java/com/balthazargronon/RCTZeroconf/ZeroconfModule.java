@@ -1,6 +1,5 @@
 package com.balthazargronon.RCTZeroconf;
 
-
 import android.util.Log;
 
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -11,7 +10,6 @@ import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import javax.annotation.Nullable;
-
 
 /**
  * Created by Jeremy White on 8/1/2016.
@@ -49,9 +47,9 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void scan(String type, String protocol, String domain, String implType) {
+    public void scan(String type, String protocol, String domain) {
         try {
-            getZeroconfImpl(implType).scan(type, protocol, domain);
+            getZeroconfImpl().scan(type, protocol, domain);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Scan: " + e.getMessage());
@@ -59,23 +57,23 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void stop(String implType) {
+    public void stop() {
         try {
-            getZeroconfImpl(implType).stop();
+            getZeroconfImpl().stop();
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Stop: " + e.getMessage());
         }
     }
 
-    private Zeroconf getZeroconfImpl(String implType) {
-        return zeroConfFactory.getZeroconf(implType);
+    private Zeroconf getZeroconfImpl() {
+        return zeroConfFactory.getZeroconf();
     }
 
     @ReactMethod
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt, String implType) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt) {
         try {
-            getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
+            getZeroconfImpl().registerService(type, protocol, domain, name, port, txt);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Register Service: " + e.getMessage());
@@ -83,9 +81,9 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void unregisterService(String serviceName, String implType) {
+    public void unregisterService(String serviceName) {
         try {
-            getZeroconfImpl(implType).unregisterService(serviceName);
+            getZeroconfImpl().unregisterService(serviceName);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Unregister Service: " + e.getMessage());
@@ -104,8 +102,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public void onCatalystInstanceDestroy() {
         super.onCatalystInstanceDestroy();
         try {
-            stop(ZeroConfImplFactory.NSD_IMPL);
-            stop(ZeroConfImplFactory.DNSSD_IMPL);
+            stop();
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
             sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Catalyst Destroy: " + e.getMessage());
