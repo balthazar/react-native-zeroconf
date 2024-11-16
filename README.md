@@ -9,7 +9,7 @@ Get running services advertizing themselves using Zeroconf implementations like 
     yarn add react-native-zeroconf
     # for react-native < 0.60 only (all platforms):
     react-native link
-    # for ios (when using CocoaPods): 
+    # for ios (when using CocoaPods):
     (cd ios && pod install)
     # for macOS (when using CocoaPods):
     (cd macos && pod install)
@@ -26,7 +26,12 @@ For Android please ensure your manifest is requesting all necessary permissions.
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 ```
 
+### Android
+
+If you need support for Android versions prior to 12, you might want to try installing the package version `0.12.5` and below.
+
 ### IOS 14 Permissions
+
 IOS 14 requires you to specify the services you want to scan for and a description for what you're using them.
 
 In your `info.plist` add the following strings:
