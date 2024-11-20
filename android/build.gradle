@@ -42,8 +42,6 @@ repositories {
 
 dependencies {
     implementation "com.facebook.react:react-native:${safeExtGet('reactNativeVersion', '+')}"
-    // https://mvnrepository.com/artifact/com.github.andriydruk/rx2dnssd
-    api group: 'com.github.andriydruk', name: 'rx2dnssd', version: '0.9.16'
     // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
     api group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
 }

@@ -118,14 +118,10 @@ export default class Zeroconf extends EventEmitter {
    * Scan for Zeroconf services,
    * Defaults to _http._tcp. on local domain
    */
-  scan(type = 'http', protocol = 'tcp', domain = 'local.', implType = ImplType.NSD) {
+  scan(type = 'http', protocol = 'tcp', domain = 'local.') {
     this._services = {}
     this.emit('update')
-    if (Platform.OS === 'android') {
-      RNZeroconf.scan(type, protocol, domain, implType)
-    } else {
-      RNZeroconf.scan(type, protocol, domain)
-    }
+    RNZeroconf.scan(type, protocol, domain);
   }
 
   /**
