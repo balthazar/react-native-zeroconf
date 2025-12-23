@@ -1,6 +1,6 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.13.8",
+  "version": "0.14.0",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "dist",
   "scripts": {
@@ -15,7 +15,8 @@
     "dist",
     "android",
     "ios",
-    "react-native-zeroconf.podspec"
+    "react-native-zeroconf.podspec",
+    "NOTICE"
   ],
   "keywords": [
     "react-component",

@@ -4,6 +4,12 @@
 
 Get running services advertizing themselves using Zeroconf implementations like Avahi, Bonjour or NSD.
 
+## Android 16KB Page Size Support
+
+This fork includes bundled native code from [Discord's RxDNSSD fork](https://github.com/discord/RxDNSSD) with 16KB page size alignment support, required for Android 15+ devices (Google Play requirement starting November 1, 2025).
+
+The native DNS-SD implementation is built directly into this library, eliminating external AAR dependencies and ensuring only the properly-aligned embedded library (`libjdns_sd_embedded.so`) is included.
+
 ### Install
 
     yarn add react-native-zeroconf
@@ -129,3 +135,11 @@ Broadcast a service name removed from the network.
 
 ###### `update` Triggered either when a service is found or removed
 ###### `error` Triggered when an error occurs
+
+### License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+#### Third-Party Licenses
+
+This project includes code from [RxDNSSD](https://github.com/discord/RxDNSSD) (originally by Andriy Druk, maintained by Discord), which is licensed under the Apache License 2.0. See the [NOTICE](NOTICE) file for details.
