@@ -16,7 +16,7 @@ import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.github.druk.rx2dnssd.BonjourService;
 import com.github.druk.rx2dnssd.Rx2Dnssd;
-import com.github.druk.rx2dnssd.Rx2DnssdBindable;
+import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
 
 import java.net.InetAddress;
 import java.util.HashMap;
@@ -49,7 +49,7 @@ public class DnssdImpl implements Zeroconf {
         this.reactApplicationContext = reactApplicationContext;
         mPublishedServices = new HashMap<String, BonjourService>();
         mRegisteredDisposables = new HashMap<String, Disposable>();
-        rxDnssd = new Rx2DnssdBindable(reactApplicationContext);
+        rxDnssd = new Rx2DnssdEmbedded(reactApplicationContext);
     }
 
     @Override
