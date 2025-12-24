@@ -5,6 +5,7 @@
   "main": "dist",
   "scripts": {
     "lint": "eslint src/*.js",
+    "format": "prettier --write src/*.js",
     "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js"
   },
   "repository": {
