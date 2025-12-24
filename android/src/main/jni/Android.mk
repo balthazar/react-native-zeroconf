@@ -73,6 +73,22 @@ LOCAL_LDLIBS := -llog
 LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
 include $(BUILD_SHARED_LIBRARY)
 
-# NOTE: Daemonic lib (jdns_sd) removed - only building embedded version
-# The embedded version is 16KB page-aligned and required for Android 15+
+### DAEMONIC LIB (for Android < 12) ###
+include $(CLEAR_VARS)
+
+LOCAL_SDK_VERSION := 8
+LOCAL_MODULE    := jdns_sd
+LOCAL_SRC_FILES := $(commonSources) JNISupport.c
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/mdnsresponder/mDNSShared \
+                    $(LOCAL_PATH)
+
+LOCAL_CFLAGS += $(commonFlags)
+LOCAL_LDLIBS := -llog
+LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
+include $(BUILD_SHARED_LIBRARY)
+
+# NOTE: Both libraries are now built with 16KB page alignment for Android 15+ compatibility
+# - jdns_sd: Uses system daemon, works on Android < 12
+# - jdns_sd_embedded: Uses embedded mDNSResponder, required for Android 12+
 # See: https://developer.android.com/guide/practices/page-sizes

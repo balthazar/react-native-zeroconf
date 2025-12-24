@@ -81,8 +81,10 @@ static DWORD	if_nametoindex( const char * nameStr );
 #include <netdb.h>
 #include <signal.h>
 
+#ifdef EMBEDDED
 #include "mDNSEmbeddedAPI.h"
 #include "mDNSPosix.h"
+#endif
 #include <android/log.h>
 
 enum {
