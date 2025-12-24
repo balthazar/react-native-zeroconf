@@ -16,7 +16,6 @@ import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.github.druk.rx2dnssd.BonjourService;
 import com.github.druk.rx2dnssd.Rx2Dnssd;
-import com.github.druk.rx2dnssd.Rx2DnssdBindable;
 import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
 
 import android.os.Build;
@@ -56,18 +55,13 @@ public class DnssdImpl implements Zeroconf {
     }
 
     /**
-     * Creates the appropriate Rx2Dnssd implementation based on Android version.
-     * - Android 12+ (API 31+): Use embedded mDNSResponder (system NSD daemon deprecated)
-     * - Android < 12: Use system daemon via NSD service (more reliable on older devices)
+     * Creates the Rx2Dnssd implementation.
+     * Always uses embedded mDNSResponder since it works across all Android versions.
+     * The daemonic version (Rx2DnssdBindable) is unreliable on Android as the
+     * system daemon at /dev/socket/mdnsd doesn't exist on most devices.
      */
     private Rx2Dnssd createDnssd(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+: System NSD daemon is deprecated, use embedded
-            return new Rx2DnssdEmbedded(context);
-        } else {
-            // Android < 12: Use system daemon (works better on older devices)
-            return new Rx2DnssdBindable(context);
-        }
+        return new Rx2DnssdEmbedded(context);
     }
 
     @Override
