@@ -88,7 +88,8 @@ LOCAL_LDLIBS := -llog
 LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
 include $(BUILD_SHARED_LIBRARY)
 
-# NOTE: Both libraries are now built with 16KB page alignment for Android 15+ compatibility
-# - jdns_sd: Uses system daemon, works on Android < 12
-# - jdns_sd_embedded: Uses embedded mDNSResponder, required for Android 12+
+# NOTE: Both libraries are built with 16KB page alignment for Android 15+ compatibility
+# However, only jdns_sd_embedded is used at runtime (see DnssdImpl.java)
+# - jdns_sd: Daemonic implementation (requires /dev/socket/mdnsd - not available on most devices)
+# - jdns_sd_embedded: Embedded mDNSResponder (used for all Android versions)
 # See: https://developer.android.com/guide/practices/page-sizes

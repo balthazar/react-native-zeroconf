@@ -18,8 +18,6 @@ import com.github.druk.rx2dnssd.BonjourService;
 import com.github.druk.rx2dnssd.Rx2Dnssd;
 import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
 
-import android.os.Build;
-
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Locale;
