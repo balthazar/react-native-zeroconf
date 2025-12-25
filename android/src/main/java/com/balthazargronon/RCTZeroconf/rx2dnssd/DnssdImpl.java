@@ -75,7 +75,13 @@ public class DnssdImpl implements Zeroconf {
             multicastLock.acquire();
         }
 
-        browseDisposable = rxDnssd.browse(getServiceType(type, protocol), "local.")
+        String serviceType = getServiceType(type, protocol);
+        Log.d("DnssdImpl", "Starting DNSSD scan for: " + serviceType);
+
+        // Emit start event
+        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_START, null);
+
+        browseDisposable = rxDnssd.browse(serviceType, "local.")
                 .compose(rxDnssd.resolve())
                 .compose(rxDnssd.queryRecords())
                 .subscribeOn(Schedulers.io())
