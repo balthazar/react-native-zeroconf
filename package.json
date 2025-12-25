@@ -1,6 +1,6 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.14.0",
+  "version": "1.0.0",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "dist",
   "scripts": {
@@ -53,7 +53,14 @@
   },
   "babel": {
     "presets": [
-      ["@babel/preset-env", { "targets": { "node": "14" } }],
+      [
+        "@babel/preset-env",
+        {
+          "targets": {
+            "node": "14"
+          }
+        }
+      ],
       "@babel/preset-flow"
     ]
   }
