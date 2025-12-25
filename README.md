@@ -8,7 +8,12 @@ Get running services advertizing themselves using Zeroconf implementations like 
 
 This fork includes bundled native code from [Discord's RxDNSSD fork](https://github.com/discord/RxDNSSD) with 16KB page size alignment support, required for Android 15+ devices (Google Play requirement starting November 1, 2025).
 
-The native DNS-SD implementation is built directly into this library, eliminating external AAR dependencies and ensuring only the properly-aligned embedded library (`libjdns_sd_embedded.so`) is included.
+The native DNS-SD implementation is built directly into this library with the embedded mDNSResponder (`Rx2DnssdEmbedded`), which:
+
+- Works reliably across **all Android versions** (5.0+)
+- Eliminates external AAR dependencies
+- Provides consistent behavior regardless of device manufacturer or Android variant
+- Does not depend on the system mDNS daemon (which doesn't exist on most devices)
 
 ### Install
 
@@ -34,13 +39,14 @@ For Android please ensure your manifest is requesting all necessary permissions.
 
 ### Android
 
-If you need support for Android versions prior to 12, you might want to try installing the package version `0.12.5` and below.
+Supports all Android versions from 5.0 (API 21) onwards using the embedded mDNSResponder implementation.
 
 ### IOS 14 Permissions
 
 IOS 14 requires you to specify the services you want to scan for and a description for what you're using them.
 
 In your `info.plist` add the following strings:
+
 ```xml
 <key>NSBonjourServices</key>
 	<array>
@@ -107,7 +113,9 @@ zeroconf.on('start', () => console.log('The scan has started.'))
 ```
 
 ###### `start` Triggered on scan start
+
 ###### `stop` Triggered on scan stop
+
 ###### `found` Triggered when a service is found
 
 Broadcast a service name as soon as it is found.
@@ -119,10 +127,7 @@ Broadcast a service object once it is fully resolved
 ```json
 {
   "host": "XeroxPrinter.local.",
-  "addresses": [
-    "192.168.1.23",
-    "fe80::aebc:123:ffff:abcd"
-  ],
+  "addresses": ["192.168.1.23", "fe80::aebc:123:ffff:abcd"],
   "name": "Xerox Printer",
   "fullName": "XeroxPrinter.local._http._tcp.",
   "port": 8080
@@ -134,6 +139,7 @@ Broadcast a service object once it is fully resolved
 Broadcast a service name removed from the network.
 
 ###### `update` Triggered either when a service is found or removed
+
 ###### `error` Triggered when an error occurs
 
 ### License
