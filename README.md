@@ -41,6 +41,66 @@ For Android please ensure your manifest is requesting all necessary permissions.
 
 Supports all Android versions from 5.0 (API 21) onwards using the embedded mDNSResponder implementation.
 
+### Android Emulator Limitations
+
+**Important:** The Android emulator does not support IGMP or multicast. This is a [documented limitation](https://developer.android.com/studio/run/emulator-networking) that affects **all Android emulator versions**.
+
+Since mDNS/Bonjour relies on multicast UDP packets to `224.0.0.251:5353`, Zeroconf discovery **will not work on Android emulators** by default.
+
+#### Workarounds for Emulator Testing
+
+**Option 1: Use a Real Device (Recommended)**
+
+For reliable mDNS testing, use a physical Android device connected to the same network as the services you want to discover.
+
+**Option 2: Enable Bridged Networking (Linux)**
+
+On Linux, you can configure TAP bridged networking to allow the emulator to receive multicast packets:
+
+1. Install required tools:
+   ```bash
+   sudo apt-get install bridge-utils
+   ```
+
+2. Create TAP interface and bridge:
+   ```bash
+   # Create TAP interface
+   sudo ip tuntap add dev tap0 mode tap user $USER
+
+   # Get your main network interface name
+   ip link show  # (e.g., eth0, enp3s0)
+
+   # Create bridge and add interfaces
+   sudo ip link add name br0 type bridge
+   sudo ip link set enp3s0 master br0  # Replace with your interface
+   sudo ip link set tap0 master br0
+
+   # Bring up interfaces
+   sudo ip link set dev tap0 up
+   sudo ip link set dev br0 up
+
+   # Get IP via DHCP
+   sudo dhclient br0
+   ```
+
+3. Launch emulator with TAP networking:
+   ```bash
+   emulator -avd <avd_name> -net-tap tap0
+   ```
+
+4. In the emulator, toggle Airplane Mode on/off to refresh network configuration.
+
+**Option 3: ADB Port Forwarding (Direct Connections Only)**
+
+For direct TCP connections (not mDNS discovery):
+```bash
+adb reverse tcp:9100 tcp:192.168.1.100:9100
+```
+
+Then connect to `localhost:9100` in your app.
+
+**Note:** WiFi bridging is complex because most WiFi cards don't support bridging. Use Ethernet for TAP bridged networking, or consider [Genymotion](https://www.genymotion.com/) which supports bridged networking by default.
+
 ### IOS 14 Permissions
 
 IOS 14 requires you to specify the services you want to scan for and a description for what you're using them.
