@@ -1,211 +1,410 @@
 # react-native-zeroconf
 
-> Basic Zeroconf implementation for React-native
+> Zeroconf (Bonjour/mDNS) implementation for React Native
 
-Get running services advertizing themselves using Zeroconf implementations like Avahi, Bonjour or NSD.
+Discover and publish network services using Zeroconf protocols (Bonjour, Avahi, mDNS).
 
-## Android 16KB Page Size Support
+## Features
 
-This fork includes bundled native code from [Discord's RxDNSSD fork](https://github.com/discord/RxDNSSD) with 16KB page size alignment support, required for Android 15+ devices (Google Play requirement starting November 1, 2025).
+- **Service Discovery**: Find services advertised on your local network
+- **Service Publishing**: Advertise your own services
+- **Cross-Platform**: Works on iOS and Android
+- **Dual Android Implementation**: Choose between NSD (Android native) or DNSSD (embedded mDNSResponder)
+- **Android 15+ Compatible**: Includes 16KB page size alignment (Google Play requirement starting November 1, 2025)
 
-The native DNS-SD implementation is built directly into this library with the embedded mDNSResponder (`Rx2DnssdEmbedded`), which:
+## Installation
 
-- Works reliably across **all Android versions** (5.0+)
-- Eliminates external AAR dependencies
-- Provides consistent behavior regardless of device manufacturer or Android variant
-- Does not depend on the system mDNS daemon (which doesn't exist on most devices)
+```bash
+# Install using yarn
+yarn add react-native-zeroconf
 
-### Install
+# For React Native < 0.60 only (all platforms):
+react-native link
 
-    yarn add react-native-zeroconf
-    # for react-native < 0.60 only (all platforms):
-    react-native link
-    # for ios (when using CocoaPods):
-    (cd ios && pod install)
-    # for macOS (when using CocoaPods):
-    (cd macos && pod install)
+# For iOS (using CocoaPods):
+cd ios && pod install
 
-You can look at [the wiki](https://github.com/Apercu/react-native-zeroconf/wiki) if you prefer a manual install.
+# For macOS (using CocoaPods):
+cd macos && pod install
+```
 
-TXT records will be available on iOS and Android >= 7.
+For manual installation, see the [wiki](https://github.com/balthazar/react-native-zeroconf/wiki).
 
-For Android please ensure your manifest is requesting all necessary permissions.
+## Setup
+
+### Android Permissions
+
+Add the following permissions to your `AndroidManifest.xml`:
 
 ```xml
+<uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 ```
 
-### Android
+### iOS 14+ Permissions
 
-Supports all Android versions from 5.0 (API 21) onwards using the embedded mDNSResponder implementation.
-
-### Android Emulator Limitations
-
-**Important:** The Android emulator does not support IGMP or multicast. This is a [documented limitation](https://developer.android.com/studio/run/emulator-networking) that affects **all Android emulator versions**.
-
-Since mDNS/Bonjour relies on multicast UDP packets to `224.0.0.251:5353`, Zeroconf discovery **will not work on Android emulators** by default.
-
-#### Workarounds for Emulator Testing
-
-**Option 1: Use a Real Device (Recommended)**
-
-For reliable mDNS testing, use a physical Android device connected to the same network as the services you want to discover.
-
-**Option 2: Enable Bridged Networking (Linux)**
-
-On Linux, you can configure TAP bridged networking to allow the emulator to receive multicast packets:
-
-1. Install required tools:
-   ```bash
-   sudo apt-get install bridge-utils
-   ```
-
-2. Create TAP interface and bridge:
-   ```bash
-   # Create TAP interface
-   sudo ip tuntap add dev tap0 mode tap user $USER
-
-   # Get your main network interface name
-   ip link show  # (e.g., eth0, enp3s0)
-
-   # Create bridge and add interfaces
-   sudo ip link add name br0 type bridge
-   sudo ip link set enp3s0 master br0  # Replace with your interface
-   sudo ip link set tap0 master br0
-
-   # Bring up interfaces
-   sudo ip link set dev tap0 up
-   sudo ip link set dev br0 up
-
-   # Get IP via DHCP
-   sudo dhclient br0
-   ```
-
-3. Launch emulator with TAP networking:
-   ```bash
-   emulator -avd <avd_name> -net-tap tap0
-   ```
-
-4. In the emulator, toggle Airplane Mode on/off to refresh network configuration.
-
-**Option 3: ADB Port Forwarding (Direct Connections Only)**
-
-For direct TCP connections (not mDNS discovery):
-```bash
-adb reverse tcp:9100 tcp:192.168.1.100:9100
-```
-
-Then connect to `localhost:9100` in your app.
-
-**Note:** WiFi bridging is complex because most WiFi cards don't support bridging. Use Ethernet for TAP bridged networking, or consider [Genymotion](https://www.genymotion.com/) which supports bridged networking by default.
-
-### IOS 14 Permissions
-
-IOS 14 requires you to specify the services you want to scan for and a description for what you're using them.
-
-In your `info.plist` add the following strings:
+iOS 14+ requires you to declare the services you want to discover in your `Info.plist`:
 
 ```xml
 <key>NSBonjourServices</key>
-	<array>
-		<string>my_service._tcp.</string>
-		<string>my_other_service._tcp.</string>
-	</array>
+<array>
+    <string>_http._tcp.</string>
+    <string>_printer._tcp.</string>
+    <!-- Add other service types you need -->
+</array>
 <key>NSLocalNetworkUsageDescription</key>
-<string>Describe why you want to use local network discovery here</string>
+<string>This app uses the local network to discover printers and other devices.</string>
 ```
 
-### Example
+## Quick Start
 
-Take a look at the [example folder](./example). Install the dependencies, run `node server.js` and launch the project.
+```javascript
+import Zeroconf from 'react-native-zeroconf'
 
-### API
+const zeroconf = new Zeroconf()
+
+// Listen for resolved services
+zeroconf.on('resolved', service => {
+  console.log('Found service:', service.name)
+  console.log('IP addresses:', service.addresses)
+  console.log('Port:', service.port)
+})
+
+// Start scanning for HTTP services
+zeroconf.scan('http', 'tcp', 'local.')
+
+// Stop scanning after 10 seconds
+setTimeout(() => {
+  zeroconf.stop()
+  console.log('All services:', zeroconf.getServices())
+}, 10000)
+```
+
+## API Reference
+
+### Constructor
 
 ```javascript
 import Zeroconf from 'react-native-zeroconf'
 const zeroconf = new Zeroconf()
 ```
 
-##### Methods
+### Methods
 
-###### `scan(type = 'http', protocol = 'tcp', domain = 'local.')` Start the zeroconf scan
+#### `scan(type, protocol, domain, implType)`
 
-This will initialize the scan from the `Zeroconf` instance. Will stop another scan if any is running.
+Start scanning for services on the network.
 
-###### `stop()` Stop the scan
-
-If any scan is running, stop it. Otherwise do nothing.
-
-###### `getServices()` Returns resolved services
-
-Will return all names of services that have been resolved.
-
-###### `removeDeviceListeners()` Remove listeners
-
-Allow you to clean the listeners, avoiding potential memory leaks ([#33](https://github.com/Apercu/react-native-zeroconf/issues/33)).
-
-###### `addDeviceListeners()` Add listeners
-
-If you cleaned the listeners and need to get them back on.
-
-###### `publishService(type, protocol, domain, name, port, txt)` Publish a service
-
-This adds a service for the current device to the discoverable services on the network.
-
-`domain` should be the domain the service is sitting on, dot suffixed, for example `'local.'`
-`type` should be both type and protocol, underscore prefixed, for example `'_http._tcp'`
-`name` should be unique to the device, often the device name
-`port` should be an integer
-`txt` should be a hash, for example `{"foo": "bar"}`
-
-###### `unpublishService(name)` Unpublish a service
-
-This removes a service from those discoverable on the network.
-
-`name` should be the name used when publishing the service
-
-##### Events
+| Parameter  | Type   | Default    | Description                                                                                        |
+| ---------- | ------ | ---------- | -------------------------------------------------------------------------------------------------- |
+| `type`     | string | `'http'`   | Service type (e.g., `'http'`, `'printer'`, `'ssh'`, `'pdl-datastream'`)                            |
+| `protocol` | string | `'tcp'`    | Protocol (`'tcp'` or `'udp'`)                                                                      |
+| `domain`   | string | `'local.'` | Domain to search (typically `'local.'`)                                                            |
+| `implType` | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` (see [Implementation Types](#android-implementation-types)) |
 
 ```javascript
-zeroconf.on('start', () => console.log('The scan has started.'))
+// Scan for HTTP services using default NSD implementation
+zeroconf.scan('http', 'tcp', 'local.')
+
+// Scan for printers using DNSSD (recommended for better compatibility)
+zeroconf.scan('pdl-datastream', 'tcp', 'local.', 'DNSSD')
 ```
 
-###### `start` Triggered on scan start
+#### `stop(implType)`
 
-###### `stop` Triggered on scan stop
+Stop the current scan.
 
-###### `found` Triggered when a service is found
+| Parameter  | Type   | Default | Description                                    |
+| ---------- | ------ | ------- | ---------------------------------------------- |
+| `implType` | string | `'NSD'` | **Android only**: Which implementation to stop |
 
-Broadcast a service name as soon as it is found.
+```javascript
+zeroconf.stop()
+// or on Android with DNSSD:
+zeroconf.stop('DNSSD')
+```
 
-###### `resolved` Triggered when a service is resolved
+#### `getServices()`
 
-Broadcast a service object once it is fully resolved
+Returns all currently discovered services.
 
-```json
+```javascript
+const services = zeroconf.getServices()
+// Returns: { 'ServiceName': { name, host, port, addresses, txt, fullName }, ... }
+```
+
+#### `publishService(type, protocol, domain, name, port, txt, implType)`
+
+Publish a service on the network.
+
+| Parameter  | Type   | Default    | Description                            |
+| ---------- | ------ | ---------- | -------------------------------------- |
+| `type`     | string | required   | Service type (e.g., `'http'`)          |
+| `protocol` | string | required   | Protocol (`'tcp'` or `'udp'`)          |
+| `domain`   | string | `'local.'` | Domain                                 |
+| `name`     | string | required   | Service name (should be unique)        |
+| `port`     | number | required   | Port number                            |
+| `txt`      | object | `{}`       | TXT record key-value pairs             |
+| `implType` | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` |
+
+```javascript
+zeroconf.publishService('http', 'tcp', 'local.', 'MyWebServer', 8080, {
+  path: '/api',
+  version: '1.0',
+})
+```
+
+#### `unpublishService(name, implType)`
+
+Remove a published service.
+
+| Parameter  | Type   | Default  | Description                            |
+| ---------- | ------ | -------- | -------------------------------------- |
+| `name`     | string | required | Name of the service to unpublish       |
+| `implType` | string | `'NSD'`  | **Android only**: Which implementation |
+
+```javascript
+zeroconf.unpublishService('MyWebServer')
+```
+
+#### `addDeviceListeners()`
+
+Manually add event listeners (called automatically in constructor).
+
+#### `removeDeviceListeners()`
+
+Remove all event listeners. Call this to prevent memory leaks when unmounting components.
+
+```javascript
+// In React useEffect cleanup
+useEffect(() => {
+  const zeroconf = new Zeroconf()
+  zeroconf.scan('http', 'tcp', 'local.')
+
+  return () => {
+    zeroconf.stop()
+    zeroconf.removeDeviceListeners()
+  }
+}, [])
+```
+
+### Events
+
+#### Scan Events
+
+| Event      | Payload                 | Description                              |
+| ---------- | ----------------------- | ---------------------------------------- |
+| `start`    | none                    | Scan has started                         |
+| `stop`     | none                    | Scan has stopped                         |
+| `found`    | `string` (service name) | Service found (before resolution)        |
+| `resolved` | `Service` object        | Service fully resolved with network info |
+| `remove`   | `string` (service name) | Service removed from network             |
+| `update`   | none                    | Services list changed (found or removed) |
+| `error`    | `Error` object          | An error occurred                        |
+
+#### Publishing Events
+
+| Event         | Payload          | Description                      |
+| ------------- | ---------------- | -------------------------------- |
+| `published`   | `Service` object | Service successfully published   |
+| `unpublished` | `Service` object | Service successfully unpublished |
+
+### Service Object
+
+```javascript
 {
-  "host": "XeroxPrinter.local.",
-  "addresses": ["192.168.1.23", "fe80::aebc:123:ffff:abcd"],
-  "name": "Xerox Printer",
-  "fullName": "XeroxPrinter.local._http._tcp.",
-  "port": 8080
+  name: 'Xerox Printer',                    // Human-readable name
+  fullName: 'XeroxPrinter._http._tcp.local.', // Full service name
+  host: 'XeroxPrinter.local.',              // Hostname
+  port: 8080,                               // Port number
+  addresses: [                              // IP addresses (IPv4 and/or IPv6)
+    '192.168.1.23',
+    'fe80::aebc:123:ffff:abcd'
+  ],
+  txt: {                                    // TXT record attributes
+    path: '/status',
+    color: 'yes'
+  }
 }
 ```
 
-###### `remove` Triggered when a service is removed
+## Android Implementation Types
 
-Broadcast a service name removed from the network.
+This library supports two implementations on Android:
 
-###### `update` Triggered either when a service is found or removed
+### NSD (Network Service Discovery)
 
-###### `error` Triggered when an error occurs
+- Uses Android's built-in `NsdManager` API
+- Default implementation
+- Good for most use cases
 
-### License
+### DNSSD (Embedded mDNSResponder)
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- Uses bundled Apple mDNSResponder
+- More reliable across different Android versions and manufacturers
+- Required for 16KB page size compliance (Android 15+)
+- Recommended for production apps
 
-#### Third-Party Licenses
+```javascript
+import Zeroconf, { ImplType } from 'react-native-zeroconf'
 
-This project includes code from [RxDNSSD](https://github.com/discord/RxDNSSD) (originally by Andriy Druk, maintained by Discord), which is licensed under the Apache License 2.0. See the [NOTICE](NOTICE) file for details.
+const zeroconf = new Zeroconf()
+
+// Use DNSSD for better compatibility
+zeroconf.scan('http', 'tcp', 'local.', ImplType.DNSSD)
+```
+
+### When to Use DNSSD
+
+- **Targeting Android 15+**: Google Play requires 16KB page size alignment
+- **Cross-device compatibility**: More consistent behavior across manufacturers
+- **Printer discovery**: Better support for `_pdl-datastream._tcp` and similar services
+- **When NSD doesn't find services**: Some devices have buggy NSD implementations
+
+## Platform Support
+
+| Feature            | iOS    | Android (NSD) | Android (DNSSD) |
+| ------------------ | ------ | ------------- | --------------- |
+| Service Discovery  | ✅     | ✅            | ✅              |
+| Service Publishing | ✅     | ✅            | ✅              |
+| TXT Records        | ✅     | ✅ (API 21+)  | ✅              |
+| IPv4 Addresses     | ✅     | ✅            | ✅              |
+| IPv6 Addresses     | ✅     | ✅            | ✅              |
+| Min API Level      | iOS 7+ | API 16+       | API 21+         |
+
+## Android Emulator Limitations
+
+**Important:** The Android emulator does not support IGMP or multicast by default. This is a [documented limitation](https://developer.android.com/studio/run/emulator-networking).
+
+Since mDNS/Bonjour relies on multicast UDP packets to `224.0.0.251:5353`, Zeroconf discovery **will not work on Android emulators** without special configuration.
+
+### Recommendations
+
+**Use a Real Device (Recommended)**
+
+For reliable mDNS testing, use a physical Android device connected to the same network as the services you want to discover.
+
+**TAP Bridged Networking (Linux - Advanced)**
+
+On Linux with Ethernet, you can configure TAP bridged networking:
+
+1. Create TAP interface and bridge (one-time setup):
+
+   ```bash
+   sudo ip tuntap add dev tap0 mode tap user $USER
+   sudo ip link add name br0 type bridge
+   sudo ip link set <your-ethernet-interface> master br0  # Replace with your ethernet interface (e.g. enp3s0)
+   sudo ip link set tap0 master br0
+   sudo ip link set dev tap0 up
+   sudo ip link set dev br0 up
+   sudo dhcpcd br0  # Or: sudo dhclient br0
+   ```
+
+2. Start emulator with TAP (must use `-no-snapshot-load`):
+
+   ```bash
+   emulator -avd <avd_name> \
+     -no-snapshot-load \
+     -qemu \
+     -netdev tap,id=mynet0,ifname=tap0,script=no,downscript=no \
+     -device virtio-net-pci,netdev=mynet0
+   ```
+
+3. Configure the emulator's eth1 interface:
+
+   ```bash
+   adb root
+   adb shell ip link set eth1 up
+   adb shell ip addr add 192.168.1.213/24 dev eth1  # Use unused IP inside the DHCP range
+   adb shell ip route add default via 192.168.1.1 dev eth1
+   ```
+
+4. Start your dev server with the host's bridge IP:
+   ```bash
+   REACT_NATIVE_PACKAGER_HOSTNAME=<host_bridge_ip> npx expo start --android
+   ```
+
+**Note:** WiFi bridging doesn't work on most systems. Use Ethernet for TAP networking.
+
+**For Direct TCP Connections (Not mDNS)**
+
+If your app falls back to direct IP connections, you can use ADB port forwarding:
+
+```bash
+adb reverse tcp:9100 tcp:192.168.1.100:9100
+```
+
+Then connect to `localhost:9100` in your app.
+
+## Common Service Types
+
+| Service       | Type             | Protocol |
+| ------------- | ---------------- | -------- |
+| HTTP          | `http`           | `tcp`    |
+| HTTPS         | `https`          | `tcp`    |
+| Printer (Raw) | `pdl-datastream` | `tcp`    |
+| Printer (IPP) | `ipp`            | `tcp`    |
+| SSH           | `ssh`            | `tcp`    |
+| FTP           | `ftp`            | `tcp`    |
+| AirPlay       | `airplay`        | `tcp`    |
+| Chromecast    | `googlecast`     | `tcp`    |
+
+## Example
+
+See the [example folder](./example) for a complete React Native app demonstrating service discovery and publishing.
+
+```bash
+cd example
+yarn install
+cd ios && pod install && cd ..
+yarn ios  # or yarn android
+```
+
+## Troubleshooting
+
+### Services not being discovered
+
+1. **Check permissions**: Ensure all required permissions are granted
+2. **iOS 14+**: Verify `NSBonjourServices` includes your service type
+3. **Android emulator**: Use a real device (emulators don't support multicast)
+4. **Try DNSSD**: Switch from NSD to DNSSD implementation on Android
+5. **Same network**: Ensure device and services are on the same network/subnet
+
+### TXT records empty or missing
+
+- TXT records require Android API 21+ (Android 5.0)
+- Verify the service actually publishes TXT records
+
+### Memory leaks
+
+Call `removeDeviceListeners()` when unmounting:
+
+```javascript
+useEffect(() => {
+  const zeroconf = new Zeroconf()
+  // ... setup
+  return () => {
+    zeroconf.stop()
+    zeroconf.removeDeviceListeners()
+  }
+}, [])
+```
+
+## About
+
+The library [react-native-zeroconf](https://github.com/balthazar/react-native-zeroconf) includes:
+
+- **16KB Page Size Support**: Native libraries built with 16KB alignment for Android 15+ (Google Play requirement as of November 1, 2025)
+- **Bundled RxDNSSD**: Native DNS-SD code from [Discord's RxDNSSD fork](https://github.com/discord/RxDNSSD) is embedded directly
+- **Embedded mDNSResponder**: Works reliably across all Android versions without depending on system daemons
+- **Zero Security Vulnerabilities**: All dependencies updated to modern versions
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file.
+
+### Third-Party Licenses
+
+This project includes code from [RxDNSSD](https://github.com/discord/RxDNSSD) (originally by Andriy Druk, maintained by Discord), licensed under the Apache License 2.0. See [NOTICE](NOTICE) file.
