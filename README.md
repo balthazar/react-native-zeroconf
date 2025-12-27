@@ -286,7 +286,15 @@ Since mDNS/Bonjour relies on multicast UDP packets to `224.0.0.251:5353`, Zeroco
 
 For reliable mDNS testing, use a physical Android device connected to the same network as the services you want to discover.
 
-**TAP Bridged Networking (Linux - Advanced)**
+**TAP Bridged Networking (Linux - Really Advanced - Not Recommended for Most Users)**
+
+> **⚠️ Important:**
+>
+> - **Use "Google APIs" system image**, not "Google Play". Google Play images are production builds that don't allow root access (`adb root` fails). You need root to configure the `eth1` interface.
+> - **Always use `-no-snapshot-load`** when starting the emulator. Without this flag, the emulator loads from a saved state and ignores the QEMU network device parameters (eth1 won't exist).
+> - **Network configuration doesn't persist.** You must reconfigure eth1 after every emulator restart.
+> - **Only one emulator per TAP interface.** If running multiple emulators, create additional TAP interfaces (tap1, tap2, etc.).
+> - **Use your network's subnet.** Replace the example IPs below with addresses matching your actual network (e.g., if your network is `192.168.1.x`, use `192.168.1.213/24` and gateway `192.168.1.1`).
 
 On Linux with Ethernet, you can configure TAP bridged networking:
 
@@ -295,6 +303,7 @@ On Linux with Ethernet, you can configure TAP bridged networking:
    ```bash
    sudo ip tuntap add dev tap0 mode tap user $USER
    sudo ip link add name br0 type bridge
+   sudo ip link show # Get the list of network interfaces
    sudo ip link set <your-ethernet-interface> master br0  # Replace with your ethernet interface (e.g. enp3s0)
    sudo ip link set tap0 master br0
    sudo ip link set dev tap0 up
@@ -317,26 +326,25 @@ On Linux with Ethernet, you can configure TAP bridged networking:
    ```bash
    adb root
    adb shell ip link set eth1 up
-   adb shell ip addr add 192.168.1.213/24 dev eth1  # Use unused IP inside the DHCP range
-   adb shell ip route add default via 192.168.1.1 dev eth1
+   adb shell ip addr add <unused_ip> dev eth1   # e.g., 192.168.1.213
+   adb shell ip route add default via <gateway> dev eth1  # e.g., 192.168.1.1
+
+   # Verify connectivity
+   adb shell ping -c 2 <your_printer_or_device_ip>
    ```
 
 4. Start your dev server with the host's bridge IP:
+
    ```bash
-   REACT_NATIVE_PACKAGER_HOSTNAME=<host_bridge_ip> npx expo start --android
+   # Find your host's bridge IP
+   ip addr show br0 | grep "inet "
+   # Example output: inet 192.168.1.28/24 ...
+
+   # Example to use that IP to start with Expo
+   REACT_NATIVE_PACKAGER_HOSTNAME=192.168.1.28 npx expo start --android
    ```
 
 **Note:** WiFi bridging doesn't work on most systems. Use Ethernet for TAP networking.
-
-**For Direct TCP Connections (Not mDNS)**
-
-If your app falls back to direct IP connections, you can use ADB port forwarding:
-
-```bash
-adb reverse tcp:9100 tcp:192.168.1.100:9100
-```
-
-Then connect to `localhost:9100` in your app.
 
 ## Common Service Types
 
