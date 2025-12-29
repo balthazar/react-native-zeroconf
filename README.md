@@ -400,6 +400,122 @@ useEffect(() => {
 }, [])
 ```
 
+## Known Issues
+
+### Android mDNS/NSD Reliability
+
+Android's Network Service Discovery (NSD) implementation has well-documented reliability issues that affect **all** mDNS libraries on Android, including this one. These are platform-level limitations, not bugs in this library.
+
+#### Symptoms
+
+- Discovery works initially, then stops finding services after a few scans
+- `start` event fires but no `resolved` events follow
+- Inconsistent results between scans on the same network
+- Discovery fails silently without error callbacks
+
+#### Root Causes
+
+1. **Android NSD limitations (Android 8–14+)**:
+   - Discovery may silently stop without error callbacks
+   - `onServiceFound` fires but resolve fails
+   - Discovery stops after screen lock or app backgrounding
+   - Multiple concurrent scans conflict with each other
+
+2. **OEM-specific issues** (Samsung, Xiaomi, Huawei, etc.):
+   - Multicast packets throttled or dropped
+   - Background discovery threads killed by battery optimization
+   - Aggressive Doze mode delays mDNS packets
+
+3. **Network change sensitivity**:
+   - mDNS breaks on WiFi reconnect, AP band switching (2.4↔5 GHz), mesh handoff, or VPN changes
+
+#### Recommended Workarounds
+
+**1. Implement retry logic**
+
+Since Android NSD fails silently, implement automatic retries:
+
+```javascript
+async function scanWithRetry(zeroconf, maxAttempts = 5) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const results = await performScan(zeroconf)
+    if (results.length > 0) return results
+
+    // Stop and wait before retry
+    zeroconf.stop('DNSSD')
+    await new Promise(r => setTimeout(r, 1000))
+  }
+  return []
+}
+```
+
+**2. Add delays between stop and start**
+
+The native DNSSD module needs time to fully stop before starting a new scan:
+
+```javascript
+zeroconf.stop('DNSSD')
+await new Promise(r => setTimeout(r, 500)) // Wait 500ms
+zeroconf.scan('pdl-datastream', 'tcp', 'local.', 'DNSSD')
+```
+
+**3. Use DNSSD instead of NSD**
+
+DNSSD (embedded mDNSResponder) is generally more reliable than Android's native NSD:
+
+```javascript
+// Use DNSSD for better reliability
+zeroconf.scan('http', 'tcp', 'local.', 'DNSSD')
+```
+
+**4. Handle app lifecycle**
+
+Stop scans when app backgrounds and restart when foregrounding:
+
+```javascript
+import { AppState } from 'react-native'
+
+AppState.addEventListener('change', (state) => {
+  if (state === 'background') {
+    zeroconf.stop('DNSSD')
+  } else if (state === 'active') {
+    // Restart scan
+    zeroconf.scan('http', 'tcp', 'local.', 'DNSSD')
+  }
+})
+```
+
+**5. Don't call stop() on already-stopped scans**
+
+Track scan state to avoid calling `stop()` multiple times, which can put the native module in a bad state:
+
+```javascript
+let isScanning = false
+
+function startScan() {
+  if (isScanning) return
+  isScanning = true
+  zeroconf.scan('http', 'tcp', 'local.', 'DNSSD')
+}
+
+function stopScan() {
+  if (!isScanning) return
+  isScanning = false
+  zeroconf.stop('DNSSD')
+}
+```
+
+#### What Doesn't Help
+
+- Creating multiple Zeroconf instances (native module is a singleton)
+- Calling `removeDeviceListeners()` + `addDeviceListeners()` rapidly
+- Very short scan timeouts (< 3 seconds)
+
+#### References
+
+- [Android NsdManager documentation](https://developer.android.com/reference/android/net/nsd/NsdManager)
+- [Android emulator multicast limitations](https://developer.android.com/studio/run/emulator-networking)
+
 ## About
 
 The library [react-native-zeroconf](https://github.com/balthazar/react-native-zeroconf) includes:
