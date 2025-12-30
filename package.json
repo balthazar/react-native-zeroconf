@@ -1,10 +1,11 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.13.8",
+  "version": "1.0.0",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "dist",
   "scripts": {
     "lint": "eslint src/*.js",
+    "format": "prettier --write src/*.js",
     "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js"
   },
   "repository": {
@@ -12,10 +13,12 @@
     "url": "git://github.com/Apercu/react-native-zeroconf.git"
   },
   "files": [
+    "src",
     "dist",
     "android",
     "ios",
-    "react-native-zeroconf.podspec"
+    "react-native-zeroconf.podspec",
+    "NOTICE"
   ],
   "keywords": [
     "react-component",
@@ -40,23 +43,25 @@
     "react-native": ">=0.60"
   },
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-eslint": "^10.0.3",
-    "babel-preset-react-native": "^4.0.1",
-    "eslint": "^6.7.2",
-    "eslint-config-prettier": "^6.7.0",
-    "eslint-config-zavatta": "^6.0.3",
-    "prettier": "^1.19.1"
-  },
-  "eslintConfig": {
-    "extends": [
-      "zavatta",
-      "prettier"
-    ]
+    "@babel/cli": "^7.23.0",
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@babel/preset-flow": "^7.23.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.0"
   },
   "babel": {
     "presets": [
-      "react-native"
+      [
+        "@babel/preset-env",
+        {
+          "targets": {
+            "node": "14"
+          }
+        }
+      ],
+      "@babel/preset-flow"
     ]
   }
 }

@@ -16,7 +16,7 @@ import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 import com.github.druk.rx2dnssd.BonjourService;
 import com.github.druk.rx2dnssd.Rx2Dnssd;
-import com.github.druk.rx2dnssd.Rx2DnssdBindable;
+import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
 
 import java.net.InetAddress;
 import java.util.HashMap;
@@ -49,7 +49,17 @@ public class DnssdImpl implements Zeroconf {
         this.reactApplicationContext = reactApplicationContext;
         mPublishedServices = new HashMap<String, BonjourService>();
         mRegisteredDisposables = new HashMap<String, Disposable>();
-        rxDnssd = new Rx2DnssdBindable(reactApplicationContext);
+        rxDnssd = createDnssd(reactApplicationContext);
+    }
+
+    /**
+     * Creates the Rx2Dnssd implementation.
+     * Always uses embedded mDNSResponder since it works across all Android versions.
+     * The daemonic version (Rx2DnssdBindable) is unreliable on Android as the
+     * system daemon at /dev/socket/mdnsd doesn't exist on most devices.
+     */
+    private Rx2Dnssd createDnssd(Context context) {
+        return new Rx2DnssdEmbedded(context);
     }
 
     @Override
@@ -63,7 +73,13 @@ public class DnssdImpl implements Zeroconf {
             multicastLock.acquire();
         }
 
-        browseDisposable = rxDnssd.browse(getServiceType(type, protocol), "local.")
+        String serviceType = getServiceType(type, protocol);
+        Log.d("DnssdImpl", "Starting DNSSD scan for: " + serviceType);
+
+        // Emit start event
+        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_START, null);
+
+        browseDisposable = rxDnssd.browse(serviceType, "local.")
                 .compose(rxDnssd.resolve())
                 .compose(rxDnssd.queryRecords())
                 .subscribeOn(Schedulers.io())
