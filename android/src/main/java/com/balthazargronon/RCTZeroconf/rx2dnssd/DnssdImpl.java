@@ -26,11 +26,14 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
+import io.reactivex.Flowable;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 
 public class DnssdImpl implements Zeroconf {
+    private static final String TAG = "DnssdImpl";
+
     private Rx2Dnssd rxDnssd;
 
     @Nullable
@@ -74,24 +77,47 @@ public class DnssdImpl implements Zeroconf {
         }
 
         String serviceType = getServiceType(type, protocol);
-        Log.d("DnssdImpl", "Starting DNSSD scan for: " + serviceType);
+        Log.d(TAG, "Starting DNSSD scan for: " + serviceType);
 
         // Emit start event
         zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_START, null);
 
         browseDisposable = rxDnssd.browse(serviceType, "local.")
-                .compose(rxDnssd.resolve())
-                .compose(rxDnssd.queryRecords())
+                .doOnNext(bonjourService -> {
+                    if (!bonjourService.isLost()) {
+                        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_FOUND, serviceNameToMap(bonjourService));
+                    }
+                })
+                // Resolve each service independently so a single failure doesn't end the whole browse
+                .flatMap(bonjourService -> bonjourService.isLost()
+                        ? Flowable.just(bonjourService)
+                        : Flowable.just(bonjourService)
+                                .compose(rxDnssd.resolve())
+                                .compose(rxDnssd.queryRecords())
+                                .onErrorResumeNext((Throwable throwable) -> {
+                                    Log.e(TAG, "Error resolving service: ", throwable);
+                                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, "Resolving service failed: " + throwable.getMessage());
+                                    return Flowable.empty();
+                                }))
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(bonjourService -> {
-                    WritableMap service = serviceInfoToMap(bonjourService);
-                    Log.d(getClass().getName(), service.toString());
-                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_RESOLVE, service);
+                    if (bonjourService.isLost()) {
+                        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_REMOVE, serviceNameToMap(bonjourService));
+                        return;
+                    }
+                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(bonjourService));
                 }, throwable -> {
-                    Log.e(getClass().getName(), "Error resolving service: ", throwable);
-                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, throwable.getMessage());
+                    Log.e(TAG, "Error browsing services: ", throwable);
+                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, "Browsing services failed: " + throwable.getMessage());
+                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_STOP, null);
                 });
+    }
+
+    private WritableMap serviceNameToMap(BonjourService serviceInfo) {
+        WritableMap service = new WritableNativeMap();
+        service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
+        return service;
     }
 
     private String getServiceType(String type, String protocol) {
@@ -102,10 +128,11 @@ public class DnssdImpl implements Zeroconf {
         WritableMap service = new WritableNativeMap();
         service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
         final List<InetAddress> hostList = serviceInfo.getInetAddresses();
-        final String fullServiceName;
-        Log.d("TAG", serviceInfo.getServiceName());
-        fullServiceName = serviceInfo.getServiceName();
-        service.putString(ZeroconfModule.KEY_SERVICE_HOST, fullServiceName);
+        final String hostname = serviceInfo.getHostname();
+        final String fullServiceName = hostname != null
+                ? hostname + serviceInfo.getRegType()
+                : serviceInfo.getServiceName();
+        service.putString(ZeroconfModule.KEY_SERVICE_HOST, hostname != null ? hostname : serviceInfo.getServiceName());
 
         WritableArray addresses = new WritableNativeArray();
         for (InetAddress host : hostList) {
@@ -170,12 +197,14 @@ public class DnssdImpl implements Zeroconf {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(bonjourService -> {
-                    Log.i("TAG", "Register successfully " + bonjourService.toString());
+                    Log.i(TAG, "Registered service " + bonjourService.toString());
 
                     mPublishedServices.put(bs.getServiceName(), bs);
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_PUBLISHED, serviceInfoToMap(bonjourService));
                 }, throwable -> {
-                    Log.e("TAG", "error", throwable);
+                    Log.e(TAG, "Error registering service: ", throwable);
+                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, "Registering service failed: " + throwable.getMessage());
+                    mRegisteredDisposables.remove(name);
                 });
 
         mRegisteredDisposables.put(name, registerDisposable);
