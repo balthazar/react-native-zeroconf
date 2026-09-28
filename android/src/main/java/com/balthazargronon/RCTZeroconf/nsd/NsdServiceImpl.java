@@ -6,6 +6,9 @@ import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
@@ -18,13 +21,17 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
 
-import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
-import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class NsdServiceImpl implements Zeroconf {
+    private static final String TAG = "NsdServiceImpl";
+    private static final long RESOLVE_RETRY_DELAY_MS = 100;
+
     private NsdManager mNsdManager;
     private NsdManager.DiscoveryListener mDiscoveryListener;
     private WifiManager.MulticastLock multicastLock;
@@ -32,10 +39,15 @@ public class NsdServiceImpl implements Zeroconf {
     private ZeroconfModule zeroconfModule;
     private ReactApplicationContext reactApplicationContext;
 
+    // NsdManager can only resolve one service at a time before API 34, so resolves are queued
+    private final ArrayDeque<NsdServiceInfo> mResolveQueue = new ArrayDeque<>();
+    private boolean mIsResolving = false;
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+
     public NsdServiceImpl(ZeroconfModule zeroconfModule, ReactApplicationContext reactApplicationContext) {
         this.zeroconfModule = zeroconfModule;
         this.reactApplicationContext = reactApplicationContext;
-        mPublishedServices = new HashMap<String, NsdManager.RegistrationListener>();
+        mPublishedServices = new ConcurrentHashMap<String, NsdManager.RegistrationListener>();
     }
 
     @Override
@@ -68,29 +80,29 @@ public class NsdServiceImpl implements Zeroconf {
 
             @Override
             public void onDiscoveryStarted(String serviceType) {
-                System.out.println("On Discovery Started");
+                Log.d(TAG, "Discovery started");
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_START, null);
             }
 
             @Override
             public void onDiscoveryStopped(String serviceType) {
-                System.out.println("On Discovery Stopped");
+                Log.d(TAG, "Discovery stopped");
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_STOP, null);
             }
 
             @Override
             public void onServiceFound(NsdServiceInfo serviceInfo) {
-                System.out.println("On Service Found");
+                Log.d(TAG, "Service found");
                 WritableMap service = new WritableNativeMap();
                 service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
 
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_FOUND, service);
-                mNsdManager.resolveService(serviceInfo, new NsdServiceImpl.ZeroResolveListener());
+                enqueueResolve(serviceInfo);
             }
 
             @Override
             public void onServiceLost(NsdServiceInfo serviceInfo) {
-                System.out.println("On Service Lost");
+                Log.d(TAG, "Service lost");
                 WritableMap service = new WritableNativeMap();
                 service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_REMOVE, service);
@@ -103,8 +115,19 @@ public class NsdServiceImpl implements Zeroconf {
 
     @Override
     public void stop() {
-        if (mDiscoveryListener != null) {
-            mNsdManager.stopServiceDiscovery(mDiscoveryListener);
+        if (mDiscoveryListener != null && mNsdManager != null) {
+            try {
+                mNsdManager.stopServiceDiscovery(mDiscoveryListener);
+            } catch (IllegalArgumentException e) {
+                // Listener was never registered or already unregistered (e.g. discovery failed to start)
+                Log.w(TAG, "stopServiceDiscovery failed", e);
+            }
+        }
+
+        mHandler.removeCallbacksAndMessages(null);
+        synchronized (mResolveQueue) {
+            mResolveQueue.clear();
+            mIsResolving = false;
         }
 
         if (multicastLock != null) {
@@ -159,21 +182,60 @@ public class NsdServiceImpl implements Zeroconf {
         return reactApplicationContext;
     }
 
+    private void enqueueResolve(NsdServiceInfo serviceInfo) {
+        synchronized (mResolveQueue) {
+            mResolveQueue.add(serviceInfo);
+        }
+        resolveNext();
+    }
+
+    private void resolveNext() {
+        NsdServiceInfo next;
+        synchronized (mResolveQueue) {
+            if (mIsResolving || mResolveQueue.isEmpty()) {
+                return;
+            }
+            next = mResolveQueue.poll();
+            mIsResolving = true;
+        }
+        try {
+            getNsdManager().resolveService(next, new ZeroResolveListener());
+        } catch (Throwable e) {
+            Log.e(TAG, "resolveService failed", e);
+            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Resolving service failed: " + e.getMessage());
+            onResolveDone();
+        }
+    }
+
+    private void onResolveDone() {
+        synchronized (mResolveQueue) {
+            mIsResolving = false;
+        }
+        resolveNext();
+    }
+
     private class ZeroResolveListener implements NsdManager.ResolveListener {
         @Override
         public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
             if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
-                mNsdManager.resolveService(serviceInfo, this);
-            } else {
-                String error = "Resolving service failed with code: " + errorCode;
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+                // Another resolve (possibly from another app or listener) is in flight: retry shortly
+                synchronized (mResolveQueue) {
+                    mResolveQueue.addFirst(serviceInfo);
+                    mIsResolving = false;
+                }
+                mHandler.postDelayed(NsdServiceImpl.this::resolveNext, RESOLVE_RETRY_DELAY_MS);
+                return;
             }
+            String error = "Resolving service failed with code: " + errorCode;
+            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+            onResolveDone();
         }
 
         @Override
         public void onServiceResolved(NsdServiceInfo serviceInfo) {
             WritableMap service = serviceInfoToMap(serviceInfo);
             zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_RESOLVE, service);
+            onResolveDone();
         }
     }
 
@@ -194,7 +256,8 @@ public class NsdServiceImpl implements Zeroconf {
 
         @Override
         public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            // Registration failed!  Put debugging code here to determine why.
+            String error = "Registering service " + serviceInfo.getServiceName() + " failed with code: " + errorCode;
+            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
         }
 
         @Override
@@ -207,7 +270,8 @@ public class NsdServiceImpl implements Zeroconf {
 
         @Override
         public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            // Unregistration failed.  Put debugging code here to determine why.
+            String error = "Unregistering service " + serviceInfo.getServiceName() + " failed with code: " + errorCode;
+            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
         }
     }
 
@@ -234,13 +298,10 @@ public class NsdServiceImpl implements Zeroconf {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             Map<String, byte[]> attributes = serviceInfo.getAttributes();
-            for (String key : attributes.keySet()) {
-                try {
+            if (attributes != null) {
+                for (String key : attributes.keySet()) {
                     byte[] recordValue = attributes.get(key);
-                    txtRecords.putString(String.format(Locale.getDefault(), "%s", key), String.format(Locale.getDefault(), "%s", recordValue != null ? new String(recordValue, "UTF_8") : ""));
-                } catch (UnsupportedEncodingException e) {
-                    String error = "Failed to encode txtRecord: " + e;
-                    zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+                    txtRecords.putString(String.format(Locale.getDefault(), "%s", key), recordValue != null ? new String(recordValue, StandardCharsets.UTF_8) : "");
                 }
             }
         }

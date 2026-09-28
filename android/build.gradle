@@ -45,6 +45,4 @@ dependencies {
     // RxJava2 for Rx2Dnssd (bundled from Discord's RxDNSSD fork)
     api 'io.reactivex.rxjava2:rxjava:2.2.21'
     api 'io.reactivex.rxjava2:rxandroid:2.1.1'
-    // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
-    api group: 'org.apache.commons', name: 'commons-lang3', version: '3.11'
 }

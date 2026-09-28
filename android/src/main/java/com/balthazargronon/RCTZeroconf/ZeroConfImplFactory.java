@@ -5,9 +5,9 @@ import com.balthazargronon.RCTZeroconf.rx2dnssd.DnssdImpl;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
 
-import org.apache.commons.lang3.StringUtils;
-
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ZeroConfImplFactory {
@@ -25,7 +25,7 @@ public class ZeroConfImplFactory {
     }
 
     public Zeroconf getZeroconf(String implType) {
-        if (StringUtils.isBlank(implType)) implType = ZeroConfImplFactory.NSD_IMPL;
+        if (implType == null || implType.trim().isEmpty()) implType = ZeroConfImplFactory.NSD_IMPL;
         return getOrCreateImpl(implType);
     }
 
@@ -44,6 +44,13 @@ public class ZeroConfImplFactory {
         }
 
         return zeroconfMap.get(implType);
+    }
+
+    /**
+     * Implementations that have already been created, without instantiating new ones
+     */
+    public List<Zeroconf> getCreatedImpls() {
+        return new ArrayList<>(zeroconfMap.values());
     }
 
 }
