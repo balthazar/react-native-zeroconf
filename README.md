@@ -74,7 +74,7 @@ zeroconf.on('resolved', service => {
 })
 
 // Start scanning for HTTP services
-zeroconf.scan('http', 'tcp', 'local.')
+zeroconf.scan({ type: 'http' })
 
 // Stop scanning after 10 seconds
 setTimeout(() => {
@@ -97,7 +97,7 @@ zeroconf.on('resolved', (service: Service) => {
 })
 zeroconf.on('remove', name => console.log(`${name} left`))
 
-zeroconf.scan('http', 'tcp', 'local.', ImplType.DNSSD)
+zeroconf.scan({ type: 'http', implType: ImplType.DNSSD })
 ```
 
 ## API Reference
@@ -111,24 +111,26 @@ const zeroconf = new Zeroconf()
 
 ### Methods
 
-#### `scan(type, protocol, domain, implType)`
+#### `scan(options)`
 
-Start scanning for services on the network.
+Start scanning for services on the network. All options are optional.
 
-| Parameter  | Type   | Default    | Description                                                                                        |
-| ---------- | ------ | ---------- | -------------------------------------------------------------------------------------------------- |
-| `type`     | string | `'http'`   | Service type (e.g., `'http'`, `'printer'`, `'ssh'`, `'pdl-datastream'`)                            |
-| `protocol` | string | `'tcp'`    | Protocol (`'tcp'` or `'udp'`)                                                                      |
-| `domain`   | string | `'local.'` | Domain to search (typically `'local.'`)                                                            |
-| `implType` | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` (see [Implementation Types](#android-implementation-types)) |
+| Option           | Type   | Default    | Description                                                                                        |
+| ---------------- | ------ | ---------- | -------------------------------------------------------------------------------------------------- |
+| `type`           | string | `'http'`   | Service type (e.g., `'http'`, `'printer'`, `'ssh'`, `'pdl-datastream'`)                            |
+| `protocol`       | string | `'tcp'`    | Protocol (`'tcp'` or `'udp'`)                                                                      |
+| `domain`         | string | `'local.'` | Domain to search (typically `'local.'`)                                                            |
+| `implType`       | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` (see [Implementation Types](#android-implementation-types)) |
 
 ```javascript
 // Scan for HTTP services using default NSD implementation
-zeroconf.scan('http', 'tcp', 'local.')
+zeroconf.scan()
 
 // Scan for printers using DNSSD (recommended for better compatibility)
-zeroconf.scan('pdl-datastream', 'tcp', 'local.', 'DNSSD')
+zeroconf.scan({ type: 'pdl-datastream', implType: 'DNSSD' })
 ```
+
+The positional form `scan(type, protocol, domain, implType)` still works but is deprecated.
 
 #### `stop(implType)`
 
@@ -151,32 +153,43 @@ const services = zeroconf.getServices()
 // Returns: { 'ServiceName': { name, host, port, addresses, txt, fullName }, ... }
 ```
 
-#### `publishService(type, protocol, domain, name, port, txt, implType)`
+#### `publishService(options)`
 
 Publish a service on the network.
 
-| Parameter  | Type   | Default    | Description                            |
-| ---------- | ------ | ---------- | -------------------------------------- |
-| `type`     | string | required   | Service type (e.g., `'http'`)          |
-| `protocol` | string | required   | Protocol (`'tcp'` or `'udp'`)          |
-| `domain`   | string | `'local.'` | Domain                                 |
-| `name`     | string | required   | Service name (should be unique)        |
-| `port`     | number | required   | Port number                            |
-| `txt`      | object \| array | `{}` | TXT record key-value pairs, or `[key, value]` pairs to control the order |
-| `implType` | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` |
+| Option     | Type            | Default    | Description                                                              |
+| ---------- | --------------- | ---------- | ------------------------------------------------------------------------ |
+| `type`     | string          | required   | Service type (e.g., `'http'`)                                            |
+| `protocol` | string          | required   | Protocol (`'tcp'` or `'udp'`)                                            |
+| `domain`   | string          | `'local.'` | Domain                                                                   |
+| `name`     | string          | required   | Service name (should be unique)                                          |
+| `port`     | number          | required   | Port number                                                              |
+| `txt`      | object \| array | `{}`       | TXT record key-value pairs, or `[key, value]` pairs to control the order |
+| `implType` | string          | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'`                                   |
 
 ```javascript
-zeroconf.publishService('http', 'tcp', 'local.', 'MyWebServer', 8080, {
-  path: '/api',
-  version: '1.0',
+zeroconf.publishService({
+  type: 'http',
+  protocol: 'tcp',
+  name: 'MyWebServer',
+  port: 8080,
+  txt: { path: '/api', version: '1.0' },
 })
 
 // TXT records are published in the order given. Use pairs when order matters and keys look like numbers
-zeroconf.publishService('http', 'tcp', 'local.', 'MyWebServer', 8080, [
-  ['txtvers', '1'],
-  ['path', '/api'],
-])
+zeroconf.publishService({
+  type: 'http',
+  protocol: 'tcp',
+  name: 'MyWebServer',
+  port: 8080,
+  txt: [
+    ['txtvers', '1'],
+    ['path', '/api'],
+  ],
+})
 ```
+
+The positional form `publishService(type, protocol, domain, name, port, txt, implType)` still works but is deprecated.
 
 TXT order is preserved on iOS and with `DNSSD` on Android. With `NSD`, the order depends on the Android system.
 
@@ -207,7 +220,7 @@ Remove all event listeners. Call this to prevent memory leaks when unmounting co
 // In React useEffect cleanup
 useEffect(() => {
   const zeroconf = new Zeroconf()
-  zeroconf.scan('http', 'tcp', 'local.')
+  zeroconf.scan({ type: 'http' })
 
   return () => {
     zeroconf.stop()
@@ -283,7 +296,7 @@ import Zeroconf, { ImplType } from 'react-native-zeroconf'
 const zeroconf = new Zeroconf()
 
 // Use DNSSD for better compatibility
-zeroconf.scan('http', 'tcp', 'local.', ImplType.DNSSD)
+zeroconf.scan({ type: 'http', implType: ImplType.DNSSD })
 ```
 
 ### When to Use DNSSD
@@ -486,7 +499,7 @@ The native DNSSD module needs time to fully stop before starting a new scan:
 ```javascript
 zeroconf.stop('DNSSD')
 await new Promise(r => setTimeout(r, 500)) // Wait 500ms
-zeroconf.scan('pdl-datastream', 'tcp', 'local.', 'DNSSD')
+zeroconf.scan({ type: 'pdl-datastream', implType: 'DNSSD' })
 ```
 
 **3. Use DNSSD instead of NSD**
@@ -495,7 +508,7 @@ DNSSD (embedded mDNSResponder) is generally more reliable than Android's native 
 
 ```javascript
 // Use DNSSD for better reliability
-zeroconf.scan('http', 'tcp', 'local.', 'DNSSD')
+zeroconf.scan({ type: 'http', implType: 'DNSSD' })
 ```
 
 **4. Handle app lifecycle**
@@ -510,7 +523,7 @@ AppState.addEventListener('change', (state) => {
     zeroconf.stop('DNSSD')
   } else if (state === 'active') {
     // Restart scan
-    zeroconf.scan('http', 'tcp', 'local.', 'DNSSD')
+    zeroconf.scan({ type: 'http', implType: 'DNSSD' })
   }
 })
 ```
@@ -525,7 +538,7 @@ let isScanning = false
 function startScan() {
   if (isScanning) return
   isScanning = true
-  zeroconf.scan('http', 'tcp', 'local.', 'DNSSD')
+  zeroconf.scan({ type: 'http', implType: 'DNSSD' })
 }
 
 function stopScan() {

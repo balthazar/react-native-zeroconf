@@ -27,6 +27,32 @@ type TxtValue = string | number | boolean
 /** TXT records as an object, or as [key, value] pairs to control the order */
 export type TxtRecord = Record<string, TxtValue> | Array<[string, TxtValue]>
 
+export interface ScanOptions {
+  /** Service type without underscore, e.g. `'http'`. Defaults to `'http'` */
+  type?: string
+  /** `'tcp'` or `'udp'`. Defaults to `'tcp'` */
+  protocol?: string
+  /** Defaults to `'local.'` */
+  domain?: string
+  /** Android only, defaults to `NSD` */
+  implType?: ImplType
+}
+
+export interface PublishOptions {
+  /** Service type without underscore, e.g. `'http'` */
+  type: string
+  /** `'tcp'` or `'udp'` */
+  protocol: string
+  /** Defaults to `'local.'` */
+  domain?: string
+  /** Service name, should be unique on the network */
+  name: string
+  port: number
+  txt?: TxtRecord
+  /** Android only, defaults to `NSD` */
+  implType?: ImplType
+}
+
 /** Published services don't carry the address family fields */
 export type PublishedService = Omit<Service, 'ipv4' | 'ipv6'>
 
@@ -67,10 +93,9 @@ export default class Zeroconf {
   /** All the services found so far, keyed by name */
   getServices(): Record<string, Service>
 
-  /**
-   * Scan for services, defaults to `_http._tcp.` on the `local.` domain
-   * @param implType Android only, defaults to `NSD`
-   */
+  /** Scan for services, defaults to `_http._tcp.` on the `local.` domain */
+  scan(options?: ScanOptions): void
+  /** @deprecated Use `scan({ type, protocol, domain, implType })` */
   scan(type?: string, protocol?: string, domain?: string, implType?: ImplType): void
 
   /**
@@ -79,10 +104,9 @@ export default class Zeroconf {
    */
   stop(implType?: ImplType): void
 
-  /**
-   * Publish a service. Type and protocol are passed without underscores, e.g. `('http', 'tcp', ...)`
-   * @param implType Android only, defaults to `NSD`
-   */
+  /** Publish a service */
+  publishService(options: PublishOptions): void
+  /** @deprecated Use `publishService({ type, protocol, domain, name, port, txt, implType })` */
   publishService(
     type: string,
     protocol: string,

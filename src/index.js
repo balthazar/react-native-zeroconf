@@ -8,6 +8,34 @@ export const ImplType = {
   DNSSD: 'DNSSD',
 }
 
+const SCAN_DEFAULTS = {
+  type: 'http',
+  protocol: 'tcp',
+  domain: 'local.',
+  implType: ImplType.NSD,
+}
+
+const PUBLISH_DEFAULTS = {
+  domain: 'local.',
+  txt: {},
+  implType: ImplType.NSD,
+}
+
+/**
+ * Merge options over defaults, ignoring undefined values
+ */
+const withDefaults = (defaults, options) => {
+  const merged = { ...defaults }
+  Object.entries(options).forEach(([key, value]) => {
+    if (value !== undefined) {
+      merged[key] = value
+    }
+  })
+  return merged
+}
+
+const isOptionsObject = value => value !== null && typeof value === 'object'
+
 const isIPv6 = address => address.includes(':')
 
 /**
@@ -144,10 +172,19 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
-   * Scan for Zeroconf services,
-   * Defaults to _http._tcp. on local domain
+   * Scan for Zeroconf services, defaults to _http._tcp. on the local. domain
+   *
+   * scan({ type, protocol, domain, implType })
+   * scan(type, protocol, domain, implType) is deprecated
    */
-  scan(type = 'http', protocol = 'tcp', domain = 'local.', implType = ImplType.NSD) {
+  scan(options, protocolArg, domainArg, implTypeArg) {
+    const { type, protocol, domain, implType } = withDefaults(
+      SCAN_DEFAULTS,
+      isOptionsObject(options)
+        ? options
+        : { type: options, protocol: protocolArg, domain: domainArg, implType: implTypeArg },
+    )
+
     this._services = {}
     this.emit('update')
     if (Platform.OS === 'android') {
@@ -176,8 +213,25 @@ export default class Zeroconf extends EventEmitter {
 
   /**
    * Publish a service
+   *
+   * publishService({ type, protocol, domain, name, port, txt, implType })
+   * publishService(type, protocol, domain, name, port, txt, implType) is deprecated
    */
-  publishService(type, protocol, domain = 'local.', name, port, txt = {}, implType = ImplType.NSD) {
+  publishService(options, protocolArg, domainArg, nameArg, portArg, txtArg, implTypeArg) {
+    const { type, protocol, domain, name, port, txt, implType } = withDefaults(
+      PUBLISH_DEFAULTS,
+      isOptionsObject(options)
+        ? options
+        : {
+            type: options,
+            protocol: protocolArg,
+            domain: domainArg,
+            name: nameArg,
+            port: portArg,
+            txt: txtArg,
+            implType: implTypeArg,
+          },
+    )
     const txtRecord = toTxtPairs(txt)
     if (Platform.OS === 'android') {
       this._publishedImplTypes[name] = implType
