@@ -59,6 +59,27 @@ iOS 14+ requires you to declare the services you want to discover in your `Info.
 <string>This app uses the local network to discover printers and other devices.</string>
 ```
 
+### Expo
+
+This library contains native code, so it doesn't work in **Expo Go**. Use a [development build](https://docs.expo.dev/develop/development-builds/introduction/) instead (`npx expo run:ios`, `npx expo run:android`, or EAS Build). It is tested with Expo SDK 54 and the New Architecture.
+
+Declare the iOS permissions in `app.json`, they are added to `Info.plist` on prebuild:
+
+```json
+{
+  "expo": {
+    "ios": {
+      "infoPlist": {
+        "NSBonjourServices": ["_http._tcp"],
+        "NSLocalNetworkUsageDescription": "This app uses the local network to discover devices."
+      }
+    }
+  }
+}
+```
+
+The Android permissions are included by the library automatically.
+
 ## Quick Start
 
 ```javascript
