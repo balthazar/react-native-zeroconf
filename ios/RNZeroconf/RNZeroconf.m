@@ -13,6 +13,8 @@
 
 @property (nonatomic, strong, readonly) NSMutableDictionary *resolvingServices;
 @property (nonatomic, strong, readonly) NSMutableDictionary *publishedServices;
+// Stopped browsers, kept alive until their asynchronous stop has been processed
+@property (nonatomic, strong, readonly) NSMutableSet<NSNetServiceBrowser *> *stoppingBrowsers;
 
 @end
 
@@ -25,12 +27,32 @@ RCT_EXPORT_MODULE()
 RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain)
 {
     [self stop];
+
+    // A fresh browser for each scan, restarting a search on a browser that is still stopping can crash (#154)
+    self.browser = [[NSNetServiceBrowser alloc] init];
+    [self.browser setDelegate:self];
     [self.browser searchForServicesOfType:[NSString stringWithFormat:@"_%@._%@.", type, protocol] inDomain:domain];
 }
 
 RCT_EXPORT_METHOD(stop)
 {
-    [self.browser stop];
+    NSNetServiceBrowser *browser = self.browser;
+    if (browser) {
+        self.browser = nil;
+        [self.stoppingBrowsers addObject:browser];
+        [browser stop];
+
+        // The stop completes asynchronously on the run loop, release the browser well after it
+        __weak RNZeroconf *weakSelf = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            browser.delegate = nil;
+            [weakSelf.stoppingBrowsers removeObject:browser];
+        });
+    }
+    for (NSNetService *service in self.resolvingServices.allValues) {
+        service.delegate = nil;
+        [service stop];
+    }
     [self.resolvingServices removeAllObjects];
 }
 
@@ -127,7 +149,10 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 // When the search stops.
 - (void) netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)browser
 {
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfStop" body:nil];
+    // A browser replaced by a newer scan stopping late shouldn't report the new scan as stopped
+    if (self.browser == nil || self.browser == browser) {
+        [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfStop" body:nil];
+    }
 }
 
 // When the search starts.
@@ -205,8 +230,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     if (self) {
         _resolvingServices = [[NSMutableDictionary alloc] init];
         _publishedServices = [[NSMutableDictionary alloc] init];
-        _browser = [[NSNetServiceBrowser alloc] init];
-        [_browser setDelegate:self];
+        _stoppingBrowsers = [[NSMutableSet alloc] init];
     }
 
     return self;
@@ -235,12 +259,11 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 // Called when the bridge is torn down (e.g. reload): stop scanning and unpublish services
 - (void) invalidate
 {
-    [self.browser stop];
-    for (NSNetService *service in self.resolvingServices.allValues) {
-        service.delegate = nil;
-        [service stop];
+    [self stop];
+    // Delegates are unretained, detach them so stopping browsers never call a released module
+    for (NSNetServiceBrowser *browser in self.stoppingBrowsers) {
+        browser.delegate = nil;
     }
-    [self.resolvingServices removeAllObjects];
     for (NSNetService *service in self.publishedServices.allValues) {
         service.delegate = nil;
         [service stop];
