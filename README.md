@@ -248,6 +248,8 @@ useEffect(() => {
 }
 ```
 
+On Android with `NSD`, `host` is the mDNS hostname on Android 16+. Older versions don't expose it, so `host` is usually the IP address (use `DNSSD` if you need the hostname there). `NSD` returns all addresses on Android 14+, and a single one before.
+
 ## Android Implementation Types
 
 This library supports two implementations on Android:

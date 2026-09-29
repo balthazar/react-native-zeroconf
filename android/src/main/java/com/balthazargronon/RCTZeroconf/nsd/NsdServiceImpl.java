@@ -24,6 +24,8 @@ import com.facebook.react.bridge.WritableNativeMap;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -275,19 +277,55 @@ public class NsdServiceImpl implements Zeroconf {
         }
     }
 
+    /**
+     * All the addresses of the service on Android 14+, only one before
+     */
+    @SuppressWarnings("deprecation")
+    private static List<InetAddress> getHostAddresses(NsdServiceInfo serviceInfo) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            return serviceInfo.getHostAddresses();
+        }
+        InetAddress host = serviceInfo.getHost();
+        return host == null ? Collections.<InetAddress>emptyList() : Collections.singletonList(host);
+    }
+
+    /**
+     * The mDNS hostname (e.g. "MyHost.local.") when available.
+     * NsdServiceInfo.getHostname() is API 36 (or backported through the Connectivity module),
+     * it is called through reflection so the library still compiles against older SDKs.
+     */
+    private static String getMdnsHostname(NsdServiceInfo serviceInfo) {
+        try {
+            Object hostname = NsdServiceInfo.class.getMethod("getHostname").invoke(serviceInfo);
+            if (hostname instanceof String && !((String) hostname).isEmpty()) {
+                return hostname + ".local.";
+            }
+        } catch (Exception e) {
+            // Not available on this device
+        }
+        return null;
+    }
+
     private WritableMap serviceInfoToMap(NsdServiceInfo serviceInfo) {
         WritableMap service = new WritableNativeMap();
         service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
-        final InetAddress host = serviceInfo.getHost();
+        final List<InetAddress> hostAddresses = getHostAddresses(serviceInfo);
         final String fullServiceName;
-        if (host == null) {
+        if (hostAddresses.isEmpty()) {
             fullServiceName = serviceInfo.getServiceName();
         } else {
-            fullServiceName = host.getHostName() + serviceInfo.getServiceType();
-            service.putString(ZeroconfModule.KEY_SERVICE_HOST, host.getHostName());
+            String hostname = getMdnsHostname(serviceInfo);
+            if (hostname == null) {
+                // No hostname API before Android 16, falls back to a reverse lookup (often the IP)
+                hostname = hostAddresses.get(0).getHostName();
+            }
+            fullServiceName = hostname + serviceInfo.getServiceType();
+            service.putString(ZeroconfModule.KEY_SERVICE_HOST, hostname);
 
             WritableArray addresses = new WritableNativeArray();
-            addresses.pushString(host.getHostAddress());
+            for (InetAddress address : hostAddresses) {
+                addresses.pushString(address.getHostAddress());
+            }
 
             service.putArray(ZeroconfModule.KEY_SERVICE_ADDRESSES, addresses);
         }
