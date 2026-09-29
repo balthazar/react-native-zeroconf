@@ -180,6 +180,8 @@ zeroconf.publishService('http', 'tcp', 'local.', 'MyWebServer', 8080, [
 
 TXT order is preserved on iOS and with `DNSSD` on Android. With `NSD`, the order depends on the Android system.
 
+Published services are unpublished when the React Native instance is torn down (e.g. on reload). If the app process is killed, it can't announce anything: other devices only drop the service once its mDNS records expire.
+
 #### `unpublishService(name, implType)`
 
 Remove a published service.

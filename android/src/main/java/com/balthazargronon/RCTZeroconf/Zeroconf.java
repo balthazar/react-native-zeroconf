@@ -14,4 +14,9 @@ public interface Zeroconf {
      * @param txt TXT records as ordered [key, value] pairs
      */
     public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt);
+
+    /**
+     * Unregister every service published through this implementation
+     */
+    void unregisterAllServices();
 }

@@ -121,6 +121,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         try {
             for (Zeroconf impl : zeroConfFactory.getCreatedImpls()) {
                 impl.stop();
+                impl.unregisterAllServices();
             }
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);

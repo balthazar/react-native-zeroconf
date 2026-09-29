@@ -232,6 +232,22 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     return data;
 }
 
+// Called when the bridge is torn down (e.g. reload): stop scanning and unpublish services
+- (void) invalidate
+{
+    [self.browser stop];
+    for (NSNetService *service in self.resolvingServices.allValues) {
+        service.delegate = nil;
+        [service stop];
+    }
+    [self.resolvingServices removeAllObjects];
+    for (NSNetService *service in self.publishedServices.allValues) {
+        service.delegate = nil;
+        [service stop];
+    }
+    [self.publishedServices removeAllObjects];
+}
+
 - (void) reportError:(NSDictionary *)errorDict
 {
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:[NSString stringWithFormat:@"%@",errorDict]];

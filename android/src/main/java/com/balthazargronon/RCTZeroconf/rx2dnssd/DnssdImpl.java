@@ -18,6 +18,7 @@ import com.github.druk.rx2dnssd.Rx2Dnssd;
 import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -208,6 +209,13 @@ public class DnssdImpl implements Zeroconf {
                 });
 
         mRegisteredDisposables.put(name, registerDisposable);
+    }
+
+    @Override
+    public void unregisterAllServices() {
+        for (String serviceName : new ArrayList<>(mRegisteredDisposables.keySet())) {
+            unregisterService(serviceName);
+        }
     }
 
     private Map<String, String> getTxtRecordMap(ReadableArray txt) {

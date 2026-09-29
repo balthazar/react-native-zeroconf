@@ -10,8 +10,9 @@
 #import <React/RCTBridge.h>
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventDispatcher.h>
+#import <React/RCTInvalidating.h>
 
-@interface RNZeroconf : NSObject <RCTBridgeModule, NSNetServiceBrowserDelegate, NSNetServiceDelegate>
+@interface RNZeroconf : NSObject <RCTBridgeModule, RCTInvalidating, NSNetServiceBrowserDelegate, NSNetServiceDelegate>
 
 @property (nonatomic, strong) NSNetServiceBrowser *browser;
 

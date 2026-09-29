@@ -23,6 +23,7 @@ import com.facebook.react.bridge.WritableNativeMap;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -168,6 +169,13 @@ public class NsdServiceImpl implements Zeroconf {
         if (serviceListener != null) {
             mPublishedServices.remove(serviceName);
             nsdManager.unregisterService(serviceListener);
+        }
+    }
+
+    @Override
+    public void unregisterAllServices() {
+        for (String serviceName : new ArrayList<>(mPublishedServices.keySet())) {
+            unregisterService(serviceName);
         }
     }
 
