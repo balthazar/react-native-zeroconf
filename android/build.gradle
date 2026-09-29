@@ -18,11 +18,6 @@ android {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
 
-        externalNativeBuild {
-            ndkBuild {
-                arguments "NDK_APPLICATION_MK:=src/main/jni/Application.mk"
-            }
-        }
     }
 
     externalNativeBuild {
