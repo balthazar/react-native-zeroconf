@@ -36,6 +36,8 @@ export interface ScanOptions {
   domain?: string
   /** Android only, defaults to `NSD` */
   implType?: ImplType
+  /** iOS only, seconds to try resolving a service before retrying once and giving up. Defaults to `5` */
+  resolveTimeout?: number
 }
 
 export interface PublishOptions {

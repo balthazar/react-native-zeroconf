@@ -121,6 +121,7 @@ Start scanning for services on the network. All options are optional.
 | `protocol`       | string | `'tcp'`    | Protocol (`'tcp'` or `'udp'`)                                                                      |
 | `domain`         | string | `'local.'` | Domain to search (typically `'local.'`)                                                            |
 | `implType`       | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` (see [Implementation Types](#android-implementation-types)) |
+| `resolveTimeout` | number | `5`        | **iOS only**: seconds to try resolving a service. A timed out resolve is retried once before an `error` event. Increase it for slow devices |
 
 ```javascript
 // Scan for HTTP services using default NSD implementation
@@ -128,6 +129,9 @@ zeroconf.scan()
 
 // Scan for printers using DNSSD (recommended for better compatibility)
 zeroconf.scan({ type: 'pdl-datastream', implType: 'DNSSD' })
+
+// Slow devices on iOS
+zeroconf.scan({ type: 'http', resolveTimeout: 15 })
 ```
 
 The positional form `scan(type, protocol, domain, implType)` still works but is deprecated.

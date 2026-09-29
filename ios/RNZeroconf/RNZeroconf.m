@@ -27,9 +27,13 @@
 
 RCT_EXPORT_MODULE()
 
-RCT_EXPORT_METHOD(scan:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain)
+RCT_EXPORT_METHOD(scan:(NSString *)type
+                  protocol:(NSString *)protocol
+                  domain:(NSString *)domain
+                  resolveTimeout:(double)resolveTimeout)
 {
     [self stop];
+    self.resolveTimeoutSeconds = resolveTimeout > 0 ? resolveTimeout : 5.0;
 
     // A fresh browser for each scan, restarting a search on a browser that is still stopping can crash (#154)
     self.browser = [[NSNetServiceBrowser alloc] init];

@@ -13,6 +13,7 @@ const SCAN_DEFAULTS = {
   protocol: 'tcp',
   domain: 'local.',
   implType: ImplType.NSD,
+  resolveTimeout: 5,
 }
 
 const PUBLISH_DEFAULTS = {
@@ -174,11 +175,11 @@ export default class Zeroconf extends EventEmitter {
   /**
    * Scan for Zeroconf services, defaults to _http._tcp. on the local. domain
    *
-   * scan({ type, protocol, domain, implType })
+   * scan({ type, protocol, domain, implType, resolveTimeout })
    * scan(type, protocol, domain, implType) is deprecated
    */
   scan(options, protocolArg, domainArg, implTypeArg) {
-    const { type, protocol, domain, implType } = withDefaults(
+    const { type, protocol, domain, implType, resolveTimeout } = withDefaults(
       SCAN_DEFAULTS,
       isOptionsObject(options)
         ? options
@@ -195,7 +196,7 @@ export default class Zeroconf extends EventEmitter {
       this._scanImplType = implType
       RNZeroconf.scan(type, protocol, domain, implType)
     } else {
-      RNZeroconf.scan(type, protocol, domain)
+      RNZeroconf.scan(type, protocol, domain, resolveTimeout)
     }
   }
 
