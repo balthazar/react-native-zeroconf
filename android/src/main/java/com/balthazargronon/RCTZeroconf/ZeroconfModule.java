@@ -95,21 +95,35 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public void sendEvent(ReactContext reactContext,
                           String eventName,
                           @Nullable Object params) {
-        reactContext
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                .emit(eventName, params);
+        try {
+            reactContext
+                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                    .emit(eventName, params);
+        } catch (Throwable e) {
+            // The JS side may already be gone, e.g. callbacks arriving during teardown
+            Log.w(getClass().getName(), "Could not send " + eventName + ": " + e.getMessage());
+        }
     }
 
-    @Override
+    // Called on teardown by current React Native versions.
+    // No @Override so it still compiles against versions that don't declare it.
+    public void invalidate() {
+        teardown();
+    }
+
+    // Called on teardown by older React Native versions, deprecated in favor of invalidate().
+    // No @Override so it still compiles once it is removed.
     public void onCatalystInstanceDestroy() {
-        super.onCatalystInstanceDestroy();
+        teardown();
+    }
+
+    private void teardown() {
         try {
             for (Zeroconf impl : zeroConfFactory.getCreatedImpls()) {
                 impl.stop();
             }
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Catalyst Destroy: " + e.getMessage());
         }
     }
 }
