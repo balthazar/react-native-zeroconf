@@ -12,8 +12,16 @@ export default class Zeroconf extends EventEmitter {
   constructor(props) {
     super(props)
 
+    if (!RNZeroconf) {
+      throw new Error(
+        'react-native-zeroconf: native module not found. Make sure the library is linked and the app rebuilt. Expo Go is not supported, use a development build instead.',
+      )
+    }
+
     this._services = {}
     this._publishedServices = {}
+    this._publishedImplTypes = {}
+    this._scanImplType = null
     this._dListeners = {}
 
     this.addDeviceListeners()
@@ -122,6 +130,11 @@ export default class Zeroconf extends EventEmitter {
     this._services = {}
     this.emit('update')
     if (Platform.OS === 'android') {
+      if (this._scanImplType && implType !== this._scanImplType) {
+        // Only one scan runs at a time, stop the one running on the other implementation
+        RNZeroconf.stop(this._scanImplType)
+      }
+      this._scanImplType = implType
       RNZeroconf.scan(type, protocol, domain, implType)
     } else {
       RNZeroconf.scan(type, protocol, domain)
@@ -129,9 +142,10 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
-   * Stop current scan if any
+   * Stop current scan if any,
+   * Defaults to the implementation used by the last scan
    */
-  stop(implType = ImplType.NSD) {
+  stop(implType = this._scanImplType || ImplType.NSD) {
     if (Platform.OS === 'android') {
       RNZeroconf.stop(implType)
     } else {
@@ -143,21 +157,24 @@ export default class Zeroconf extends EventEmitter {
    * Publish a service
    */
   publishService(type, protocol, domain = 'local.', name, port, txt = {}, implType = ImplType.NSD) {
-    if (Object.keys(txt).length !== 0) {
-      Object.entries(txt).map(([key, value]) => (txt[key] = value.toString()))
-    }
+    const txtRecord = Object.fromEntries(
+      Object.entries(txt || {}).map(([key, value]) => [key, String(value)]),
+    )
     if (Platform.OS === 'android') {
-      RNZeroconf.registerService(type, protocol, domain, name, port, txt, implType)
+      this._publishedImplTypes[name] = implType
+      RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, implType)
     } else {
-      RNZeroconf.registerService(type, protocol, domain, name, port, txt)
+      RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord)
     }
   }
 
   /**
-   * Unpublish a service
+   * Unpublish a service,
+   * Defaults to the implementation the service was published with
    */
-  unpublishService(name, implType = ImplType.NSD) {
+  unpublishService(name, implType = this._publishedImplTypes[name] || ImplType.NSD) {
     if (Platform.OS === 'android') {
+      delete this._publishedImplTypes[name]
       RNZeroconf.unregisterService(name, implType)
     } else {
       RNZeroconf.unregisterService(name)

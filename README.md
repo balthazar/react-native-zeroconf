@@ -34,7 +34,7 @@ For manual installation, see the [wiki](https://github.com/balthazar/react-nativ
 
 ### Android Permissions
 
-Add the following permissions to your `AndroidManifest.xml`:
+The library declares the following permissions in its own manifest, so they are merged into your app automatically:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
@@ -118,12 +118,10 @@ Stop the current scan.
 
 | Parameter  | Type   | Default | Description                                    |
 | ---------- | ------ | ------- | ---------------------------------------------- |
-| `implType` | string | `'NSD'` | **Android only**: Which implementation to stop |
+| `implType` | string | last scan's | **Android only**: Which implementation to stop. Defaults to the one used by the last `scan()` |
 
 ```javascript
 zeroconf.stop()
-// or on Android with DNSSD:
-zeroconf.stop('DNSSD')
 ```
 
 #### `getServices()`
@@ -163,7 +161,7 @@ Remove a published service.
 | Parameter  | Type   | Default  | Description                            |
 | ---------- | ------ | -------- | -------------------------------------- |
 | `name`     | string | required | Name of the service to unpublish       |
-| `implType` | string | `'NSD'`  | **Android only**: Which implementation |
+| `implType` | string | publish's | **Android only**: Which implementation. Defaults to the one the service was published with |
 
 ```javascript
 zeroconf.unpublishService('MyWebServer')

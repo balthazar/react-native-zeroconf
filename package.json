@@ -3,6 +3,7 @@
   "version": "0.14.0",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "dist",
+  "types": "index.d.ts",
   "scripts": {
     "lint": "eslint src/*.js",
     "format": "prettier --write src/*.js",
@@ -15,6 +16,7 @@
   "files": [
     "src",
     "dist",
+    "index.d.ts",
     "android",
     "ios",
     "react-native-zeroconf.podspec",
