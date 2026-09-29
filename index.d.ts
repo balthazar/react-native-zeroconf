@@ -14,11 +14,16 @@ export interface Service {
   /** Hostname, e.g. `XeroxPrinter.local.` */
   host: string
   port: number
-  /** IPv4 and/or IPv6 addresses */
+  /** IPv4 and IPv6 addresses, IPv4 first */
   addresses: string[]
+  ipv4: string[]
+  ipv6: string[]
   /** TXT record attributes */
   txt: Record<string, string>
 }
+
+/** Published services don't carry the address family fields */
+export type PublishedService = Omit<Service, 'ipv4' | 'ipv6'>
 
 export interface ZeroconfEvents {
   start: () => void
@@ -32,8 +37,8 @@ export interface ZeroconfEvents {
   /** Services list changed */
   update: () => void
   error: (error: Error) => void
-  published: (service: Service) => void
-  unpublished: (service: Service) => void
+  published: (service: PublishedService) => void
+  unpublished: (service: PublishedService) => void
 }
 
 /** Extends the `events` package EventEmitter */

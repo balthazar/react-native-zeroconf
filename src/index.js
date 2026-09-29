@@ -8,6 +8,18 @@ export const ImplType = {
   DNSSD: 'DNSSD',
 }
 
+const isIPv6 = address => address.includes(':')
+
+/**
+ * Sort addresses IPv4 first and expose them by family
+ */
+const withAddressFamilies = service => {
+  const addresses = Array.isArray(service.addresses) ? service.addresses : []
+  const ipv4 = addresses.filter(address => !isIPv6(address))
+  const ipv6 = addresses.filter(isIPv6)
+  return { ...service, addresses: [...ipv4, ...ipv6], ipv4, ipv6 }
+}
+
 export default class Zeroconf extends EventEmitter {
   constructor(props) {
     super(props)
@@ -72,11 +84,12 @@ export default class Zeroconf extends EventEmitter {
       this.emit('update')
     })
 
-    this._dListeners.resolved = DeviceEventEmitter.addListener('RNZeroconfResolved', service => {
-      if (!service || !service.name) {
+    this._dListeners.resolved = DeviceEventEmitter.addListener('RNZeroconfResolved', data => {
+      if (!data || !data.name) {
         return
       }
 
+      const service = withAddressFamilies(data)
       this._services[service.name] = service
       this.emit('resolved', service)
       this.emit('update')

@@ -235,10 +235,12 @@ useEffect(() => {
   fullName: 'XeroxPrinter._http._tcp.local.', // Full service name
   host: 'XeroxPrinter.local.',              // Hostname
   port: 8080,                               // Port number
-  addresses: [                              // IP addresses (IPv4 and/or IPv6)
+  addresses: [                              // IP addresses, IPv4 first
     '192.168.1.23',
     'fe80::aebc:123:ffff:abcd'
   ],
+  ipv4: ['192.168.1.23'],                   // IPv4 addresses only
+  ipv6: ['fe80::aebc:123:ffff:abcd'],       // IPv6 addresses only
   txt: {                                    // TXT record attributes
     path: '/status',
     color: 'yes'
