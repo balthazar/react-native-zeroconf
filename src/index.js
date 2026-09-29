@@ -20,6 +20,14 @@ const withAddressFamilies = service => {
   return { ...service, addresses: [...ipv4, ...ipv6], ipv4, ipv6 }
 }
 
+/**
+ * TXT records as ordered [key, value] pairs, from an object or an array of pairs
+ */
+const toTxtPairs = txt => {
+  const entries = Array.isArray(txt) ? txt : Object.entries(txt || {})
+  return entries.map(([key, value]) => [String(key), String(value)])
+}
+
 export default class Zeroconf extends EventEmitter {
   constructor(props) {
     super(props)
@@ -170,9 +178,7 @@ export default class Zeroconf extends EventEmitter {
    * Publish a service
    */
   publishService(type, protocol, domain = 'local.', name, port, txt = {}, implType = ImplType.NSD) {
-    const txtRecord = Object.fromEntries(
-      Object.entries(txt || {}).map(([key, value]) => [key, String(value)]),
-    )
+    const txtRecord = toTxtPairs(txt)
     if (Platform.OS === 'android') {
       this._publishedImplTypes[name] = implType
       RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, implType)

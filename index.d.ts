@@ -22,6 +22,11 @@ export interface Service {
   txt: Record<string, string>
 }
 
+type TxtValue = string | number | boolean
+
+/** TXT records as an object, or as [key, value] pairs to control the order */
+export type TxtRecord = Record<string, TxtValue> | Array<[string, TxtValue]>
+
 /** Published services don't carry the address family fields */
 export type PublishedService = Omit<Service, 'ipv4' | 'ipv6'>
 
@@ -84,7 +89,7 @@ export default class Zeroconf {
     domain: string | undefined,
     name: string,
     port: number,
-    txt?: Record<string, string | number | boolean>,
+    txt?: TxtRecord,
     implType?: ImplType,
   ): void
 

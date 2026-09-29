@@ -162,7 +162,7 @@ Publish a service on the network.
 | `domain`   | string | `'local.'` | Domain                                 |
 | `name`     | string | required   | Service name (should be unique)        |
 | `port`     | number | required   | Port number                            |
-| `txt`      | object | `{}`       | TXT record key-value pairs             |
+| `txt`      | object \| array | `{}` | TXT record key-value pairs, or `[key, value]` pairs to control the order |
 | `implType` | string | `'NSD'`    | **Android only**: `'NSD'` or `'DNSSD'` |
 
 ```javascript
@@ -170,7 +170,15 @@ zeroconf.publishService('http', 'tcp', 'local.', 'MyWebServer', 8080, {
   path: '/api',
   version: '1.0',
 })
+
+// TXT records are published in the order given. Use pairs when order matters and keys look like numbers
+zeroconf.publishService('http', 'tcp', 'local.', 'MyWebServer', 8080, [
+  ['txtvers', '1'],
+  ['path', '/api'],
+])
 ```
+
+TXT order is preserved on iOS and with `DNSSD` on Android. With `NSD`, the order depends on the Android system.
 
 #### `unpublishService(name, implType)`
 

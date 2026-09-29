@@ -1,6 +1,6 @@
 package com.balthazargronon.RCTZeroconf;
 
-import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableArray;
 
 public interface Zeroconf {
 
@@ -10,5 +10,8 @@ public interface Zeroconf {
 
     public void unregisterService(String serviceName);
 
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt);
+    /**
+     * @param txt TXT records as ordered [key, value] pairs
+     */
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt);
 }

@@ -7,7 +7,7 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import javax.annotation.Nullable;
@@ -73,7 +73,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt, String implType) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, String implType) {
         try {
             getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
         } catch (Throwable e) {

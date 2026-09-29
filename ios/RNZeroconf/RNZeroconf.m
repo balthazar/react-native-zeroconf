@@ -49,15 +49,14 @@ RCT_EXPORT_METHOD(registerService:(NSString *)type
                   domain:(NSString *)domain
                   name:(NSString *)name
                   port:(int)port
-                  txt:(NSDictionary *)txt)
+                  txt:(NSArray<NSArray<NSString *> *> *)txt)
 {
     const NSNetService *svc = [[NSNetService alloc] initWithDomain:domain type:[NSString stringWithFormat:@"_%@._%@.", type, protocol] name:name port:port];
     [svc setDelegate:self];
     [svc scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
 
-    if (txt) {
-      NSData *txtData = [NSNetService dataFromTXTRecordDictionary:txt];
-      [svc setTXTRecordData:txtData];
+    if (txt.count > 0) {
+      [svc setTXTRecordData:[self TXTRecordDataFromPairs:txt]];
     }
 
     [svc publish];
@@ -211,6 +210,26 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     }
 
     return self;
+}
+
+// Builds the TXT record in the given order, unlike dataFromTXTRecordDictionary
+- (NSData *) TXTRecordDataFromPairs:(NSArray<NSArray<NSString *> *> *)pairs
+{
+    NSMutableData *data = [NSMutableData data];
+    for (NSArray<NSString *> *pair in pairs) {
+        if (pair.count != 2) {
+            continue;
+        }
+        NSData *entry = [[NSString stringWithFormat:@"%@=%@", pair[0], pair[1]] dataUsingEncoding:NSUTF8StringEncoding];
+        if (entry.length > 255) {
+            [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:[NSString stringWithFormat:@"TXT record entry %@ is longer than 255 bytes", pair[0]]];
+            continue;
+        }
+        uint8_t length = (uint8_t)entry.length;
+        [data appendBytes:&length length:1];
+        [data appendData:entry];
+    }
+    return data;
 }
 
 - (void) reportError:(NSDictionary *)errorDict

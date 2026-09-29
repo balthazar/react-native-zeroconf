@@ -8,8 +8,7 @@ import android.util.Log;
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.ReadableMapKeySetIterator;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
@@ -20,6 +19,7 @@ import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
 
 import java.net.InetAddress;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.List;
@@ -187,7 +187,7 @@ public class DnssdImpl implements Zeroconf {
     }
 
     @Override
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableMap txt) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt) {
         BonjourService bs = new BonjourService.Builder(0, 0, name, getServiceType(type, protocol), null)
                 .port(port)
                 .dnsRecords(getTxtRecordMap(txt))
@@ -210,12 +210,12 @@ public class DnssdImpl implements Zeroconf {
         mRegisteredDisposables.put(name, registerDisposable);
     }
 
-    private Map<String, String> getTxtRecordMap(ReadableMap txt) {
-        Map<String, String> txtMap = new HashMap<>();
-        ReadableMapKeySetIterator iterator = txt.keySetIterator();
-        while (iterator.hasNextKey()) {
-            String key = iterator.nextKey();
-            txtMap.put(key, txt.getString(key));
+    private Map<String, String> getTxtRecordMap(ReadableArray txt) {
+        // LinkedHashMap keeps the TXT record order
+        Map<String, String> txtMap = new LinkedHashMap<>();
+        for (int i = 0; i < txt.size(); i++) {
+            ReadableArray pair = txt.getArray(i);
+            txtMap.put(pair.getString(0), pair.getString(1));
         }
         return txtMap;
     }
