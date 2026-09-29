@@ -35,9 +35,13 @@ const NSString *kRNServiceTxtRecords = @"txt";
         NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
         for (NSString *key in txtRecordDict) {
             @try{
-                dict[key] = [[NSString alloc]
-                            initWithData:txtRecordDict[key]
-                            encoding:NSASCIIStringEncoding];
+                NSData *value = txtRecordDict[key];
+                NSString *string = [[NSString alloc] initWithData:value encoding:NSUTF8StringEncoding];
+                if (string == nil) {
+                    // Not valid UTF-8, fall back to a lossless 8-bit decoding
+                    string = [[NSString alloc] initWithData:value encoding:NSISOLatin1StringEncoding];
+                }
+                dict[key] = string;
             }
             @catch(NSException *exception){
                 NSLog(@"%@", exception);

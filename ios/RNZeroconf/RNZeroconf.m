@@ -106,6 +106,14 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
       return;
     }
 
+    // Stop any pending resolve for the removed service
+    NSNetService *resolving = self.resolvingServices[service.name];
+    if (resolving) {
+        resolving.delegate = nil;
+        [resolving stop];
+        [self.resolvingServices removeObjectForKey:service.name];
+    }
+
     NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:service resolved:NO];
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfRemove" body:serviceInfo];
 }
