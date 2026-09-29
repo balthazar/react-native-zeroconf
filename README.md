@@ -11,6 +11,7 @@ Discover and publish network services using Zeroconf protocols (Bonjour, Avahi, 
 - **Cross-Platform**: Works on iOS and Android
 - **Dual Android Implementation**: Choose between NSD (Android native) or DNSSD (embedded mDNSResponder)
 - **Android 15+ Compatible**: Includes 16KB page size alignment (Google Play requirement starting November 1, 2025)
+- **TypeScript**: Type definitions included
 
 ## Installation
 
@@ -80,6 +81,23 @@ setTimeout(() => {
   zeroconf.stop()
   console.log('All services:', zeroconf.getServices())
 }, 10000)
+```
+
+## TypeScript
+
+Type definitions ship with the package, so `@types/react-native-zeroconf` is no longer needed (uninstall it to avoid conflicting types). Event listeners are typed by event name:
+
+```typescript
+import Zeroconf, { ImplType, Service } from 'react-native-zeroconf'
+
+const zeroconf = new Zeroconf()
+
+zeroconf.on('resolved', (service: Service) => {
+  console.log(service.name, service.addresses, service.txt)
+})
+zeroconf.on('remove', name => console.log(`${name} left`))
+
+zeroconf.scan('http', 'tcp', 'local.', ImplType.DNSSD)
 ```
 
 ## API Reference
