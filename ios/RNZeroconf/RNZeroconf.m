@@ -13,8 +13,11 @@
 
 @property (nonatomic, strong, readonly) NSMutableDictionary *resolvingServices;
 @property (nonatomic, strong, readonly) NSMutableDictionary *publishedServices;
+// Services already retried after a resolve timeout
+@property (nonatomic, strong, readonly) NSMutableSet<NSString *> *retriedServices;
 // Stopped browsers, kept alive until their asynchronous stop has been processed
 @property (nonatomic, strong, readonly) NSMutableSet<NSNetServiceBrowser *> *stoppingBrowsers;
+@property (nonatomic, assign) NSTimeInterval resolveTimeoutSeconds;
 
 @end
 
@@ -54,6 +57,7 @@ RCT_EXPORT_METHOD(stop)
         [service stop];
     }
     [self.resolvingServices removeAllObjects];
+    [self.retriedServices removeAllObjects];
 }
 
 - (dispatch_queue_t)methodQueue
@@ -115,7 +119,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     self.resolvingServices[service.name] = service;
 
     service.delegate = self;
-    [service resolveWithTimeout:5.0];
+    [service resolveWithTimeout:self.resolveTimeoutSeconds];
 }
 
 // When a service is removed.
@@ -171,12 +175,22 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 
     sender.delegate = nil;
     [self.resolvingServices removeObjectForKey:sender.name];
+    [self.retriedServices removeObject:sender.name];
 }
 
 // When the service has failed to resolve it's network data (IP addresses, etc)
 - (void) netService:(NSNetService *)sender
       didNotResolve:(NSDictionary *)errorDict
 {
+    // Slow devices can time out, retry once before reporting the error (#186)
+    NSNumber *code = errorDict[NSNetServicesErrorCode];
+    if (code.integerValue == NSNetServicesTimeoutError && ![self.retriedServices containsObject:sender.name]) {
+        [self.retriedServices addObject:sender.name];
+        [sender resolveWithTimeout:self.resolveTimeoutSeconds];
+        return;
+    }
+    [self.retriedServices removeObject:sender.name];
+
     [self reportError:errorDict];
 
     sender.delegate = nil;
@@ -230,7 +244,9 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     if (self) {
         _resolvingServices = [[NSMutableDictionary alloc] init];
         _publishedServices = [[NSMutableDictionary alloc] init];
+        _retriedServices = [[NSMutableSet alloc] init];
         _stoppingBrowsers = [[NSMutableSet alloc] init];
+        _resolveTimeoutSeconds = 5.0;
     }
 
     return self;
