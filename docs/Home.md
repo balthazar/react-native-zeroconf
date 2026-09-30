@@ -22,7 +22,8 @@ zeroconf.scan({ type: 'http' })
 | Advertise your own services and TXT records | [Publishing](Publishing) |
 | Use the `useZeroconf` hook and clean up in components | [React Integration](React-Integration) |
 | Tell errors apart and react to them | [Error Handling](Error-Handling) |
-| Look up a method, option, event or error code | [API Reference](API-Reference) |
+| Look up a method, option or event | [API Reference](API-Reference) |
+| Look up an error code or domain | [Errors](Errors) |
 | Choose between `NSD` and `DNSSD` on Android | [Android Implementations](Android-Implementations) |
 | Test on the Android emulator | [Android Emulator](Android-Emulator) |
 | Fix "nothing is found", `-65555` / `-65570`, Expo Go crashes... | [Troubleshooting and FAQ](Troubleshooting-and-FAQ) |

@@ -13,7 +13,7 @@
 
 ## Structured errors
 
-`error` events and promise rejections now receive an `Error` with `message`, `code`, `domain` and `serviceName`. In 0.15, iOS errors were a plain `Error` whose message was a stringified dictionary (e.g. containing `NSNetServicesErrorCode = "-72008"`), and Android errors were plain strings. Stop parsing `error.message` and switch on `domain` and `code` instead. See the [error tables](API-Reference#errors).
+`error` events and promise rejections now receive an `Error` with `message`, `code`, `domain` and `serviceName`. In 0.15, iOS errors were a plain `Error` whose message was a stringified dictionary (e.g. containing `NSNetServicesErrorCode = "-72008"`), and Android errors were plain strings. Stop parsing `error.message` and switch on `domain` and `code` instead. See the [error tables](Errors).
 
 The iOS implementation also moved from `NSNetService` to Apple's dns_sd C API, so iOS codes changed:
 

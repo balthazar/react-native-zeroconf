@@ -11,8 +11,8 @@
 - [Error Handling](Error-Handling)
 
 **Reference**
-- [API Reference](API-Reference)
-- [Errors](API-Reference#errors)
+- [API](API-Reference)
+- [Errors](Errors)
 - [Platform Support](Platform-Support)
 
 **Android**

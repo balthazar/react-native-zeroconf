@@ -19,7 +19,7 @@ zeroconf.on('error', error => {
 
 > Add an `error` listener. Native errors are only emitted to JavaScript when at least one `error` listener is registered.
 
-The full list of domains and codes is in the [API Reference](API-Reference#errors).
+The full list of domains and codes is in the [API Reference](Errors).
 
 ---
 
