@@ -1,0 +1,48 @@
+# react-native-zeroconf
+
+Discover and publish network services on the local network with Zeroconf (Bonjour, Avahi, mDNS) from React Native, on iOS, macOS, tvOS and Android.
+
+```javascript
+import Zeroconf from 'react-native-zeroconf'
+
+const zeroconf = new Zeroconf()
+zeroconf.on('resolved', service => console.log(service.name, service.addresses, service.port))
+zeroconf.scan({ type: 'http' })
+```
+
+> **Documentation for 0.16.** These docs describe the 0.16 API (options objects, promises, structured errors). Coming from 0.15 or earlier? Read the [Migration Guide](Migration-Guide).
+
+## Start here
+
+| If you want to... | Read |
+| --- | --- |
+| Add the library to a React Native or Expo app | [Installation](Installation) |
+| Configure `Info.plist`, Local Network access and Android permissions | [Permissions and Setup](Permissions-and-Setup) |
+| Scan for services and read what they resolve to | [Scanning](Scanning) |
+| Advertise your own services and TXT records | [Publishing](Publishing) |
+| Use the `useZeroconf` hook and clean up in components | [React Integration](React-Integration) |
+| Tell errors apart and react to them | [Error Handling](Error-Handling) |
+| Look up a method, option, event or error code | [API Reference](API-Reference) |
+| Choose between `NSD` and `DNSSD` on Android | [Android Implementations](Android-Implementations) |
+| Test on the Android emulator | [Android Emulator](Android-Emulator) |
+| Fix "nothing is found", `-65555` / `-65570`, Expo Go crashes... | [Troubleshooting and FAQ](Troubleshooting-and-FAQ) |
+| Upgrade from 0.15 | [Migration Guide](Migration-Guide) |
+| Check what each platform supports | [Platform Support](Platform-Support) |
+| Build the library and the example app | [Contributing](Contributing) |
+
+## At a glance
+
+- **React hook**: `useZeroconf()` scans while a component is mounted and returns the resolved services.
+- **Discovery**: `scan()` emits `found`, then `resolved` with host, port, addresses (IPv4 first) and TXT records.
+- **Multiple scans**: each `Zeroconf` instance (and each `useZeroconf` hook) runs its own scan, so several service types can be browsed at once.
+- **Publishing**: `publishService()` returns a promise with the service as advertised (its name can be renamed on conflict).
+- **Structured errors**: every error carries `code`, `domain` and, when relevant, `serviceName`.
+- **iOS Local Network permission**: `checkLocalNetworkAccess()` tells you whether the user denied access.
+- **Two Android backends**: the system `NsdManager` (`NSD`, default) or an embedded mDNSResponder (`DNSSD`).
+- **TypeScript**: type definitions ship with the package.
+
+## Links
+
+- [Repository and README](https://github.com/balthazar/react-native-zeroconf)
+- [Issues](https://github.com/balthazar/react-native-zeroconf/issues)
+- [npm](https://www.npmjs.com/package/react-native-zeroconf)

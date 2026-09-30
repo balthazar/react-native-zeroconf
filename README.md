@@ -4,7 +4,7 @@
 
 Find the services other devices advertise on the local network (printers, speakers, cameras, your own servers) and advertise your own, on iOS, Android, macOS and tvOS.
 
-**[Read the documentation](https://github.com/balthazar/react-native-zeroconf/wiki)**
+**[Read the documentation](https://zeroconf.balthazar.dev)**
 
 ## Installation
 
@@ -13,7 +13,7 @@ yarn add react-native-zeroconf
 cd ios && pod install
 ```
 
-On iOS, declare the service types you use in `NSBonjourServices`, see [Permissions and Setup](https://github.com/balthazar/react-native-zeroconf/wiki/Permissions-and-Setup). Expo works with development builds, see [Installation](https://github.com/balthazar/react-native-zeroconf/wiki/Installation).
+On iOS, declare the service types you use in `NSBonjourServices`, see [Permissions and Setup](https://zeroconf.balthazar.dev/Permissions-and-Setup). Expo works with development builds, see [Installation](https://zeroconf.balthazar.dev/Installation).
 
 ## Usage
 
@@ -43,12 +43,12 @@ zeroconf.scan({ type: 'http' })
 
 ## Documentation
 
-- **Getting started**: [Installation](https://github.com/balthazar/react-native-zeroconf/wiki/Installation), [Permissions and Setup](https://github.com/balthazar/react-native-zeroconf/wiki/Permissions-and-Setup)
-- **Guides**: [Scanning](https://github.com/balthazar/react-native-zeroconf/wiki/Scanning), [Publishing](https://github.com/balthazar/react-native-zeroconf/wiki/Publishing), [React Integration](https://github.com/balthazar/react-native-zeroconf/wiki/React-Integration), [Error Handling](https://github.com/balthazar/react-native-zeroconf/wiki/Error-Handling)
-- **Reference**: [API Reference](https://github.com/balthazar/react-native-zeroconf/wiki/API-Reference), [Platform Support](https://github.com/balthazar/react-native-zeroconf/wiki/Platform-Support)
-- **Android**: [Android Implementations](https://github.com/balthazar/react-native-zeroconf/wiki/Android-Implementations), [Android Emulator](https://github.com/balthazar/react-native-zeroconf/wiki/Android-Emulator)
-- **Help**: [Troubleshooting and FAQ](https://github.com/balthazar/react-native-zeroconf/wiki/Troubleshooting-and-FAQ), [Migration Guide](https://github.com/balthazar/react-native-zeroconf/wiki/Migration-Guide)
-- **Project**: [Contributing](https://github.com/balthazar/react-native-zeroconf/wiki/Contributing), [example app](./example)
+- **Getting started**: [Installation](https://zeroconf.balthazar.dev/Installation), [Permissions and Setup](https://zeroconf.balthazar.dev/Permissions-and-Setup)
+- **Guides**: [Scanning](https://zeroconf.balthazar.dev/Scanning), [Publishing](https://zeroconf.balthazar.dev/Publishing), [React Integration](https://zeroconf.balthazar.dev/React-Integration), [Error Handling](https://zeroconf.balthazar.dev/Error-Handling)
+- **Reference**: [API Reference](https://zeroconf.balthazar.dev/API-Reference), [Platform Support](https://zeroconf.balthazar.dev/Platform-Support)
+- **Android**: [Android Implementations](https://zeroconf.balthazar.dev/Android-Implementations), [Android Emulator](https://zeroconf.balthazar.dev/Android-Emulator)
+- **Help**: [Troubleshooting and FAQ](https://zeroconf.balthazar.dev/Troubleshooting-and-FAQ), [Migration Guide](https://zeroconf.balthazar.dev/Migration-Guide)
+- **Project**: [Contributing](https://zeroconf.balthazar.dev/Contributing), [example app](./example)
 
 ## License
 

@@ -73,7 +73,7 @@
     "discovery"
   ],
   "author": "Balthazar Gronon <bgronon@gmail.com>",
-  "homepage": "https://github.com/balthazar/react-native-zeroconf",
+  "homepage": "https://zeroconf.balthazar.dev",
   "license": "MIT",
   "dependencies": {
     "events": "^3.0.0"

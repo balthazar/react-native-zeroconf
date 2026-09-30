@@ -1,0 +1,89 @@
+# Documentation website, served at zeroconf.balthazar.dev.
+# The page and nginx config come from the zeroconf-docs ConfigMap, created by website/deploy.sh.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zeroconf-docs
+  namespace: apps
+  labels:
+    app: zeroconf-docs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zeroconf-docs
+  template:
+    metadata:
+      labels:
+        app: zeroconf-docs
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: site
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+            - name: site
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 30
+      volumes:
+        - name: site
+          configMap:
+            name: zeroconf-docs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zeroconf-docs
+  namespace: apps
+  labels:
+    app: zeroconf-docs
+spec:
+  type: ClusterIP
+  selector:
+    app: zeroconf-docs
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zeroconf-docs
+  namespace: apps
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: zeroconf.balthazar.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: zeroconf-docs
+                port:
+                  number: 80
