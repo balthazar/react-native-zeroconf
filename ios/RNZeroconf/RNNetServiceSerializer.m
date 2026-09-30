@@ -8,6 +8,7 @@
 
 #import "RNNetServiceSerializer.h"
 #include <arpa/inet.h>
+#include <dns_sd.h>
 
 const NSString *kRNServiceKeysName = @"name";
 const NSString *kRNServiceKeysFullName = @"fullName";
@@ -18,75 +19,66 @@ const NSString *kRNServiceTxtRecords = @"txt";
 
 @implementation RNNetServiceSerializer
 
-+ (NSDictionary *) serializeServiceToDictionary:(NSNetService *)service
-                                       resolved:(BOOL)resolved
++ (NSString *) stringFromAddress:(const struct sockaddr *)address
 {
-    NSMutableDictionary *serviceInfo = [[NSMutableDictionary alloc] init];
-    serviceInfo[kRNServiceKeysName] = service.name;
-
-    if (resolved) {
-        serviceInfo[kRNServiceKeysFullName] = [NSString stringWithFormat:@"%@%@", service.hostName, service.type];
-        serviceInfo[kRNServiceKeysAddresses] = [self addressesFromService:service];
-        serviceInfo[kRNServiceKeysHost] = service.hostName;
-        serviceInfo[kRNServiceKeysPort] = @(service.port);
-        
-        NSDictionary<NSString *, NSData *> *txtRecordDict = [NSNetService dictionaryFromTXTRecordData:service.TXTRecordData];
-        
-        NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
-        for (NSString *key in txtRecordDict) {
-            @try{
-                NSData *value = txtRecordDict[key];
-                NSString *string = [[NSString alloc] initWithData:value encoding:NSUTF8StringEncoding];
-                if (string == nil) {
-                    // Not valid UTF-8, fall back to a lossless 8-bit decoding
-                    string = [[NSString alloc] initWithData:value encoding:NSISOLatin1StringEncoding];
-                }
-                dict[key] = string;
-            }
-            @catch(NSException *exception){
-                NSLog(@"%@", exception);
-            }
-        }
-        serviceInfo[kRNServiceTxtRecords] = dict;
+    if (address == NULL) {
+        return nil;
     }
 
-    return [NSDictionary dictionaryWithDictionary:serviceInfo];
+    char buffer[INET6_ADDRSTRLEN];
+    const char *result = NULL;
+    if (address->sa_family == AF_INET) {
+        result = inet_ntop(AF_INET, &((const struct sockaddr_in *)address)->sin_addr, buffer, sizeof(buffer));
+    } else if (address->sa_family == AF_INET6) {
+        result = inet_ntop(AF_INET6, &((const struct sockaddr_in6 *)address)->sin6_addr, buffer, sizeof(buffer));
+    }
+    return result ? [NSString stringWithUTF8String:result] : nil;
 }
 
-+ (NSArray<NSString *> *) addressesFromService:(NSNetService *)service
++ (NSDictionary<NSString *, NSString *> *) dictionaryFromTXTRecord:(const void *)record length:(uint16_t)length
 {
-    NSMutableArray<NSString *> *addresses = [[NSMutableArray alloc] init];
+    NSMutableDictionary *txt = [[NSMutableDictionary alloc] init];
+    uint16_t count = TXTRecordGetCount(length, record);
+    for (uint16_t i = 0; i < count; i++) {
+        char key[256];
+        uint8_t valueLength = 0;
+        const void *value = NULL;
+        if (TXTRecordGetItemAtIndex(length, record, i, sizeof(key), key, &valueLength, &value) != kDNSServiceErr_NoError || key[0] == '\0') {
+            continue;
+        }
 
-    // source: http://stackoverflow.com/a/4976808/2715
-    char addressBuffer[INET6_ADDRSTRLEN];
-
-    for (NSData *data in service.addresses) {
-        memset(addressBuffer, 0, INET6_ADDRSTRLEN);
-
-        typedef union {
-            struct sockaddr sa;
-            struct sockaddr_in ipv4;
-            struct sockaddr_in6 ipv6;
-        } ip_socket_address;
-
-        ip_socket_address *socketAddress = (ip_socket_address *)[data bytes];
-
-        if (socketAddress && (socketAddress->sa.sa_family == AF_INET || socketAddress->sa.sa_family == AF_INET6)) {
-            const char *addressStr = inet_ntop(
-                socketAddress->sa.sa_family,
-                (socketAddress->sa.sa_family == AF_INET ? (void *)&(socketAddress->ipv4.sin_addr) : (void *)&(socketAddress->ipv6.sin6_addr)),
-                addressBuffer,
-                sizeof(addressBuffer)
-            );
-
-            if (addressStr) {
-                NSString *address = [NSString stringWithUTF8String:addressStr];
-                [addresses addObject:address];
-            }
+        NSString *string = @"";
+        if (value != NULL && valueLength > 0) {
+            NSData *data = [NSData dataWithBytes:value length:valueLength];
+            string = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
+                ?: [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding]
+                ?: @"";
+        }
+        NSString *keyString = [NSString stringWithUTF8String:key];
+        if (keyString) {
+            txt[keyString] = string;
         }
     }
+    return txt;
+}
 
-    return [NSArray arrayWithArray:addresses];
++ (NSData *) TXTRecordFromPairs:(NSArray<NSArray<NSString *> *> *)pairs tooLong:(NSMutableArray<NSString *> *)tooLong
+{
+    NSMutableData *data = [NSMutableData data];
+    for (NSArray<NSString *> *pair in pairs) {
+        if (pair.count != 2) {
+            continue;
+        }
+        NSData *entry = [[NSString stringWithFormat:@"%@=%@", pair[0], pair[1]] dataUsingEncoding:NSUTF8StringEncoding];
+        if (entry.length > 255) {
+            [tooLong addObject:pair[0]];
+            continue;
+        }
+        uint8_t entryLength = (uint8_t)entry.length;
+        [data appendBytes:&entryLength length:1];
+        [data appendData:entry];
+    }
+    return data;
 }
 
 @end

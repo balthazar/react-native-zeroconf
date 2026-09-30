@@ -12,8 +12,6 @@
 #import <React/RCTEventDispatcher.h>
 #import <React/RCTInvalidating.h>
 
-@interface RNZeroconf : NSObject <RCTBridgeModule, RCTInvalidating, NSNetServiceBrowserDelegate, NSNetServiceDelegate>
-
-@property (nonatomic, strong) NSNetServiceBrowser *browser;
+@interface RNZeroconf : NSObject <RCTBridgeModule, RCTInvalidating>
 
 @end

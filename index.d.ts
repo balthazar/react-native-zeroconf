@@ -58,14 +58,14 @@ export interface PublishOptions {
 /**
  * Errors emitted by the `error` event
  *
- * - `NSNetServices`: iOS NSNetServicesErrorCode, e.g. `-72007` timeout, `-72008` missing Info.plist configuration
+ * - `DNSSD`: DNSServiceErrorType, on iOS and from Android's embedded mDNSResponder,
+ *   e.g. `-65570` Local Network access denied or the type is missing from NSBonjourServices
  * - `NsdManager`: Android NsdManager failure code
- * - `DNSSD`: Android DNSServiceErrorType from the embedded mDNSResponder
  * - `RNZeroconf`: the library's own errors, e.g. `'EXCEPTION'`
  */
 export interface ZeroconfError extends Error {
   code: number | string
-  domain: 'NSNetServices' | 'NsdManager' | 'DNSSD' | 'RNZeroconf'
+  domain: 'DNSSD' | 'NsdManager' | 'RNZeroconf'
   /** The service the error is about, when there is one */
   serviceName?: string
 }

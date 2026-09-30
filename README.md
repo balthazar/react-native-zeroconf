@@ -312,13 +312,13 @@ useEffect(() => {
 | ------------- | ------------------------------------------------------------------------------------------------- |
 | `message`     | Readable description                                                                              |
 | `code`        | Platform error code (number), or the library's own code (string, e.g. `'EXCEPTION'`)               |
-| `domain`      | Where the code comes from: `'NSNetServices'` (iOS), `'NsdManager'` or `'DNSSD'` (Android), `'RNZeroconf'` |
+| `domain`      | Where the code comes from: `'DNSSD'` (iOS, and Android's DNSSD), `'NsdManager'` (Android NSD), `'RNZeroconf'` (e.g. `'TIMEOUT'`, `'NOT_PUBLISHED'`) |
 | `serviceName` | The service the error is about, when there is one                                                 |
 
 ```javascript
 zeroconf.on('error', error => {
-  if (error.domain === 'NSNetServices' && error.code === -72008) {
-    // iOS: the service type is missing from NSBonjourServices in Info.plist
+  if (error.domain === 'DNSSD' && error.code === -65570) {
+    // iOS: Local Network access denied, or the service type is missing from NSBonjourServices
   }
 })
 ```
@@ -491,7 +491,7 @@ yarn ios  # or yarn android
 ### Services not being discovered
 
 1. **Check permissions**: Ensure all required permissions are granted. On iOS, `checkLocalNetworkAccess()` tells you if Local Network access was denied
-2. **iOS 14+**: Verify `NSBonjourServices` includes your service type. An `error` with code `-72008` means it is missing
+2. **iOS 14+**: Verify `NSBonjourServices` includes your service type. An `error` with code `-65570` means access was denied or it is missing
 3. **Android emulator**: Use a real device (emulators don't support multicast)
 4. **Try DNSSD**: Switch from NSD to DNSSD implementation on Android
 5. **Same network**: Ensure device and services are on the same network/subnet
