@@ -59,7 +59,7 @@ public class DnssdImpl implements Zeroconf {
     /**
      * Creates the Rx2Dnssd implementation.
      * Always uses embedded mDNSResponder since it works across all Android versions.
-     * The daemonic version (Rx2DnssdBindable) is unreliable on Android as the
+     * The daemonic version (not bundled) is unreliable on Android as the
      * system daemon at /dev/socket/mdnsd doesn't exist on most devices.
      */
     private Rx2Dnssd createDnssd(Context context) {

@@ -1,10 +1,5 @@
 LOCAL_PATH := $(call my-dir)
 
-commonSources := \
-    mdnsresponder/mDNSShared/dnssd_clientlib.c  \
-    mdnsresponder/mDNSShared/dnssd_clientstub.c \
-    mdnsresponder/mDNSShared/dnssd_ipc.c
-
 commonFlags := \
     -O2 -g \
     -fno-strict-aliasing \
@@ -73,23 +68,5 @@ LOCAL_LDLIBS := -llog
 LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
 include $(BUILD_SHARED_LIBRARY)
 
-### DAEMONIC LIB (for Android < 12) ###
-include $(CLEAR_VARS)
-
-LOCAL_SDK_VERSION := 8
-LOCAL_MODULE    := jdns_sd
-LOCAL_SRC_FILES := $(commonSources) JNISupport.c
-
-LOCAL_C_INCLUDES := $(LOCAL_PATH)/mdnsresponder/mDNSShared \
-                    $(LOCAL_PATH)
-
-LOCAL_CFLAGS += $(commonFlags)
-LOCAL_LDLIBS := -llog
-LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
-include $(BUILD_SHARED_LIBRARY)
-
-# NOTE: Both libraries are built with 16KB page alignment for Android 15+ compatibility
-# However, only jdns_sd_embedded is used at runtime (see DnssdImpl.java)
-# - jdns_sd: Daemonic implementation (requires /dev/socket/mdnsd - not available on most devices)
-# - jdns_sd_embedded: Embedded mDNSResponder (used for all Android versions)
+# NOTE: Built with 16KB page alignment for Android 15+ compatibility
 # See: https://developer.android.com/guide/practices/page-sizes
