@@ -108,6 +108,8 @@ export default class Zeroconf {
   removeListener<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
   off<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
   removeAllListeners(event?: keyof ZeroconfEvents): this
+  /** Adds a listener and returns a function that removes it */
+  subscribe<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): () => void
   listenerCount(event: keyof ZeroconfEvents): number
 
   /** Add the native event listeners (called automatically in the constructor) */

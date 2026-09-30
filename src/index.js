@@ -192,6 +192,14 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
+   * Add a listener and get a function that removes it, handy in useEffect cleanups
+   */
+  subscribe(event, listener) {
+    this.on(event, listener)
+    return () => this.removeListener(event, listener)
+  }
+
+  /**
    * Remove all event listeners and clean map
    */
   removeDeviceListeners() {

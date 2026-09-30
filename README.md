@@ -262,6 +262,17 @@ await zeroconf.unpublishService('MyWebServer')
 
 Resolves once the service is no longer advertised. Rejects with code `'NOT_PUBLISHED'` if no service with that name is published.
 
+#### `subscribe(event, listener)`
+
+Adds an event listener and returns a function that removes it, handy in `useEffect` cleanups. `on()` still works and returns the instance for chaining.
+
+```javascript
+useEffect(() => {
+  const unsubscribe = zeroconf.subscribe('resolved', service => console.log(service.name))
+  return unsubscribe
+}, [])
+```
+
 #### `addDeviceListeners()`
 
 Manually add event listeners (called automatically in constructor).
