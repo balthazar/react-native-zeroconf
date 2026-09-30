@@ -3,6 +3,7 @@ LOCAL_PATH := $(call my-dir)
 commonFlags := \
     -O2 -g \
     -fno-strict-aliasing \
+    -fwrapv \
     -D_GNU_SOURCE \
     -DHAVE_IPV6 \
     -DHAVE_LINUX \
