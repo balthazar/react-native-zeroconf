@@ -214,7 +214,18 @@ zeroconf.publishService({
 })
 ```
 
-The positional form `publishService(type, protocol, domain, name, port, txt, implType)` still works but is deprecated.
+It returns a promise that resolves with the published service once it is advertised, and rejects with an [error](#errors). The published name can differ from the requested one when that name is already taken on the network, so use the resolved `name` to unpublish:
+
+```javascript
+try {
+  const service = await zeroconf.publishService({ type: 'http', protocol: 'tcp', name: 'MyWebServer', port: 8080 })
+  console.log(`Published as ${service.name}`)
+} catch (error) {
+  console.warn(error.code, error.message)
+}
+```
+
+The `published` event is still emitted as well. The positional form `publishService(type, protocol, domain, name, port, txt, implType)` still works but is deprecated.
 
 TXT order is preserved on iOS and with `DNSSD` on Android. With `NSD`, the order depends on the Android system.
 
@@ -230,8 +241,10 @@ Remove a published service.
 | `implType` | string | publish's | **Android only**: Which implementation. Defaults to the one the service was published with |
 
 ```javascript
-zeroconf.unpublishService('MyWebServer')
+await zeroconf.unpublishService('MyWebServer')
 ```
+
+Resolves once the service is no longer advertised. Rejects with code `'NOT_PUBLISHED'` if no service with that name is published.
 
 #### `addDeviceListeners()`
 

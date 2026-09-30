@@ -53,6 +53,24 @@ const toError = payload => {
   return error
 }
 
+/**
+ * Promise rejections carry the same payload as error events in userInfo
+ */
+const toRejection = error =>
+  error && error.userInfo && error.userInfo.domain ? toError(error.userInfo) : error
+
+/**
+ * Normalizes rejections, and marks the promise handled so callers that don't await it
+ * don't get unhandled rejection warnings (errors are also emitted as error events)
+ */
+const asPromise = nativePromise => {
+  const promise = Promise.resolve(nativePromise).catch(error => {
+    throw toRejection(error)
+  })
+  promise.catch(() => {})
+  return promise
+}
+
 const isIPv6 = address => address.includes(':')
 
 /**
@@ -229,7 +247,8 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
-   * Publish a service
+   * Publish a service, resolves with the published service once it is advertised.
+   * Its name can differ from the requested one when that name is already taken.
    *
    * publishService({ type, protocol, domain, name, port, txt, implType })
    * publishService(type, protocol, domain, name, port, txt, implType) is deprecated
@@ -252,22 +271,22 @@ export default class Zeroconf extends EventEmitter {
     const txtRecord = toTxtPairs(txt)
     if (Platform.OS === 'android') {
       this._publishedImplTypes[name] = implType
-      RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, implType)
-    } else {
-      RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord)
+      return asPromise(
+        RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, implType),
+      )
     }
+    return asPromise(RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord))
   }
 
   /**
-   * Unpublish a service,
+   * Unpublish a service, resolves once it is no longer advertised.
    * Defaults to the implementation the service was published with
    */
   unpublishService(name, implType = this._publishedImplTypes[name] || ImplType.NSD) {
     if (Platform.OS === 'android') {
       delete this._publishedImplTypes[name]
-      RNZeroconf.unregisterService(name, implType)
-    } else {
-      RNZeroconf.unregisterService(name)
+      return asPromise(RNZeroconf.unregisterService(name, implType))
     }
+    return asPromise(RNZeroconf.unregisterService(name))
   }
 }

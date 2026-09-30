@@ -7,6 +7,7 @@ import android.util.Log;
 
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.WritableArray;
@@ -128,6 +129,14 @@ public class DnssdImpl implements Zeroconf {
         }
     }
 
+    private void rejectWith(@Nullable Promise promise, Throwable throwable, String prefix, @Nullable String serviceName) {
+        if (throwable instanceof DNSSDException) {
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_DNSSD, ((DNSSDException) throwable).getErrorCode(), prefix + throwable.getMessage(), serviceName);
+        } else {
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, prefix + throwable.getMessage(), serviceName);
+        }
+    }
+
     private WritableMap serviceNameToMap(BonjourService serviceInfo) {
         WritableMap service = new WritableNativeMap();
         service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
@@ -184,29 +193,40 @@ public class DnssdImpl implements Zeroconf {
     }
 
     @Override
-    public void unregisterService(String serviceName) {
+    public void unregisterService(String serviceName, @Nullable Promise promise) {
 
         BonjourService bs = mPublishedServices.get(serviceName);
+        Disposable registerDisposable = mRegisteredDisposables.get(serviceName);
+        if (bs == null && registerDisposable == null) {
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_NOT_PUBLISHED, "Service " + serviceName + " is not published", serviceName);
+            return;
+        }
+
         if (bs != null) {
             zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_UNREGISTERED, serviceInfoToMap(bs));
             mPublishedServices.remove(serviceName);
         }
 
-        Disposable registerDisposable = mRegisteredDisposables.get(serviceName);
         if (registerDisposable != null && !registerDisposable.isDisposed()) {
             registerDisposable.dispose();
-            mRegisteredDisposables.remove(serviceName);
         }
+        mRegisteredDisposables.remove(serviceName);
 
+        // Disposing unregisters synchronously
+        if (promise != null) {
+            promise.resolve(bs != null ? serviceInfoToMap(bs) : null);
+        }
     }
 
     @Override
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, Promise promise) {
         BonjourService bs = new BonjourService.Builder(0, 0, name, getServiceType(type, protocol), null)
                 .port(port)
                 .dnsRecords(getTxtRecordMap(txt))
                 .build();
 
+        // Resolved once, the registration stream can emit again later
+        final Promise[] registerPromise = { promise };
         Disposable registerDisposable = rxDnssd.register(bs)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -215,9 +235,15 @@ public class DnssdImpl implements Zeroconf {
 
                     mPublishedServices.put(bs.getServiceName(), bs);
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_PUBLISHED, serviceInfoToMap(bonjourService));
+                    if (registerPromise[0] != null) {
+                        registerPromise[0].resolve(serviceInfoToMap(bonjourService));
+                        registerPromise[0] = null;
+                    }
                 }, throwable -> {
                     Log.e(TAG, "Error registering service: ", throwable);
                     sendError(throwable, "Registering service " + name + " failed: ", name);
+                    rejectWith(registerPromise[0], throwable, "Registering service " + name + " failed: ", name);
+                    registerPromise[0] = null;
                     mRegisteredDisposables.remove(name);
                 });
 
@@ -227,7 +253,7 @@ public class DnssdImpl implements Zeroconf {
     @Override
     public void unregisterAllServices() {
         for (String serviceName : new ArrayList<>(mRegisteredDisposables.keySet())) {
-            unregisterService(serviceName);
+            unregisterService(serviceName, null);
         }
     }
 

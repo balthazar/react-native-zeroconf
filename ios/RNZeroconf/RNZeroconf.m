@@ -18,8 +18,16 @@
 // Stopped browsers, kept alive until their asynchronous stop has been processed
 @property (nonatomic, strong, readonly) NSMutableSet<NSNetServiceBrowser *> *stoppingBrowsers;
 @property (nonatomic, assign) NSTimeInterval resolveTimeoutSeconds;
+// Promise callbacks of publish / unpublish calls, keyed by service object since services can be renamed
+@property (nonatomic, strong, readonly) NSMutableDictionary<NSValue *, NSArray *> *pendingPublishes;
+@property (nonatomic, strong, readonly) NSMutableDictionary<NSValue *, RCTPromiseResolveBlock> *pendingUnpublishes;
 
 @end
+
+static NSValue *RNServiceKey(NSNetService *service)
+{
+    return [NSValue valueWithNonretainedObject:service];
+}
 
 @implementation RNZeroconf
 
@@ -79,9 +87,12 @@ RCT_EXPORT_METHOD(registerService:(NSString *)type
                   domain:(NSString *)domain
                   name:(NSString *)name
                   port:(int)port
-                  txt:(NSArray<NSArray<NSString *> *> *)txt)
+                  txt:(NSArray<NSArray<NSString *> *> *)txt
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
-    const NSNetService *svc = [[NSNetService alloc] initWithDomain:domain type:[NSString stringWithFormat:@"_%@._%@.", type, protocol] name:name port:port];
+    NSNetService *svc = [[NSNetService alloc] initWithDomain:domain type:[NSString stringWithFormat:@"_%@._%@.", type, protocol] name:name port:port];
+    self.pendingPublishes[RNServiceKey(svc)] = @[resolve, reject];
     [svc setDelegate:self];
     [svc scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
 
@@ -94,13 +105,23 @@ RCT_EXPORT_METHOD(registerService:(NSString *)type
     NSLog(@"zeroconf publish called");
 }
 
-RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
+RCT_EXPORT_METHOD(unregisterService:(NSString *)serviceName
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
 {
     NSNetService *svc = self.publishedServices[serviceName];
-
-    if (svc) {
-        [svc stop];
+    if (!svc) {
+        [self reject:reject error:@{
+            @"message": [NSString stringWithFormat:@"Service %@ is not published", serviceName],
+            @"code": @"NOT_PUBLISHED",
+            @"domain": @"RNZeroconf",
+            @"serviceName": serviceName,
+        }];
+        return;
     }
+
+    self.pendingUnpublishes[RNServiceKey(svc)] = resolve;
+    [svc stop];
 }
 
 #pragma mark - NSNetServiceBrowserDelegate
@@ -215,6 +236,12 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 
     self.publishedServices[sender.name] = sender;
 
+    NSArray *pending = self.pendingPublishes[RNServiceKey(sender)];
+    if (pending) {
+        [self.pendingPublishes removeObjectForKey:RNServiceKey(sender)];
+        ((RCTPromiseResolveBlock)pending[0])(serviceInfo);
+    }
+
 }
 
 - (void)netService:(NSNetService *)sender
@@ -222,8 +249,13 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 {
     NSLog(@"zeroconf netServiceDidNotPublish");
 
-    [self reportError:errorDict action:@"Publishing service" serviceName:sender.name];
-    NSLog(@"zeroconf %@", errorDict);
+    NSDictionary *error = [self errorFrom:errorDict action:@"Publishing service" serviceName:sender.name];
+    [self sendError:error];
+    NSArray *pending = self.pendingPublishes[RNServiceKey(sender)];
+    if (pending) {
+        [self.pendingPublishes removeObjectForKey:RNServiceKey(sender)];
+        [self reject:pending[1] error:error];
+    }
     sender.delegate = nil;
     [self.publishedServices removeObjectForKey:sender.name];
 
@@ -236,6 +268,24 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 
     NSDictionary *serviceInfo = [RNNetServiceSerializer serializeServiceToDictionary:sender resolved:YES];
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfServiceUnregistered" body:serviceInfo];
+
+    RCTPromiseResolveBlock resolveUnpublish = self.pendingUnpublishes[RNServiceKey(sender)];
+    if (resolveUnpublish) {
+        [self.pendingUnpublishes removeObjectForKey:RNServiceKey(sender)];
+        resolveUnpublish(serviceInfo);
+    }
+
+    // Stopped before it finished publishing
+    NSArray *pendingPublish = self.pendingPublishes[RNServiceKey(sender)];
+    if (pendingPublish) {
+        [self.pendingPublishes removeObjectForKey:RNServiceKey(sender)];
+        [self reject:pendingPublish[1] error:@{
+            @"message": [NSString stringWithFormat:@"Publishing service %@ was cancelled", sender.name],
+            @"code": @"CANCELLED",
+            @"domain": @"RNZeroconf",
+            @"serviceName": sender.name,
+        }];
+    }
 
 }
 
@@ -251,6 +301,8 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
         _retriedServices = [[NSMutableSet alloc] init];
         _stoppingBrowsers = [[NSMutableSet alloc] init];
         _resolveTimeoutSeconds = 5.0;
+        _pendingPublishes = [[NSMutableDictionary alloc] init];
+        _pendingUnpublishes = [[NSMutableDictionary alloc] init];
     }
 
     return self;
@@ -301,7 +353,22 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:error];
 }
 
+// Rejects a promise with the same { message, code, domain, serviceName } shape as error events, in userInfo
+- (void) reject:(RCTPromiseRejectBlock)reject error:(NSDictionary *)error
+{
+    id code = error[@"code"];
+    NSError *nsError = [NSError errorWithDomain:error[@"domain"]
+                                           code:[code isKindOfClass:[NSNumber class]] ? [code integerValue] : 0
+                                       userInfo:error];
+    reject([NSString stringWithFormat:@"%@", code], error[@"message"], nsError);
+}
+
 - (void) reportError:(NSDictionary *)errorDict action:(NSString *)action serviceName:(NSString *)serviceName
+{
+    [self sendError:[self errorFrom:errorDict action:action serviceName:serviceName]];
+}
+
+- (NSDictionary *) errorFrom:(NSDictionary *)errorDict action:(NSString *)action serviceName:(NSString *)serviceName
 {
     NSNumber *code = errorDict[NSNetServicesErrorCode] ?: @(NSNetServicesUnknownError);
     NSString *subject = serviceName ? [NSString stringWithFormat:@"%@ %@", action, serviceName] : action;
@@ -313,7 +380,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     if (serviceName) {
         error[@"serviceName"] = serviceName;
     }
-    [self sendError:error];
+    return error;
 }
 
 // Readable description of an NSNetServicesErrorCode

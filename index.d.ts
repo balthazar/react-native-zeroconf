@@ -121,8 +121,11 @@ export default class Zeroconf {
    */
   stop(implType?: ImplType): void
 
-  /** Publish a service */
-  publishService(options: PublishOptions): void
+  /**
+   * Publish a service. Resolves with the published service once it is advertised, its name can differ
+   * from the requested one when that name is already taken. Rejects with a `ZeroconfError`.
+   */
+  publishService(options: PublishOptions): Promise<PublishedService>
   /** @deprecated Use `publishService({ type, protocol, domain, name, port, txt, implType })` */
   publishService(
     type: string,
@@ -132,11 +135,12 @@ export default class Zeroconf {
     port: number,
     txt?: TxtRecord,
     implType?: ImplType,
-  ): void
+  ): Promise<PublishedService>
 
   /**
-   * Unpublish a service
+   * Unpublish a service. Resolves once it is no longer advertised, rejects with a `ZeroconfError`
+   * (e.g. code `'NOT_PUBLISHED'`).
    * @param implType Android only, defaults to the implementation the service was published with
    */
-  unpublishService(name: string, implType?: ImplType): void
+  unpublishService(name: string, implType?: ImplType): Promise<PublishedService | null>
 }

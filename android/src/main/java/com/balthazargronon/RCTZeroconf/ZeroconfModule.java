@@ -3,6 +3,7 @@ package com.balthazargronon.RCTZeroconf;
 
 import android.util.Log;
 
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -43,6 +44,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String ERROR_DOMAIN_DNSSD = "DNSSD";
     public static final String ERROR_DOMAIN_LIBRARY = "RNZeroconf";
     public static final String ERROR_CODE_EXCEPTION = "EXCEPTION";
+    public static final String ERROR_CODE_NOT_PUBLISHED = "NOT_PUBLISHED";
 
     private ZeroConfImplFactory zeroConfFactory;
 
@@ -81,22 +83,26 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, String implType) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, String implType, Promise promise) {
         try {
-            getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
+            getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt, promise);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception while registering service: " + e.getMessage(), name);
+            String message = "Exception while registering service: " + e.getMessage();
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, message, name);
+            reject(promise, ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, message, name);
         }
     }
 
     @ReactMethod
-    public void unregisterService(String serviceName, String implType) {
+    public void unregisterService(String serviceName, String implType, Promise promise) {
         try {
-            getZeroconfImpl(implType).unregisterService(serviceName);
+            getZeroconfImpl(implType).unregisterService(serviceName, promise);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception while unregistering service: " + e.getMessage(), serviceName);
+            String message = "Exception while unregistering service: " + e.getMessage();
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, message, serviceName);
+            reject(promise, ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, message, serviceName);
         }
     }
 
@@ -119,6 +125,19 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
      * @param code an Integer for platform error codes, a String for the library's own
      */
     public void sendError(String domain, Object code, String message, @Nullable String serviceName) {
+        sendEvent(getReactApplicationContext(), EVENT_ERROR, buildError(domain, code, message, serviceName));
+    }
+
+    /**
+     * Rejects a promise with the same { message, code, domain, serviceName } shape as error events, in userInfo
+     */
+    public static void reject(@Nullable Promise promise, String domain, Object code, String message, @Nullable String serviceName) {
+        if (promise != null) {
+            promise.reject(String.valueOf(code), message, buildError(domain, code, message, serviceName));
+        }
+    }
+
+    private static WritableMap buildError(String domain, Object code, String message, @Nullable String serviceName) {
         WritableMap error = new WritableNativeMap();
         error.putString("message", message);
         error.putString("domain", domain);
@@ -130,7 +149,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         if (serviceName != null) {
             error.putString("serviceName", serviceName);
         }
-        sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+        return error;
     }
 
     /**

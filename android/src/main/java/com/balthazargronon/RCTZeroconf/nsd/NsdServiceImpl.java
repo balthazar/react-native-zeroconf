@@ -12,6 +12,7 @@ import android.util.Log;
 
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 
 import com.facebook.react.bridge.ReadableArray;
@@ -30,6 +31,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.annotation.Nullable;
+
 public class NsdServiceImpl implements Zeroconf {
     private static final String TAG = "NsdServiceImpl";
     private static final long RESOLVE_RETRY_DELAY_MS = 100;
@@ -37,7 +40,7 @@ public class NsdServiceImpl implements Zeroconf {
     private NsdManager mNsdManager;
     private NsdManager.DiscoveryListener mDiscoveryListener;
     private WifiManager.MulticastLock multicastLock;
-    private Map<String, NsdManager.RegistrationListener> mPublishedServices;
+    private Map<String, ServiceRegistrationListener> mPublishedServices;
     private ZeroconfModule zeroconfModule;
     private ReactApplicationContext reactApplicationContext;
 
@@ -49,7 +52,7 @@ public class NsdServiceImpl implements Zeroconf {
     public NsdServiceImpl(ZeroconfModule zeroconfModule, ReactApplicationContext reactApplicationContext) {
         this.zeroconfModule = zeroconfModule;
         this.reactApplicationContext = reactApplicationContext;
-        mPublishedServices = new ConcurrentHashMap<String, NsdManager.RegistrationListener>();
+        mPublishedServices = new ConcurrentHashMap<String, ServiceRegistrationListener>();
     }
 
     @Override
@@ -139,7 +142,7 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     @Override
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt) {
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, Promise promise) {
         String serviceType = String.format("_%s._%s.", type, protocol);
 
         final NsdManager nsdManager = this.getNsdManager();
@@ -154,26 +157,30 @@ public class NsdServiceImpl implements Zeroconf {
         }
 
         nsdManager.registerService(
-                serviceInfo, NsdManager.PROTOCOL_DNS_SD, new ServiceRegistrationListener());
+                serviceInfo, NsdManager.PROTOCOL_DNS_SD, new ServiceRegistrationListener(promise));
     }
 
     @Override
-    public void unregisterService(String serviceName) {
+    public void unregisterService(String serviceName, @Nullable Promise promise) {
 
         final NsdManager nsdManager = this.getNsdManager();
 
-        NsdManager.RegistrationListener serviceListener = mPublishedServices.get(serviceName);
+        ServiceRegistrationListener serviceListener = mPublishedServices.get(serviceName);
 
-        if (serviceListener != null) {
-            mPublishedServices.remove(serviceName);
-            nsdManager.unregisterService(serviceListener);
+        if (serviceListener == null) {
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_NOT_PUBLISHED, "Service " + serviceName + " is not published", serviceName);
+            return;
         }
+
+        mPublishedServices.remove(serviceName);
+        serviceListener.unregisterPromise = promise;
+        nsdManager.unregisterService(serviceListener);
     }
 
     @Override
     public void unregisterAllServices() {
         for (String serviceName : new ArrayList<>(mPublishedServices.keySet())) {
-            unregisterService(serviceName);
+            unregisterService(serviceName, null);
         }
     }
 
@@ -245,6 +252,12 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     private class ServiceRegistrationListener implements NsdManager.RegistrationListener {
+        @Nullable private Promise registerPromise;
+        @Nullable private Promise unregisterPromise;
+
+        ServiceRegistrationListener(@Nullable Promise registerPromise) {
+            this.registerPromise = registerPromise;
+        }
 
         @Override
         public void onServiceRegistered(NsdServiceInfo NsdServiceInfo) {
@@ -257,11 +270,18 @@ public class NsdServiceImpl implements Zeroconf {
 
             WritableMap service = serviceInfoToMap(NsdServiceInfo);
             zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_PUBLISHED, service);
+            if (registerPromise != null) {
+                registerPromise.resolve(serviceInfoToMap(NsdServiceInfo));
+                registerPromise = null;
+            }
         }
 
         @Override
         public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Registering service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
+            String message = "Registering service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, message, serviceInfo.getServiceName());
+            ZeroconfModule.reject(registerPromise, ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, message, serviceInfo.getServiceName());
+            registerPromise = null;
         }
 
         @Override
@@ -270,11 +290,18 @@ public class NsdServiceImpl implements Zeroconf {
             // NsdManager.unregisterService() and pass in this listener.
             final WritableMap service = serviceInfoToMap(nsdServiceInfo);
             zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_UNREGISTERED, service);
+            if (unregisterPromise != null) {
+                unregisterPromise.resolve(serviceInfoToMap(nsdServiceInfo));
+                unregisterPromise = null;
+            }
         }
 
         @Override
         public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Unregistering service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
+            String message = "Unregistering service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, message, serviceInfo.getServiceName());
+            ZeroconfModule.reject(unregisterPromise, ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, message, serviceInfo.getServiceName());
+            unregisterPromise = null;
         }
     }
 
