@@ -23,6 +23,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.List;
@@ -39,14 +40,12 @@ public class DnssdImpl implements Zeroconf {
 
     private Rx2Dnssd rxDnssd;
 
-    @Nullable
-    private Disposable browseDisposable;
 
     private Map<String, BonjourService> mPublishedServices;
     private Map<String, Disposable> mRegisteredDisposables;
 
-    // A service is reported once per network interface, count them so found/remove are emitted once
-    private final Map<String, Integer> mFoundInterfaces = new HashMap<>();
+    // Running browses, keyed by the id of the JS instance that started them
+    private final Map<String, Disposable> mBrowses = new ConcurrentHashMap<>();
 
     private ZeroconfModule zeroconfModule;
 
@@ -72,38 +71,32 @@ public class DnssdImpl implements Zeroconf {
     }
 
     @Override
-    public void scan(String type, String protocol, String domain) {
-        this.stop();
-
-        if (multicastLock == null) {
-            @SuppressLint("WifiManagerLeak") WifiManager wifi = (WifiManager) reactApplicationContext.getSystemService(Context.WIFI_SERVICE);
-            multicastLock = wifi.createMulticastLock("multicastLock");
-            multicastLock.setReferenceCounted(true);
-            multicastLock.acquire();
-        }
+    public void scan(final String scanId, String type, String protocol, String domain) {
+        this.stop(scanId);
+        acquireMulticastLock();
 
         String serviceType = getServiceType(type, protocol);
-        Log.d(TAG, "Starting DNSSD scan for: " + serviceType);
+        Log.d(TAG, "Starting DNSSD scan " + scanId + " for: " + serviceType);
 
-        // Emit start event
-        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_START, null);
+        sendScanEvent(ZeroconfModule.EVENT_START, new WritableNativeMap(), scanId);
 
-        mFoundInterfaces.clear();
-        browseDisposable = rxDnssd.browse(serviceType, "local.")
+        // A service is reported once per network interface, count them so found/remove are emitted once
+        final Map<String, Integer> foundInterfaces = new HashMap<>();
+        Disposable browse = rxDnssd.browse(serviceType, "local.")
                 .doOnNext(bonjourService -> {
                     String name = bonjourService.getServiceName();
-                    Integer count = mFoundInterfaces.get(name);
+                    Integer count = foundInterfaces.get(name);
                     int interfaces = count == null ? 0 : count;
                     if (!bonjourService.isLost()) {
-                        mFoundInterfaces.put(name, interfaces + 1);
+                        foundInterfaces.put(name, interfaces + 1);
                         if (interfaces == 0) {
-                            zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_FOUND, serviceNameToMap(bonjourService));
+                            sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceNameToMap(bonjourService), scanId);
                         }
                     } else if (interfaces <= 1) {
-                        mFoundInterfaces.remove(name);
-                        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_REMOVE, serviceNameToMap(bonjourService));
+                        foundInterfaces.remove(name);
+                        sendScanEvent(ZeroconfModule.EVENT_REMOVE, serviceNameToMap(bonjourService), scanId);
                     } else {
-                        mFoundInterfaces.put(name, interfaces - 1);
+                        foundInterfaces.put(name, interfaces - 1);
                     }
                 })
                 .filter(bonjourService -> !bonjourService.isLost())
@@ -113,7 +106,7 @@ public class DnssdImpl implements Zeroconf {
                                 .compose(rxDnssd.queryRecords())
                                 .onErrorResumeNext((Throwable throwable) -> {
                                     Log.e(TAG, "Error resolving service: ", throwable);
-                                    sendError(throwable, "Resolving service " + bonjourService.getServiceName() + " failed: ", bonjourService.getServiceName());
+                                    sendError(throwable, "Resolving service " + bonjourService.getServiceName() + " failed: ", bonjourService.getServiceName(), scanId);
                                     return Flowable.empty();
                                 }))
                 .subscribeOn(Schedulers.io())
@@ -123,23 +116,47 @@ public class DnssdImpl implements Zeroconf {
                     if (bonjourService.isLost()) {
                         return;
                     }
-                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(bonjourService));
+                    sendScanEvent(ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(bonjourService), scanId);
                 }, throwable -> {
                     Log.e(TAG, "Error browsing services: ", throwable);
-                    sendError(throwable, "Browsing services failed: ", null);
-                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_STOP, null);
+                    sendError(throwable, "Browsing services failed: ", null, scanId);
+                    if (mBrowses.remove(scanId) != null) {
+                        releaseMulticastLock();
+                    }
+                    sendScanEvent(ZeroconfModule.EVENT_STOP, new WritableNativeMap(), scanId);
                 });
+        mBrowses.put(scanId, browse);
+    }
+
+    private void sendScanEvent(String eventName, WritableMap body, String scanId) {
+        body.putString(ZeroconfModule.KEY_SCAN_ID, scanId);
+        zeroconfModule.sendEvent(reactApplicationContext, eventName, body);
+    }
+
+    private void acquireMulticastLock() {
+        if (multicastLock == null) {
+            @SuppressLint("WifiManagerLeak") WifiManager wifi = (WifiManager) reactApplicationContext.getSystemService(Context.WIFI_SERVICE);
+            multicastLock = wifi.createMulticastLock("multicastLock");
+            multicastLock.setReferenceCounted(true);
+        }
+        multicastLock.acquire();
+    }
+
+    private void releaseMulticastLock() {
+        if (multicastLock != null && multicastLock.isHeld()) {
+            multicastLock.release();
+        }
     }
 
     /**
      * DNSSD errors carry their DNSServiceErrorType code, anything else is reported as an exception
      */
-    private void sendError(Throwable throwable, String prefix, @Nullable String serviceName) {
+    private void sendError(Throwable throwable, String prefix, @Nullable String serviceName, @Nullable String scanId) {
         if (throwable instanceof DNSSDException) {
             DNSSDException dnssdException = (DNSSDException) throwable;
-            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_DNSSD, dnssdException.getErrorCode(), prefix + throwable.getMessage(), serviceName);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_DNSSD, dnssdException.getErrorCode(), prefix + throwable.getMessage(), serviceName, scanId);
         } else {
-            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, prefix + throwable.getMessage(), serviceName);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, prefix + throwable.getMessage(), serviceName, scanId);
         }
     }
 
@@ -194,16 +211,21 @@ public class DnssdImpl implements Zeroconf {
     }
 
     @Override
-    public void stop() {
-        if (browseDisposable != null) {
-            browseDisposable.dispose();
-            zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_STOP, null);
+    public void stop(String scanId) {
+        Disposable browse = mBrowses.remove(scanId);
+        if (browse == null) {
+            return;
         }
-        if (multicastLock != null) {
-            multicastLock.release();
+        browse.dispose();
+        releaseMulticastLock();
+        sendScanEvent(ZeroconfModule.EVENT_STOP, new WritableNativeMap(), scanId);
+    }
+
+    @Override
+    public void stopAll() {
+        for (String scanId : new ArrayList<>(mBrowses.keySet())) {
+            stop(scanId);
         }
-        browseDisposable = null;
-        multicastLock = null;
     }
 
     @Override
@@ -255,7 +277,7 @@ public class DnssdImpl implements Zeroconf {
                     }
                 }, throwable -> {
                     Log.e(TAG, "Error registering service: ", throwable);
-                    sendError(throwable, "Registering service " + name + " failed: ", name);
+                    sendError(throwable, "Registering service " + name + " failed: ", name, null);
                     rejectWith(registerPromise[0], throwable, "Registering service " + name + " failed: ", name);
                     registerPromise[0] = null;
                     mRegisteredDisposables.remove(name);

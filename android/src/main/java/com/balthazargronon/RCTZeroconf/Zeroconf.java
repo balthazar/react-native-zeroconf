@@ -7,9 +7,14 @@ import javax.annotation.Nullable;
 
 public interface Zeroconf {
 
-    void scan(String type, String protocol, String domain);
+    /**
+     * @param scanId id of the JS instance starting the scan, several scans can run at once
+     */
+    void scan(String scanId, String type, String protocol, String domain);
 
-    void stop();
+    void stop(String scanId);
+
+    void stopAll();
 
     /**
      * @param promise resolved with the service once unregistered, null when nobody waits for it

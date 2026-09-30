@@ -105,6 +105,27 @@ setTimeout(() => {
 }, 10000)
 ```
 
+## Multiple Scans
+
+Each `Zeroconf` instance runs its own scan, so several scans can run at the same time, each receiving only its own events:
+
+```javascript
+const printers = new Zeroconf()
+const speakers = new Zeroconf()
+
+printers.on('resolved', service => console.log('printer', service.name))
+speakers.on('resolved', service => console.log('speaker', service.name))
+
+printers.scan({ type: 'ipp' })
+speakers.scan({ type: 'raop' })
+
+// Later
+printers.stop()
+speakers.stop()
+```
+
+An instance that never calls `scan()` receives the events of every scan, as before.
+
 ## React Hook
 
 `useZeroconf` scans while the component is mounted and returns the resolved services. It scans again when the options change, and stops and cleans up on unmount.
@@ -137,7 +158,7 @@ It takes the same options as [`scan`](#scanoptions), plus `enabled` (default `tr
 | `stop()`     | Stops scanning                                                  |
 | `restart()`  | Clears the services and scans again                             |
 
-The native side runs one scan at a time, so use one `useZeroconf` at a time.
+Each hook runs its own scan, so several components can scan for different types at the same time.
 
 ## TypeScript
 

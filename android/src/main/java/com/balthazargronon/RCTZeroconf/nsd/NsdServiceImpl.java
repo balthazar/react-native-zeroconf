@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,21 +41,42 @@ public class NsdServiceImpl implements Zeroconf {
     private static final long RESOLVE_RETRY_DELAY_MS = 100;
 
     private NsdManager mNsdManager;
-    private NsdManager.DiscoveryListener mDiscoveryListener;
+    // Reference counted: acquired once per running scan
     private WifiManager.MulticastLock multicastLock;
     private Map<String, ServiceRegistrationListener> mPublishedServices;
     private ZeroconfModule zeroconfModule;
     private ReactApplicationContext reactApplicationContext;
 
-    // Android 14+: services are followed with registerServiceInfoCallback, null before
-    @Nullable private ServiceInfoCallbacks mInfoCallbacks;
+    // Running scans, keyed by the id of the JS instance that started them
+    private final Map<String, NsdScan> mScans = new ConcurrentHashMap<>();
     // Not the main thread: serviceInfoToMap can do a blocking reverse lookup for the host name
     private final ExecutorService mCallbackExecutor = Executors.newSingleThreadExecutor();
 
-    // NsdManager can only resolve one service at a time before API 34, so resolves are queued
-    private final ArrayDeque<NsdServiceInfo> mResolveQueue = new ArrayDeque<>();
+    // NsdManager can only resolve one service at a time before API 34, so resolves are queued across scans
+    private final ArrayDeque<PendingResolve> mResolveQueue = new ArrayDeque<>();
     private boolean mIsResolving = false;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
+
+    private static class NsdScan {
+        final String scanId;
+        NsdManager.DiscoveryListener discoveryListener;
+        // Android 14+: services are followed with registerServiceInfoCallback, null before
+        @Nullable ServiceInfoCallbacks infoCallbacks;
+
+        NsdScan(String scanId) {
+            this.scanId = scanId;
+        }
+    }
+
+    private static class PendingResolve {
+        final String scanId;
+        final NsdServiceInfo serviceInfo;
+
+        PendingResolve(String scanId, NsdServiceInfo serviceInfo) {
+            this.scanId = scanId;
+            this.serviceInfo = serviceInfo;
+        }
+    }
 
     public NsdServiceImpl(ZeroconfModule zeroconfModule, ReactApplicationContext reactApplicationContext) {
         this.zeroconfModule = zeroconfModule;
@@ -63,118 +85,147 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     @Override
-    public void scan(String type, String protocol, String domain) {
-        if (mNsdManager == null) {
-            mNsdManager = (NsdManager) getReactApplicationContext().getSystemService(Context.NSD_SERVICE);
-        }
+    public void scan(final String scanId, String type, String protocol, String domain) {
+        final NsdManager nsdManager = getNsdManager();
 
-        this.stop();
+        this.stop(scanId);
+        acquireMulticastLock();
 
-        if (multicastLock == null) {
-            @SuppressLint("WifiManagerLeak") WifiManager wifi = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            multicastLock = wifi.createMulticastLock("multicastLock");
-            multicastLock.setReferenceCounted(true);
-            multicastLock.acquire();
-        }
+        final NsdScan scan = new NsdScan(scanId);
 
         if (Build.VERSION.SDK_INT >= 34) {
-            mInfoCallbacks = new ServiceInfoCallbacks(mNsdManager, mCallbackExecutor, new ServiceInfoCallbacks.Listener() {
+            scan.infoCallbacks = new ServiceInfoCallbacks(nsdManager, mCallbackExecutor, new ServiceInfoCallbacks.Listener() {
                 @Override
                 public void onServiceUpdated(NsdServiceInfo serviceInfo) {
                     if (getHostAddresses(serviceInfo).isEmpty()) {
                         return;
                     }
-                    zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(serviceInfo));
+                    sendScanEvent(ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(serviceInfo), scanId);
                 }
 
                 @Override
                 public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                    zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
+                    zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName(), scanId);
                 }
             });
         }
 
-        mDiscoveryListener = new NsdManager.DiscoveryListener() {
+        scan.discoveryListener = new NsdManager.DiscoveryListener() {
             @Override
             public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Starting service discovery failed: " + ZeroconfModule.describeNsdError(errorCode), null);
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Starting service discovery failed: " + ZeroconfModule.describeNsdError(errorCode), null, scanId);
+                // The discovery never started, nothing to stop
+                if (mScans.remove(scanId, scan)) {
+                    releaseMulticastLock();
+                }
             }
 
             @Override
             public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Stopping service discovery failed: " + ZeroconfModule.describeNsdError(errorCode), null);
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Stopping service discovery failed: " + ZeroconfModule.describeNsdError(errorCode), null, scanId);
             }
 
             @Override
             public void onDiscoveryStarted(String serviceType) {
-                Log.d(TAG, "Discovery started");
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_START, null);
+                Log.d(TAG, "Discovery started for " + scanId);
+                sendScanEvent(ZeroconfModule.EVENT_START, new WritableNativeMap(), scanId);
             }
 
             @Override
             public void onDiscoveryStopped(String serviceType) {
-                Log.d(TAG, "Discovery stopped");
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_STOP, null);
+                Log.d(TAG, "Discovery stopped for " + scanId);
+                sendScanEvent(ZeroconfModule.EVENT_STOP, new WritableNativeMap(), scanId);
             }
 
             @Override
             public void onServiceFound(NsdServiceInfo serviceInfo) {
                 Log.d(TAG, "Service found");
-                WritableMap service = new WritableNativeMap();
-                service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
-
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_FOUND, service);
-                if (mInfoCallbacks != null) {
-                    mInfoCallbacks.register(serviceInfo);
+                sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceNameToMap(serviceInfo), scanId);
+                if (scan.infoCallbacks != null) {
+                    scan.infoCallbacks.register(serviceInfo);
                 } else {
-                    enqueueResolve(serviceInfo);
+                    enqueueResolve(scanId, serviceInfo);
                 }
             }
 
             @Override
             public void onServiceLost(NsdServiceInfo serviceInfo) {
                 Log.d(TAG, "Service lost");
-                WritableMap service = new WritableNativeMap();
-                service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_REMOVE, service);
-                if (mInfoCallbacks != null) {
-                    mInfoCallbacks.unregister(serviceInfo.getServiceName());
+                sendScanEvent(ZeroconfModule.EVENT_REMOVE, serviceNameToMap(serviceInfo), scanId);
+                if (scan.infoCallbacks != null) {
+                    scan.infoCallbacks.unregister(serviceInfo.getServiceName());
                 }
             }
         };
 
+        mScans.put(scanId, scan);
         String serviceType = String.format("_%s._%s.", type, protocol);
-        mNsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+        nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, scan.discoveryListener);
     }
 
     @Override
-    public void stop() {
-        if (mDiscoveryListener != null && mNsdManager != null) {
+    public void stop(String scanId) {
+        NsdScan scan = mScans.remove(scanId);
+        if (scan == null) {
+            return;
+        }
+
+        if (scan.discoveryListener != null && mNsdManager != null) {
             try {
-                mNsdManager.stopServiceDiscovery(mDiscoveryListener);
+                mNsdManager.stopServiceDiscovery(scan.discoveryListener);
             } catch (IllegalArgumentException e) {
                 // Listener was never registered or already unregistered (e.g. discovery failed to start)
                 Log.w(TAG, "stopServiceDiscovery failed", e);
             }
         }
 
-        if (mInfoCallbacks != null) {
-            mInfoCallbacks.unregisterAll();
-            mInfoCallbacks = null;
+        if (scan.infoCallbacks != null) {
+            scan.infoCallbacks.unregisterAll();
         }
 
-        mHandler.removeCallbacksAndMessages(null);
         synchronized (mResolveQueue) {
-            mResolveQueue.clear();
-            mIsResolving = false;
+            Iterator<PendingResolve> iterator = mResolveQueue.iterator();
+            while (iterator.hasNext()) {
+                if (iterator.next().scanId.equals(scanId)) {
+                    iterator.remove();
+                }
+            }
         }
 
-        if (multicastLock != null) {
+        releaseMulticastLock();
+    }
+
+    @Override
+    public void stopAll() {
+        for (String scanId : new ArrayList<>(mScans.keySet())) {
+            stop(scanId);
+        }
+    }
+
+    private void acquireMulticastLock() {
+        if (multicastLock == null) {
+            @SuppressLint("WifiManagerLeak") WifiManager wifi = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            multicastLock = wifi.createMulticastLock("multicastLock");
+            multicastLock.setReferenceCounted(true);
+        }
+        multicastLock.acquire();
+    }
+
+    private void releaseMulticastLock() {
+        if (multicastLock != null && multicastLock.isHeld()) {
             multicastLock.release();
         }
+    }
 
-        mDiscoveryListener = null;
-        multicastLock = null;
+    private void sendScanEvent(String eventName, WritableMap body, String scanId) {
+        body.putString(ZeroconfModule.KEY_SCAN_ID, scanId);
+        zeroconfModule.sendEvent(getReactApplicationContext(), eventName, body);
+    }
+
+    private static WritableMap serviceNameToMap(NsdServiceInfo serviceInfo) {
+        WritableMap service = new WritableNativeMap();
+        service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
+        return service;
     }
 
     @Override
@@ -231,15 +282,15 @@ public class NsdServiceImpl implements Zeroconf {
         return reactApplicationContext;
     }
 
-    private void enqueueResolve(NsdServiceInfo serviceInfo) {
+    private void enqueueResolve(String scanId, NsdServiceInfo serviceInfo) {
         synchronized (mResolveQueue) {
-            mResolveQueue.add(serviceInfo);
+            mResolveQueue.add(new PendingResolve(scanId, serviceInfo));
         }
         resolveNext();
     }
 
     private void resolveNext() {
-        NsdServiceInfo next;
+        PendingResolve next;
         synchronized (mResolveQueue) {
             if (mIsResolving || mResolveQueue.isEmpty()) {
                 return;
@@ -248,10 +299,11 @@ public class NsdServiceImpl implements Zeroconf {
             mIsResolving = true;
         }
         try {
-            getNsdManager().resolveService(next, new ZeroResolveListener());
+            getNsdManager().resolveService(next.serviceInfo, new ZeroResolveListener(next.scanId));
         } catch (Throwable e) {
             Log.e(TAG, "resolveService failed", e);
-            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, "Resolving service " + next.getServiceName() + " failed: " + e.getMessage(), next.getServiceName());
+            String serviceName = next.serviceInfo.getServiceName();
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, "Resolving service " + serviceName + " failed: " + e.getMessage(), serviceName, next.scanId);
             onResolveDone();
         }
     }
@@ -264,25 +316,35 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     private class ZeroResolveListener implements NsdManager.ResolveListener {
+        private final String scanId;
+
+        ZeroResolveListener(String scanId) {
+            this.scanId = scanId;
+        }
+
         @Override
         public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
             if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
                 // Another resolve (possibly from another app or listener) is in flight: retry shortly
                 synchronized (mResolveQueue) {
-                    mResolveQueue.addFirst(serviceInfo);
+                    mResolveQueue.addFirst(new PendingResolve(scanId, serviceInfo));
                     mIsResolving = false;
                 }
                 mHandler.postDelayed(NsdServiceImpl.this::resolveNext, RESOLVE_RETRY_DELAY_MS);
                 return;
             }
-            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
+            if (mScans.containsKey(scanId)) {
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName(), scanId);
+            }
             onResolveDone();
         }
 
         @Override
         public void onServiceResolved(NsdServiceInfo serviceInfo) {
-            WritableMap service = serviceInfoToMap(serviceInfo);
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_RESOLVE, service);
+            // The scan may have been stopped while resolving
+            if (mScans.containsKey(scanId)) {
+                sendScanEvent(ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(serviceInfo), scanId);
+            }
             onResolveDone();
         }
     }

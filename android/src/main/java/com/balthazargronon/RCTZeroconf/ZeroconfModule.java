@@ -38,6 +38,8 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_PORT = "port";
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
     public static final String KEY_SERVICE_TXT = "txt";
+    // Id of the JS instance whose scan an event belongs to
+    public static final String KEY_SCAN_ID = "scanId";
 
     // Where an error code comes from
     public static final String ERROR_DOMAIN_NSD = "NsdManager";
@@ -59,22 +61,30 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void scan(String type, String protocol, String domain, String implType) {
+    public void scan(String scanId, String type, String protocol, String domain, String implType) {
         try {
-            getZeroconfImpl(implType).scan(type, protocol, domain);
+            getZeroconfImpl(implType).scan(scanId, type, protocol, domain);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception during scan: " + e.getMessage(), null);
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception during scan: " + e.getMessage(), null, scanId);
         }
     }
 
+    /**
+     * Stops the scan with this id, or every scan of the implementation without one
+     */
     @ReactMethod
-    public void stop(String implType) {
+    public void stop(@Nullable String scanId, String implType) {
         try {
-            getZeroconfImpl(implType).stop();
+            Zeroconf impl = getZeroconfImpl(implType);
+            if (scanId == null || scanId.isEmpty()) {
+                impl.stopAll();
+            } else {
+                impl.stop(scanId);
+            }
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception during stop: " + e.getMessage(), null);
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception during stop: " + e.getMessage(), null, scanId);
         }
     }
 
@@ -125,7 +135,18 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
      * @param code an Integer for platform error codes, a String for the library's own
      */
     public void sendError(String domain, Object code, String message, @Nullable String serviceName) {
-        sendEvent(getReactApplicationContext(), EVENT_ERROR, buildError(domain, code, message, serviceName));
+        sendError(domain, code, message, serviceName, null);
+    }
+
+    /**
+     * @param scanId the scan the error belongs to, null for errors not related to a scan
+     */
+    public void sendError(String domain, Object code, String message, @Nullable String serviceName, @Nullable String scanId) {
+        WritableMap error = buildError(domain, code, message, serviceName);
+        if (scanId != null) {
+            error.putString(KEY_SCAN_ID, scanId);
+        }
+        sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
     }
 
     /**
@@ -181,7 +202,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     private void teardown() {
         try {
             for (Zeroconf impl : zeroConfFactory.getCreatedImpls()) {
-                impl.stop();
+                impl.stopAll();
                 impl.unregisterAllServices();
             }
         } catch (Throwable e) {

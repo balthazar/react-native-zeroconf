@@ -182,6 +182,6 @@ export interface UseZeroconfResult {
 
 /**
  * Scans while mounted and returns the resolved services. Scans again when the options change,
- * stops and cleans up on unmount. The native side runs one scan at a time, so use one useZeroconf at a time.
+ * stops and cleans up on unmount. Each hook runs its own scan, several can run at once.
  */
 export function useZeroconf(options?: UseZeroconfOptions): UseZeroconfResult

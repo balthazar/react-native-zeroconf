@@ -38,6 +38,9 @@ const withDefaults = (defaults, options) => {
 
 const isOptionsObject = value => value !== null && typeof value === 'object'
 
+// Each instance runs its own scan, identified by this id in native events
+let instanceCount = 0
+
 /**
  * Error from a native { message, code, domain, serviceName } payload
  */
@@ -106,6 +109,8 @@ export default class Zeroconf extends EventEmitter {
     this._publishedServices = {}
     this._publishedImplTypes = {}
     this._scanImplType = null
+    this._scanId = `zeroconf-${++instanceCount}`
+    this._hasScanned = false
     this._dListeners = {}
 
     this.addDeviceListeners()
@@ -119,33 +124,37 @@ export default class Zeroconf extends EventEmitter {
       return this.emit('error', new Error('RNZeroconf listeners already in place.'))
     }
 
-    this._dListeners.start = DeviceEventEmitter.addListener('RNZeroconfStart', () =>
-      this.emit('start'),
-    )
+    this._dListeners.start = DeviceEventEmitter.addListener('RNZeroconfStart', payload => {
+      if (this._isOwnEvent(payload)) {
+        this.emit('start')
+      }
+    })
 
-    this._dListeners.stop = DeviceEventEmitter.addListener('RNZeroconfStop', () =>
-      this.emit('stop'),
-    )
+    this._dListeners.stop = DeviceEventEmitter.addListener('RNZeroconfStop', payload => {
+      if (this._isOwnEvent(payload)) {
+        this.emit('stop')
+      }
+    })
 
     this._dListeners.error = DeviceEventEmitter.addListener('RNZeroconfError', err => {
-      if (this.listenerCount('error') > 0) {
+      if (this._isOwnEvent(err) && this.listenerCount('error') > 0) {
         this.emit('error', toError(err))
       }
     })
 
     this._dListeners.found = DeviceEventEmitter.addListener('RNZeroconfFound', service => {
-      if (!service || !service.name) {
+      if (!service || !service.name || !this._isOwnEvent(service)) {
         return
       }
       const { name } = service
 
-      this._services[name] = service
+      this._services[name] = { name }
       this.emit('found', name)
       this.emit('update')
     })
 
     this._dListeners.remove = DeviceEventEmitter.addListener('RNZeroconfRemove', service => {
-      if (!service || !service.name) {
+      if (!service || !service.name || !this._isOwnEvent(service)) {
         return
       }
       const { name } = service
@@ -157,11 +166,13 @@ export default class Zeroconf extends EventEmitter {
     })
 
     this._dListeners.resolved = DeviceEventEmitter.addListener('RNZeroconfResolved', data => {
-      if (!data || !data.name) {
+      if (!data || !data.name || !this._isOwnEvent(data)) {
         return
       }
 
-      const service = withAddressFamilies(data)
+      const resolved = { ...data }
+      delete resolved.scanId
+      const service = withAddressFamilies(resolved)
       this._services[service.name] = service
       this.emit('resolved', service)
       this.emit('update')
@@ -201,6 +212,17 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
+   * Scan events belong to the instance that started the scan. Instances that never scanned still receive
+   * every scan's events, as before multiple scans, and events without a scan id (publishing) go to everyone.
+   */
+  _isOwnEvent(payload) {
+    if (!payload || typeof payload !== 'object' || payload.scanId == null || !this._hasScanned) {
+      return true
+    }
+    return payload.scanId === this._scanId
+  }
+
+  /**
    * Remove all event listeners and clean map
    */
   removeDeviceListeners() {
@@ -230,16 +252,17 @@ export default class Zeroconf extends EventEmitter {
     )
 
     this._services = {}
+    this._hasScanned = true
     this.emit('update')
     if (Platform.OS === 'android') {
       if (this._scanImplType && implType !== this._scanImplType) {
-        // Only one scan runs at a time, stop the one running on the other implementation
-        RNZeroconf.stop(this._scanImplType)
+        // This instance's scan moves to the other implementation
+        RNZeroconf.stop(this._scanId, this._scanImplType)
       }
       this._scanImplType = implType
-      RNZeroconf.scan(type, protocol, domain, implType)
+      RNZeroconf.scan(this._scanId, type, protocol, domain, implType)
     } else {
-      RNZeroconf.scan(type, protocol, domain, resolveTimeout)
+      RNZeroconf.scan(this._scanId, type, protocol, domain, resolveTimeout)
     }
   }
 
@@ -249,9 +272,9 @@ export default class Zeroconf extends EventEmitter {
    */
   stop(implType = this._scanImplType || ImplType.NSD) {
     if (Platform.OS === 'android') {
-      RNZeroconf.stop(implType)
+      RNZeroconf.stop(this._scanId, implType)
     } else {
-      RNZeroconf.stop()
+      RNZeroconf.stop(this._scanId)
     }
   }
 
@@ -316,7 +339,7 @@ export default class Zeroconf extends EventEmitter {
 /**
  * Scans while mounted and returns the resolved services.
  * Scans again when the options change, stops and cleans up on unmount.
- * The native side runs one scan at a time, so use one useZeroconf at a time.
+ * Each hook runs its own scan, several can run at once.
  *
  * const { services, isScanning, error, stop, restart } = useZeroconf({ type: 'http' })
  */
