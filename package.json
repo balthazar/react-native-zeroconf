@@ -7,7 +7,9 @@
   "scripts": {
     "lint": "eslint src/*.js",
     "format": "prettier --write src/*.js",
-    "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js"
+    "build": "rm -rf dist && mkdir dist && babel src -o dist/index.js",
+    "test": "jest",
+    "typecheck": "tsc -p test/types"
   },
   "repository": {
     "type": "git",
@@ -87,9 +89,14 @@
     "@babel/core": "^7.23.0",
     "@babel/preset-env": "^7.23.0",
     "@babel/preset-flow": "^7.23.0",
+    "babel-jest": "^29.6.3",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.2.0"
+    "jest": "^29.6.3",
+    "prettier": "^3.2.0",
+    "react": "18.2.0",
+    "react-test-renderer": "18.2.0",
+    "typescript": "^5.4.0"
   },
   "babel": {
     "presets": [
@@ -104,5 +111,17 @@
       "@babel/preset-flow"
     ]
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "jest": {
+    "roots": [
+      "<rootDir>/test"
+    ],
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.js"
+    ],
+    "moduleNameMapper": {
+      "^react-native$": "<rootDir>/test/helpers/mockReactNative.js"
+    }
+  }
 }
