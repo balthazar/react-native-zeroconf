@@ -70,6 +70,15 @@ export interface ZeroconfError extends Error {
   serviceName?: string
 }
 
+export interface LocalNetworkAccessOptions {
+  /** Service type without underscore, must be listed in `NSBonjourServices`. Defaults to the first one listed */
+  type?: string
+  /** Defaults to `'tcp'` */
+  protocol?: string
+  /** Seconds to wait for an answer, defaults to `5` */
+  timeout?: number
+}
+
 /** Published services don't carry the address family fields */
 export type PublishedService = Omit<Service, 'ipv4' | 'ipv6'>
 
@@ -114,6 +123,14 @@ export default class Zeroconf {
   scan(options?: ScanOptions): void
   /** @deprecated Use `scan({ type, protocol, domain, implType })` */
   scan(type?: string, protocol?: string, domain?: string, implType?: ImplType): void
+
+  /**
+   * Checks the iOS Local Network permission. Can show the permission prompt when it hasn't been answered yet.
+   * Resolves `'unknown'` on Android, which has no equivalent permission to check.
+   */
+  checkLocalNetworkAccess(
+    options?: LocalNetworkAccessOptions,
+  ): Promise<'granted' | 'denied' | 'unknown'>
 
   /**
    * Stop the current scan

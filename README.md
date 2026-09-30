@@ -169,6 +169,22 @@ Stop the current scan.
 zeroconf.stop()
 ```
 
+#### `checkLocalNetworkAccess(options)`
+
+**iOS.** Checks the Local Network permission and resolves `'granted'`, `'denied'` or `'unknown'`. iOS has no API to read this permission, so it advertises a temporary service and browses for it. It can show the permission prompt if the user hasn't answered it yet. On Android it resolves `'unknown'`.
+
+| Option     | Type   | Default                            | Description                                               |
+| ---------- | ------ | ---------------------------------- | --------------------------------------------------------- |
+| `type`     | string | first entry of `NSBonjourServices` | Service type to check with, must be in `NSBonjourServices` |
+| `protocol` | string | `'tcp'`                            | Protocol                                                  |
+| `timeout`  | number | `5`                                | Seconds to wait before resolving `'denied'` or `'unknown'` |
+
+```javascript
+if ((await zeroconf.checkLocalNetworkAccess()) === 'denied') {
+  // Ask the user to enable Local Network access in Settings
+}
+```
+
 #### `getServices()`
 
 Returns all currently discovered services.

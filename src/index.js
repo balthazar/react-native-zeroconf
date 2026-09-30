@@ -247,6 +247,19 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
+   * Checks the iOS Local Network permission, resolves 'granted', 'denied' or 'unknown'.
+   * Uses a service type from NSBonjourServices (the first one by default) and can show the permission prompt.
+   * Android has no equivalent permission to check and resolves 'unknown'.
+   */
+  checkLocalNetworkAccess({ type, protocol = 'tcp', timeout = 5 } = {}) {
+    if (Platform.OS === 'android') {
+      return Promise.resolve('unknown')
+    }
+    const serviceType = type ? `_${type}._${protocol}` : null
+    return asPromise(RNZeroconf.checkLocalNetworkAccess(serviceType, timeout))
+  }
+
+  /**
    * Publish a service, resolves with the published service once it is advertised.
    * Its name can differ from the requested one when that name is already taken.
    *
