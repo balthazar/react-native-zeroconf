@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js:
+    name: Lint, tests and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn lint
+      - run: yarn test
+      - run: yarn typecheck
+      - run: yarn build
+      - name: Check the published files
+        run: |
+          npm pack --dry-run 2>&1 | tee pack.txt
+          grep -q "dist/index.js" pack.txt
+          grep -q "index.d.ts" pack.txt
+          if grep -qE "docs/|website/|test/|mDNSWindows" pack.txt; then
+            echo "Unexpected files in the package"
+            exit 1
+          fi
+
+  ios-native:
+    name: iOS implementation (macOS harness)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: test/ios/run.sh
+
+  android:
+    name: Android build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Pack the library
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Install the example with the packed library
+        working-directory: example
+        env:
+          YARN_NODE_LINKER: node-modules
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
+        run: |
+          corepack enable
+          yarn install
+          rm -rf node_modules/react-native-zeroconf
+          mkdir -p node_modules/react-native-zeroconf
+          tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
+      - name: Build
+        working-directory: example/android
+        # The example enables Jetifier, which runs out of memory on the Hermes AAR and is not needed with AndroidX
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> ~/.gradle/gradle.properties
+          ./gradlew :app:assembleDebug --no-daemon -Pandroid.enableJetifier=false -PreactNativeArchitectures=x86_64
+
+  ios:
+    name: iOS build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Pack the library
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Install the example with the packed library
+        working-directory: example
+        env:
+          YARN_NODE_LINKER: node-modules
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
+        run: |
+          corepack enable
+          yarn install
+          rm -rf node_modules/react-native-zeroconf
+          mkdir -p node_modules/react-native-zeroconf
+          tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
+      - name: Install pods
+        working-directory: example/ios
+        run: pod install
+      - name: Build
+        working-directory: example/ios
+        run: |
+          xcodebuild -workspace ZeroConfExample.xcworkspace -scheme ZeroConfExample \
+            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -20
