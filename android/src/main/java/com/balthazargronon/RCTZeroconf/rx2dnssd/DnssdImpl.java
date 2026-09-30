@@ -13,6 +13,7 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.WritableNativeArray;
 import com.facebook.react.bridge.WritableNativeMap;
+import com.github.druk.dnssd.DNSSDException;
 import com.github.druk.rx2dnssd.BonjourService;
 import com.github.druk.rx2dnssd.Rx2Dnssd;
 import com.github.druk.rx2dnssd.Rx2DnssdEmbedded;
@@ -97,7 +98,7 @@ public class DnssdImpl implements Zeroconf {
                                 .compose(rxDnssd.queryRecords())
                                 .onErrorResumeNext((Throwable throwable) -> {
                                     Log.e(TAG, "Error resolving service: ", throwable);
-                                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, "Resolving service failed: " + throwable.getMessage());
+                                    sendError(throwable, "Resolving service " + bonjourService.getServiceName() + " failed: ", bonjourService.getServiceName());
                                     return Flowable.empty();
                                 }))
                 .subscribeOn(Schedulers.io())
@@ -110,9 +111,21 @@ public class DnssdImpl implements Zeroconf {
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(bonjourService));
                 }, throwable -> {
                     Log.e(TAG, "Error browsing services: ", throwable);
-                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, "Browsing services failed: " + throwable.getMessage());
+                    sendError(throwable, "Browsing services failed: ", null);
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_STOP, null);
                 });
+    }
+
+    /**
+     * DNSSD errors carry their DNSServiceErrorType code, anything else is reported as an exception
+     */
+    private void sendError(Throwable throwable, String prefix, @Nullable String serviceName) {
+        if (throwable instanceof DNSSDException) {
+            DNSSDException dnssdException = (DNSSDException) throwable;
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_DNSSD, dnssdException.getErrorCode(), prefix + throwable.getMessage(), serviceName);
+        } else {
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, prefix + throwable.getMessage(), serviceName);
+        }
     }
 
     private WritableMap serviceNameToMap(BonjourService serviceInfo) {
@@ -204,7 +217,7 @@ public class DnssdImpl implements Zeroconf {
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_PUBLISHED, serviceInfoToMap(bonjourService));
                 }, throwable -> {
                     Log.e(TAG, "Error registering service: ", throwable);
-                    zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_ERROR, "Registering service failed: " + throwable.getMessage());
+                    sendError(throwable, "Registering service " + name + " failed: ", name);
                     mRegisteredDisposables.remove(name);
                 });
 

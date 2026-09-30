@@ -37,6 +37,22 @@ const withDefaults = (defaults, options) => {
 
 const isOptionsObject = value => value !== null && typeof value === 'object'
 
+/**
+ * Error from a native { message, code, domain, serviceName } payload
+ */
+const toError = payload => {
+  if (!payload || typeof payload !== 'object') {
+    return new Error(payload)
+  }
+  const error = new Error(payload.message)
+  error.code = payload.code
+  error.domain = payload.domain
+  if (payload.serviceName) {
+    error.serviceName = payload.serviceName
+  }
+  return error
+}
+
 const isIPv6 = address => address.includes(':')
 
 /**
@@ -94,7 +110,7 @@ export default class Zeroconf extends EventEmitter {
 
     this._dListeners.error = DeviceEventEmitter.addListener('RNZeroconfError', err => {
       if (this.listenerCount('error') > 0) {
-        this.emit('error', new Error(err))
+        this.emit('error', toError(err))
       }
     })
 

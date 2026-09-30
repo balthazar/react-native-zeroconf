@@ -55,6 +55,21 @@ export interface PublishOptions {
   implType?: ImplType
 }
 
+/**
+ * Errors emitted by the `error` event
+ *
+ * - `NSNetServices`: iOS NSNetServicesErrorCode, e.g. `-72007` timeout, `-72008` missing Info.plist configuration
+ * - `NsdManager`: Android NsdManager failure code
+ * - `DNSSD`: Android DNSServiceErrorType from the embedded mDNSResponder
+ * - `RNZeroconf`: the library's own errors, e.g. `'EXCEPTION'`
+ */
+export interface ZeroconfError extends Error {
+  code: number | string
+  domain: 'NSNetServices' | 'NsdManager' | 'DNSSD' | 'RNZeroconf'
+  /** The service the error is about, when there is one */
+  serviceName?: string
+}
+
 /** Published services don't carry the address family fields */
 export type PublishedService = Omit<Service, 'ipv4' | 'ipv6'>
 
@@ -69,7 +84,7 @@ export interface ZeroconfEvents {
   remove: (name: string) => void
   /** Services list changed */
   update: () => void
-  error: (error: Error) => void
+  error: (error: ZeroconfError) => void
   published: (service: PublishedService) => void
   unpublished: (service: PublishedService) => void
 }

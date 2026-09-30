@@ -275,6 +275,25 @@ useEffect(() => {
 | `published`   | `Service` object | Service successfully published   |
 | `unpublished` | `Service` object | Service successfully unpublished |
 
+#### Errors
+
+`error` events receive an `Error` with extra fields to tell failures apart:
+
+| Field         | Description                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| `message`     | Readable description                                                                              |
+| `code`        | Platform error code (number), or the library's own code (string, e.g. `'EXCEPTION'`)               |
+| `domain`      | Where the code comes from: `'NSNetServices'` (iOS), `'NsdManager'` or `'DNSSD'` (Android), `'RNZeroconf'` |
+| `serviceName` | The service the error is about, when there is one                                                 |
+
+```javascript
+zeroconf.on('error', error => {
+  if (error.domain === 'NSNetServices' && error.code === -72008) {
+    // iOS: the service type is missing from NSBonjourServices in Info.plist
+  }
+})
+```
+
 ### Service Object
 
 ```javascript

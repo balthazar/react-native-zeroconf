@@ -151,7 +151,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 - (void) netServiceBrowser:(NSNetServiceBrowser *)browser
               didNotSearch:(NSDictionary *)errorDict
 {
-    [self reportError:errorDict];
+    [self reportError:errorDict action:@"Browsing services" serviceName:nil];
 }
 
 // When the search stops.
@@ -195,7 +195,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     }
     [self.retriedServices removeObject:sender.name];
 
-    [self reportError:errorDict];
+    [self reportError:errorDict action:@"Resolving service" serviceName:sender.name];
 
     sender.delegate = nil;
     [self.resolvingServices removeObjectForKey:sender.name];
@@ -222,7 +222,7 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
 {
     NSLog(@"zeroconf netServiceDidNotPublish");
 
-    [self reportError:errorDict];
+    [self reportError:errorDict action:@"Publishing service" serviceName:sender.name];
     NSLog(@"zeroconf %@", errorDict);
     sender.delegate = nil;
     [self.publishedServices removeObjectForKey:sender.name];
@@ -266,7 +266,11 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
         }
         NSData *entry = [[NSString stringWithFormat:@"%@=%@", pair[0], pair[1]] dataUsingEncoding:NSUTF8StringEncoding];
         if (entry.length > 255) {
-            [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:[NSString stringWithFormat:@"TXT record entry %@ is longer than 255 bytes", pair[0]]];
+            [self sendError:@{
+                @"message": [NSString stringWithFormat:@"TXT record entry %@ is longer than 255 bytes", pair[0]],
+                @"code": @"TXT_ENTRY_TOO_LONG",
+                @"domain": @"RNZeroconf",
+            }];
             continue;
         }
         uint8_t length = (uint8_t)entry.length;
@@ -291,9 +295,42 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *) serviceName)
     [self.publishedServices removeAllObjects];
 }
 
-- (void) reportError:(NSDictionary *)errorDict
+// Emits an error event as { message, code, domain, serviceName }
+- (void) sendError:(NSDictionary *)error
 {
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:[NSString stringWithFormat:@"%@",errorDict]];
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"RNZeroconfError" body:error];
+}
+
+- (void) reportError:(NSDictionary *)errorDict action:(NSString *)action serviceName:(NSString *)serviceName
+{
+    NSNumber *code = errorDict[NSNetServicesErrorCode] ?: @(NSNetServicesUnknownError);
+    NSString *subject = serviceName ? [NSString stringWithFormat:@"%@ %@", action, serviceName] : action;
+    NSMutableDictionary *error = [@{
+        @"message": [NSString stringWithFormat:@"%@ failed: %@", subject, [RNZeroconf describeError:code.integerValue]],
+        @"code": code,
+        @"domain": @"NSNetServices",
+    } mutableCopy];
+    if (serviceName) {
+        error[@"serviceName"] = serviceName;
+    }
+    [self sendError:error];
+}
+
+// Readable description of an NSNetServicesErrorCode
++ (NSString *) describeError:(NSInteger)code
+{
+    switch (code) {
+        case NSNetServicesCollisionError: return @"name already in use";
+        case NSNetServicesNotFoundError: return @"service not found";
+        case NSNetServicesActivityInProgress: return @"operation already in progress";
+        case NSNetServicesBadArgumentError: return @"bad argument";
+        case NSNetServicesCancelledError: return @"cancelled";
+        case NSNetServicesInvalidError: return @"invalid service";
+        case NSNetServicesTimeoutError: return @"timed out";
+        // NSNetServicesMissingRequiredConfigurationError (iOS 14+)
+        case -72008: return @"missing configuration, add the service type to NSBonjourServices and NSLocalNetworkUsageDescription to Info.plist";
+        default: return [NSString stringWithFormat:@"error %ld", (long)code];
+    }
 }
 
 @end

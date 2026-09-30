@@ -8,6 +8,8 @@ import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import javax.annotation.Nullable;
@@ -36,6 +38,12 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
     public static final String KEY_SERVICE_ADDRESSES = "addresses";
     public static final String KEY_SERVICE_TXT = "txt";
 
+    // Where an error code comes from
+    public static final String ERROR_DOMAIN_NSD = "NsdManager";
+    public static final String ERROR_DOMAIN_DNSSD = "DNSSD";
+    public static final String ERROR_DOMAIN_LIBRARY = "RNZeroconf";
+    public static final String ERROR_CODE_EXCEPTION = "EXCEPTION";
+
     private ZeroConfImplFactory zeroConfFactory;
 
     public ZeroconfModule(ReactApplicationContext reactContext) {
@@ -54,7 +62,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             getZeroconfImpl(implType).scan(type, protocol, domain);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Scan: " + e.getMessage());
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception during scan: " + e.getMessage(), null);
         }
     }
 
@@ -64,7 +72,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             getZeroconfImpl(implType).stop();
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Stop: " + e.getMessage());
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception during stop: " + e.getMessage(), null);
         }
     }
 
@@ -78,7 +86,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             getZeroconfImpl(implType).registerService(type, protocol, domain, name, port, txt);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Register Service: " + e.getMessage());
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception while registering service: " + e.getMessage(), name);
         }
     }
 
@@ -88,7 +96,7 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             getZeroconfImpl(implType).unregisterService(serviceName);
         } catch (Throwable e) {
             Log.e(getClass().getName(), e.getMessage(), e);
-            sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Exception During Unregister Service: " + e.getMessage());
+            sendError(ERROR_DOMAIN_LIBRARY, ERROR_CODE_EXCEPTION, "Exception while unregistering service: " + e.getMessage(), serviceName);
         }
     }
 
@@ -102,6 +110,40 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         } catch (Throwable e) {
             // The JS side may already be gone, e.g. callbacks arriving during teardown
             Log.w(getClass().getName(), "Could not send " + eventName + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Emits an error event as { message, code, domain, serviceName }
+     *
+     * @param code an Integer for platform error codes, a String for the library's own
+     */
+    public void sendError(String domain, Object code, String message, @Nullable String serviceName) {
+        WritableMap error = new WritableNativeMap();
+        error.putString("message", message);
+        error.putString("domain", domain);
+        if (code instanceof Integer) {
+            error.putInt("code", (Integer) code);
+        } else {
+            error.putString("code", String.valueOf(code));
+        }
+        if (serviceName != null) {
+            error.putString("serviceName", serviceName);
+        }
+        sendEvent(getReactApplicationContext(), EVENT_ERROR, error);
+    }
+
+    /**
+     * Readable description of an NsdManager failure code
+     */
+    public static String describeNsdError(int errorCode) {
+        switch (errorCode) {
+            case 0: return "internal error"; // FAILURE_INTERNAL_ERROR
+            case 3: return "operation already active"; // FAILURE_ALREADY_ACTIVE
+            case 4: return "maximum number of requests reached"; // FAILURE_MAX_LIMIT
+            case 5: return "operation not running"; // FAILURE_OPERATION_NOT_RUNNING (API 34)
+            case 6: return "bad parameters"; // FAILURE_BAD_PARAMETERS (API 34)
+            default: return "error " + errorCode;
         }
     }
 

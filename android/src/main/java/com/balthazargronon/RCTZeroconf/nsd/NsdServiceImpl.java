@@ -70,14 +70,12 @@ public class NsdServiceImpl implements Zeroconf {
         mDiscoveryListener = new NsdManager.DiscoveryListener() {
             @Override
             public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                String error = "Starting service discovery failed with code: " + errorCode;
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Starting service discovery failed: " + ZeroconfModule.describeNsdError(errorCode), null);
             }
 
             @Override
             public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                String error = "Stopping service discovery failed with code: " + errorCode;
-                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Stopping service discovery failed: " + ZeroconfModule.describeNsdError(errorCode), null);
             }
 
             @Override
@@ -210,7 +208,7 @@ public class NsdServiceImpl implements Zeroconf {
             getNsdManager().resolveService(next, new ZeroResolveListener());
         } catch (Throwable e) {
             Log.e(TAG, "resolveService failed", e);
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, "Resolving service failed: " + e.getMessage());
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, "Resolving service " + next.getServiceName() + " failed: " + e.getMessage(), next.getServiceName());
             onResolveDone();
         }
     }
@@ -234,8 +232,7 @@ public class NsdServiceImpl implements Zeroconf {
                 mHandler.postDelayed(NsdServiceImpl.this::resolveNext, RESOLVE_RETRY_DELAY_MS);
                 return;
             }
-            String error = "Resolving service failed with code: " + errorCode;
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
             onResolveDone();
         }
 
@@ -264,8 +261,7 @@ public class NsdServiceImpl implements Zeroconf {
 
         @Override
         public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            String error = "Registering service " + serviceInfo.getServiceName() + " failed with code: " + errorCode;
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Registering service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
         }
 
         @Override
@@ -278,8 +274,7 @@ public class NsdServiceImpl implements Zeroconf {
 
         @Override
         public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            String error = "Unregistering service " + serviceInfo.getServiceName() + " failed with code: " + errorCode;
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_ERROR, error);
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Unregistering service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
         }
     }
 
