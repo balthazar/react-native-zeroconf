@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, NativeModules, DeviceEventEmitter } from 'react-native'
 import { EventEmitter } from 'events'
 
@@ -310,4 +311,60 @@ export default class Zeroconf extends EventEmitter {
     }
     return asPromise(RNZeroconf.unregisterService(name))
   }
+}
+
+/**
+ * Scans while mounted and returns the resolved services.
+ * Scans again when the options change, stops and cleans up on unmount.
+ * The native side runs one scan at a time, so use one useZeroconf at a time.
+ *
+ * const { services, isScanning, error, stop, restart } = useZeroconf({ type: 'http' })
+ */
+export function useZeroconf(options = {}) {
+  const { type, protocol, domain, implType, resolveTimeout, enabled = true } = options
+  const zeroconfRef = useRef(null)
+  const [services, setServices] = useState([])
+  const [isScanning, setIsScanning] = useState(false)
+  const [error, setError] = useState(null)
+  const [scanCount, setScanCount] = useState(0)
+
+  useEffect(() => {
+    const zeroconf = new Zeroconf()
+    zeroconfRef.current = zeroconf
+    // Found services only have a name until they are resolved
+    const updateServices = () =>
+      setServices(Object.values(zeroconf.getServices()).filter(service => service.addresses))
+    const unsubscribes = [
+      zeroconf.subscribe('start', () => setIsScanning(true)),
+      zeroconf.subscribe('stop', () => setIsScanning(false)),
+      zeroconf.subscribe('update', updateServices),
+      zeroconf.subscribe('error', setError),
+    ]
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe())
+      zeroconf.stop()
+      zeroconf.removeDeviceListeners()
+      zeroconfRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const zeroconf = zeroconfRef.current
+    if (!zeroconf || !enabled) {
+      return undefined
+    }
+    setServices([])
+    setError(null)
+    zeroconf.scan({ type, protocol, domain, implType, resolveTimeout })
+    return () => zeroconf.stop()
+  }, [enabled, type, protocol, domain, implType, resolveTimeout, scanCount])
+
+  const stop = useCallback(() => {
+    if (zeroconfRef.current) {
+      zeroconfRef.current.stop()
+    }
+  }, [])
+  const restart = useCallback(() => setScanCount(count => count + 1), [])
+
+  return { services, isScanning, error, stop, restart }
 }

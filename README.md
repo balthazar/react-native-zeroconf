@@ -12,6 +12,7 @@ Discover and publish network services using Zeroconf protocols (Bonjour, Avahi, 
 - **Dual Android Implementation**: Choose between NSD (Android native) or DNSSD (embedded mDNSResponder)
 - **Android 15+ Compatible**: Includes 16KB page size alignment (Google Play requirement starting November 1, 2025)
 - **TypeScript**: Type definitions included
+- **React hook**: `useZeroconf` scans while mounted and returns the resolved services
 - **Promise-based publishing**: `publishService` and `unpublishService` resolve once the network is updated
 - **Structured errors**: errors carry a platform `code` and `domain` to tell failures apart
 - **Local Network permission check** (iOS): know when the user denied access
@@ -103,6 +104,40 @@ setTimeout(() => {
   console.log('All services:', zeroconf.getServices())
 }, 10000)
 ```
+
+## React Hook
+
+`useZeroconf` scans while the component is mounted and returns the resolved services. It scans again when the options change, and stops and cleans up on unmount.
+
+```javascript
+import { useZeroconf } from 'react-native-zeroconf'
+
+function Printers() {
+  const { services, isScanning, error, restart } = useZeroconf({ type: 'ipp' })
+
+  return (
+    <FlatList
+      data={services}
+      keyExtractor={service => service.name}
+      renderItem={({ item }) => <Text>{item.name} ({item.ipv4[0]})</Text>}
+      refreshing={isScanning}
+      onRefresh={restart}
+    />
+  )
+}
+```
+
+It takes the same options as [`scan`](#scanoptions), plus `enabled` (default `true`) to scan only when needed. It returns:
+
+| Field        | Description                                                     |
+| ------------ | --------------------------------------------------------------- |
+| `services`   | Resolved services, updated as they are found, resolved or removed |
+| `isScanning` | Whether a scan is running                                       |
+| `error`      | Last [error](#errors), reset when a new scan starts             |
+| `stop()`     | Stops scanning                                                  |
+| `restart()`  | Clears the services and scans again                             |
+
+The native side runs one scan at a time, so use one `useZeroconf` at a time.
 
 ## TypeScript
 

@@ -79,6 +79,7 @@
     "events": "^3.0.0"
   },
   "peerDependencies": {
+    "react": "*",
     "react-native": ">=0.60"
   },
   "devDependencies": {

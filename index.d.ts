@@ -163,3 +163,25 @@ export default class Zeroconf {
    */
   unpublishService(name: string, implType?: ImplType): Promise<PublishedService | null>
 }
+
+export interface UseZeroconfOptions extends ScanOptions {
+  /** Scan only while true, defaults to `true` */
+  enabled?: boolean
+}
+
+export interface UseZeroconfResult {
+  /** Resolved services, updated as they are found, resolved and removed */
+  services: Service[]
+  isScanning: boolean
+  /** Last error, reset when a new scan starts */
+  error: ZeroconfError | null
+  stop(): void
+  /** Clears the services and scans again */
+  restart(): void
+}
+
+/**
+ * Scans while mounted and returns the resolved services. Scans again when the options change,
+ * stops and cleans up on unmount. The native side runs one scan at a time, so use one useZeroconf at a time.
+ */
+export function useZeroconf(options?: UseZeroconfOptions): UseZeroconfResult
