@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.annotation.Nullable;
 
@@ -43,6 +45,11 @@ public class NsdServiceImpl implements Zeroconf {
     private Map<String, ServiceRegistrationListener> mPublishedServices;
     private ZeroconfModule zeroconfModule;
     private ReactApplicationContext reactApplicationContext;
+
+    // Android 14+: services are followed with registerServiceInfoCallback, null before
+    @Nullable private ServiceInfoCallbacks mInfoCallbacks;
+    // Not the main thread: serviceInfoToMap can do a blocking reverse lookup for the host name
+    private final ExecutorService mCallbackExecutor = Executors.newSingleThreadExecutor();
 
     // NsdManager can only resolve one service at a time before API 34, so resolves are queued
     private final ArrayDeque<NsdServiceInfo> mResolveQueue = new ArrayDeque<>();
@@ -68,6 +75,23 @@ public class NsdServiceImpl implements Zeroconf {
             multicastLock = wifi.createMulticastLock("multicastLock");
             multicastLock.setReferenceCounted(true);
             multicastLock.acquire();
+        }
+
+        if (Build.VERSION.SDK_INT >= 34) {
+            mInfoCallbacks = new ServiceInfoCallbacks(mNsdManager, mCallbackExecutor, new ServiceInfoCallbacks.Listener() {
+                @Override
+                public void onServiceUpdated(NsdServiceInfo serviceInfo) {
+                    if (getHostAddresses(serviceInfo).isEmpty()) {
+                        return;
+                    }
+                    zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(serviceInfo));
+                }
+
+                @Override
+                public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
+                    zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName());
+                }
+            });
         }
 
         mDiscoveryListener = new NsdManager.DiscoveryListener() {
@@ -100,7 +124,11 @@ public class NsdServiceImpl implements Zeroconf {
                 service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
 
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_FOUND, service);
-                enqueueResolve(serviceInfo);
+                if (mInfoCallbacks != null) {
+                    mInfoCallbacks.register(serviceInfo);
+                } else {
+                    enqueueResolve(serviceInfo);
+                }
             }
 
             @Override
@@ -109,6 +137,9 @@ public class NsdServiceImpl implements Zeroconf {
                 WritableMap service = new WritableNativeMap();
                 service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_REMOVE, service);
+                if (mInfoCallbacks != null) {
+                    mInfoCallbacks.unregister(serviceInfo.getServiceName());
+                }
             }
         };
 
@@ -125,6 +156,11 @@ public class NsdServiceImpl implements Zeroconf {
                 // Listener was never registered or already unregistered (e.g. discovery failed to start)
                 Log.w(TAG, "stopServiceDiscovery failed", e);
             }
+        }
+
+        if (mInfoCallbacks != null) {
+            mInfoCallbacks.unregisterAll();
+            mInfoCallbacks = null;
         }
 
         mHandler.removeCallbacksAndMessages(null);
