@@ -73,8 +73,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 .record { font-family: var(--font-mono); font-size: 13px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
 .record b { color: var(--accent); font-weight: 600; }
 .links { margin-left: auto; display: flex; gap: 14px; font-size: 14px; }
-.links a { color: var(--muted); text-decoration: none; }
-.links a:hover { color: var(--accent); }
+.links a { display: flex; color: var(--muted); padding: 4px; border-radius: 6px; }
+.links a:hover { color: var(--accent); background: var(--accent-soft); }
+.links svg { width: 20px; height: 20px; fill: currentColor; }
 
 .shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-inline: 20px; }
 .sidebar { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 72px); align-self: start; max-height: calc(100vh - 100px); overflow: auto; font-size: 15px; }
@@ -136,8 +137,9 @@ main { min-width: 0; }
   <a class="brand" href="/" style="color: inherit; text-decoration: none">react-native-zeroconf</a>
   <span class="record" id="record">_docs._tcp.local.</span>
   <nav class="links" aria-label="Project">
-    <a href="https://github.com/balthazar/react-native-zeroconf">GitHub</a>
-    <a href="https://www.npmjs.com/package/react-native-zeroconf">npm</a>
+    <!-- Logos from Simple Icons (CC0) -->
+    <a href="https://github.com/balthazar/react-native-zeroconf" aria-label="GitHub repository" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+    <a href="https://www.npmjs.com/package/react-native-zeroconf" aria-label="npm package" title="npm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z"/></svg></a>
   </nav>
 </header>
 <div class="shell">
@@ -231,9 +233,11 @@ main { min-width: 0; }
     current = key;
     recordEl.innerHTML = '<b>' + key + '</b>._docs._tcp.local.';
     document.title = key === 'Home' ? 'react-native-zeroconf' : key.replace(/-/g, ' ') + ' · react-native-zeroconf';
-    sidebarEl.querySelectorAll('a').forEach(function (a) {
-      a.classList.toggle('current', a.dataset.page === key);
-    });
+    // Highlight one sidebar link: the one for this section if there is one, else the page link
+    var links = Array.prototype.slice.call(sidebarEl.querySelectorAll('a'));
+    var match = links.filter(function (a) { return a.dataset.page === key && anchor && a.dataset.section === anchor; })[0]
+      || links.filter(function (a) { return a.dataset.page === key && !a.dataset.section; })[0];
+    links.forEach(function (a) { a.classList.toggle('current', a === match); });
     if (anchor) {
       var target = document.getElementById(anchor);
       if (target) { target.scrollIntoView(); return; }
@@ -282,7 +286,7 @@ main { min-width: 0; }
     sidebarEl.innerHTML = render(pages._Sidebar);
     sidebarEl.querySelectorAll('a').forEach(function (a) {
       var t = internalTarget(a.getAttribute('href'));
-      if (t && t.name) a.dataset.page = pageKey(t.name);
+      if (t && t.name) { a.dataset.page = pageKey(t.name); a.dataset.section = t.anchor || ''; }
     });
   } else {
     sidebarEl.innerHTML = '<ul>' + Object.keys(pages).filter(function (k) { return k[0] !== '_'; }).map(function (k) {

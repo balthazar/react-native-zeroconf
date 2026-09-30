@@ -25,4 +25,3 @@
 
 **Project**
 - [Contributing](Contributing)
-- [GitHub repository](https://github.com/balthazar/react-native-zeroconf)
