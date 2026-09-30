@@ -12,15 +12,15 @@ Discover and publish network services using Zeroconf protocols (Bonjour, Avahi, 
 - **Dual Android Implementation**: Choose between NSD (Android native) or DNSSD (embedded mDNSResponder)
 - **Android 15+ Compatible**: Includes 16KB page size alignment (Google Play requirement starting November 1, 2025)
 - **TypeScript**: Type definitions included
+- **Promise-based publishing**: `publishService` and `unpublishService` resolve once the network is updated
+- **Structured errors**: errors carry a platform `code` and `domain` to tell failures apart
+- **Local Network permission check** (iOS): know when the user denied access
 
 ## Installation
 
 ```bash
 # Install using yarn
 yarn add react-native-zeroconf
-
-# For React Native < 0.60 only (all platforms):
-react-native link
 
 # For iOS (using CocoaPods):
 cd ios && pod install
@@ -295,7 +295,7 @@ useEffect(() => {
 | `resolved` | `Service` object        | Service fully resolved with network info |
 | `remove`   | `string` (service name) | Service removed from network             |
 | `update`   | none                    | Services list changed (found or removed) |
-| `error`    | `Error` object          | An error occurred                        |
+| `error`    | `Error` ([details](#errors)) | An error occurred                   |
 
 #### Publishing Events
 
@@ -388,7 +388,7 @@ zeroconf.scan({ type: 'http', implType: ImplType.DNSSD })
 | TXT Records        | ✅     | ✅ (API 21+)  | ✅              |
 | IPv4 Addresses     | ✅     | ✅            | ✅              |
 | IPv6 Addresses     | ✅     | ✅            | ✅              |
-| Min API Level      | iOS 7+ | API 16+       | API 21+         |
+| Minimum version    | React Native's minimum (13.4+) | API 21+ | API 21+ |
 
 ## Android Emulator Limitations
 
@@ -490,8 +490,8 @@ yarn ios  # or yarn android
 
 ### Services not being discovered
 
-1. **Check permissions**: Ensure all required permissions are granted
-2. **iOS 14+**: Verify `NSBonjourServices` includes your service type
+1. **Check permissions**: Ensure all required permissions are granted. On iOS, `checkLocalNetworkAccess()` tells you if Local Network access was denied
+2. **iOS 14+**: Verify `NSBonjourServices` includes your service type. An `error` with code `-72008` means it is missing
 3. **Android emulator**: Use a real device (emulators don't support multicast)
 4. **Try DNSSD**: Switch from NSD to DNSSD implementation on Android
 5. **Same network**: Ensure device and services are on the same network/subnet
@@ -558,7 +558,7 @@ async function scanWithRetry(zeroconf, maxAttempts = 5) {
     if (results.length > 0) return results
 
     // Stop and wait before retry
-    zeroconf.stop('DNSSD')
+    zeroconf.stop()
     await new Promise(r => setTimeout(r, 1000))
   }
   return []
@@ -570,7 +570,7 @@ async function scanWithRetry(zeroconf, maxAttempts = 5) {
 The native DNSSD module needs time to fully stop before starting a new scan:
 
 ```javascript
-zeroconf.stop('DNSSD')
+zeroconf.stop()
 await new Promise(r => setTimeout(r, 500)) // Wait 500ms
 zeroconf.scan({ type: 'pdl-datastream', implType: 'DNSSD' })
 ```
@@ -593,7 +593,7 @@ import { AppState } from 'react-native'
 
 AppState.addEventListener('change', (state) => {
   if (state === 'background') {
-    zeroconf.stop('DNSSD')
+    zeroconf.stop()
   } else if (state === 'active') {
     // Restart scan
     zeroconf.scan({ type: 'http', implType: 'DNSSD' })
@@ -617,7 +617,7 @@ function startScan() {
 function stopScan() {
   if (!isScanning) return
   isScanning = false
-  zeroconf.stop('DNSSD')
+  zeroconf.stop()
 }
 ```
 
