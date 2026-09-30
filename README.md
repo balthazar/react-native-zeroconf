@@ -384,8 +384,11 @@ useEffect(() => {
 
 ```javascript
 zeroconf.on('error', error => {
+  if (error.domain === 'DNSSD' && error.code === -65555) {
+    // iOS: the service type is missing from NSBonjourServices in Info.plist
+  }
   if (error.domain === 'DNSSD' && error.code === -65570) {
-    // iOS: Local Network access denied, or the service type is missing from NSBonjourServices
+    // iOS: Local Network access denied
   }
 })
 ```
@@ -558,7 +561,7 @@ yarn ios  # or yarn android
 ### Services not being discovered
 
 1. **Check permissions**: Ensure all required permissions are granted. On iOS, `checkLocalNetworkAccess()` tells you if Local Network access was denied
-2. **iOS 14+**: Verify `NSBonjourServices` includes your service type. An `error` with code `-65570` means access was denied or it is missing
+2. **iOS 14+**: Verify `NSBonjourServices` includes your service type. An `error` with code `-65555` means it is missing, `-65570` that Local Network access was denied
 3. **Android emulator**: Use a real device (emulators don't support multicast)
 4. **Try DNSSD**: Switch from NSD to DNSSD implementation on Android
 5. **Same network**: Ensure device and services are on the same network/subnet

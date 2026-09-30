@@ -745,7 +745,8 @@ RCT_EXPORT_METHOD(checkLocalNetworkAccess:(NSString *)type
 + (NSString *) describeError:(DNSServiceErrorType)code
 {
     switch (code) {
-        case kDNSServiceErr_PolicyDenied: return @"Local Network access denied, or the service type is missing from NSBonjourServices in Info.plist";
+        case kDNSServiceErr_NoAuth: return @"not authorized, add the service type to NSBonjourServices in Info.plist";
+        case kDNSServiceErr_PolicyDenied: return @"Local Network access denied";
         case kDNSServiceErr_NameConflict: return @"name already in use";
         case kDNSServiceErr_BadParam: return @"bad parameter";
         case kDNSServiceErr_NoSuchName: return @"no such name";

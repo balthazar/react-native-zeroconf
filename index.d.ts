@@ -59,7 +59,7 @@ export interface PublishOptions {
  * Errors emitted by the `error` event
  *
  * - `DNSSD`: DNSServiceErrorType, on iOS and from Android's embedded mDNSResponder,
- *   e.g. `-65570` Local Network access denied or the type is missing from NSBonjourServices
+ *   e.g. `-65555` type missing from NSBonjourServices, `-65570` Local Network access denied
  * - `NsdManager`: Android NsdManager failure code
  * - `RNZeroconf`: the library's own errors, e.g. `'EXCEPTION'`
  */
