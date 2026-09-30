@@ -43,6 +43,6 @@ repositories {
 dependencies {
     implementation "com.facebook.react:react-native:${safeExtGet('reactNativeVersion', '+')}"
     // RxJava2 for Rx2Dnssd (bundled from Discord's RxDNSSD fork)
-    api 'io.reactivex.rxjava2:rxjava:2.2.21'
-    api 'io.reactivex.rxjava2:rxandroid:2.1.1'
+    implementation 'io.reactivex.rxjava2:rxjava:2.2.21'
+    implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
 }
