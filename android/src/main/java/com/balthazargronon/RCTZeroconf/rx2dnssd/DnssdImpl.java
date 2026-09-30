@@ -45,6 +45,9 @@ public class DnssdImpl implements Zeroconf {
     private Map<String, BonjourService> mPublishedServices;
     private Map<String, Disposable> mRegisteredDisposables;
 
+    // A service is reported once per network interface, count them so found/remove are emitted once
+    private final Map<String, Integer> mFoundInterfaces = new HashMap<>();
+
     private ZeroconfModule zeroconfModule;
 
     private ReactApplicationContext reactApplicationContext;
@@ -85,16 +88,27 @@ public class DnssdImpl implements Zeroconf {
         // Emit start event
         zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_START, null);
 
+        mFoundInterfaces.clear();
         browseDisposable = rxDnssd.browse(serviceType, "local.")
                 .doOnNext(bonjourService -> {
+                    String name = bonjourService.getServiceName();
+                    Integer count = mFoundInterfaces.get(name);
+                    int interfaces = count == null ? 0 : count;
                     if (!bonjourService.isLost()) {
-                        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_FOUND, serviceNameToMap(bonjourService));
+                        mFoundInterfaces.put(name, interfaces + 1);
+                        if (interfaces == 0) {
+                            zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_FOUND, serviceNameToMap(bonjourService));
+                        }
+                    } else if (interfaces <= 1) {
+                        mFoundInterfaces.remove(name);
+                        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_REMOVE, serviceNameToMap(bonjourService));
+                    } else {
+                        mFoundInterfaces.put(name, interfaces - 1);
                     }
                 })
+                .filter(bonjourService -> !bonjourService.isLost())
                 // Resolve each service independently so a single failure doesn't end the whole browse
-                .flatMap(bonjourService -> bonjourService.isLost()
-                        ? Flowable.just(bonjourService)
-                        : Flowable.just(bonjourService)
+                .flatMap(bonjourService -> Flowable.just(bonjourService)
                                 .compose(rxDnssd.resolve())
                                 .compose(rxDnssd.queryRecords())
                                 .onErrorResumeNext((Throwable throwable) -> {
@@ -105,8 +119,8 @@ public class DnssdImpl implements Zeroconf {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(bonjourService -> {
+                    // Lost services were filtered out above, a lost service could still come back from resolve
                     if (bonjourService.isLost()) {
-                        zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_REMOVE, serviceNameToMap(bonjourService));
                         return;
                     }
                     zeroconfModule.sendEvent(reactApplicationContext, ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(bonjourService));
