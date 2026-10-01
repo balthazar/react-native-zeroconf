@@ -534,6 +534,10 @@ void Zeroconf::OnBrowse(const std::shared_ptr<Browse> &browse, DWORD status, PDN
         }
 
         std::wstring name = browse->typesOnly ? ServiceTypeName(target) : InstanceName(target, browse->regType, browse->domain);
+        // Service type answers can also announce subtypes ("_printer._sub._ipp._tcp"), only types are listed
+        if (browse->typesOnly && !EndsWith(Lower(name), L"._tcp") && !EndsWith(Lower(name), L"._udp")) {
+          continue;
+        }
         browse->found[key] = name;
         after.push_back([this, scanId, name] {
           if (events_.found) events_.found(scanId, name);
