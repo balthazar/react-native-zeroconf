@@ -211,6 +211,22 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         }
     }
 
+    /**
+     * Readable description of a DNSServiceErrorType code, as on iOS
+     */
+    public static String describeDnssdError(int errorCode) {
+        switch (errorCode) {
+            case -65548: return "name already in use"; // kDNSServiceErr_NameConflict
+            case -65540: return "bad parameter"; // kDNSServiceErr_BadParam
+            case -65538: return "no such name"; // kDNSServiceErr_NoSuchName
+            case -65554: return "no such record"; // kDNSServiceErr_NoSuchRecord
+            case -65563: return "mDNSResponder is not running"; // kDNSServiceErr_ServiceNotRunning
+            case -65539: return "out of memory"; // kDNSServiceErr_NoMemory
+            case -65544: return "unsupported"; // kDNSServiceErr_Unsupported
+            default: return "error " + errorCode;
+        }
+    }
+
     // Called on teardown by current React Native versions.
     // No @Override so it still compiles against versions that don't declare it.
     public void invalidate() {

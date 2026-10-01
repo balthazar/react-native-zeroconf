@@ -77,7 +77,7 @@ With `implType: 'NSD'` on Android 14+, found services are followed with `NsdMana
 
 ## RxJava is no longer exposed on Android
 
-The Android module now declares RxJava as an `implementation` dependency. If your app code used RxJava classes without declaring RxJava itself, add the dependency to your app.
+The Android module now declares RxJava as an `implementation` dependency. If your app code used RxJava classes without declaring RxJava itself, add the dependency to your app. Since 0.17 the library does not use RxJava at all.
 
 ## Coming from 0.14 or earlier
 

@@ -1,7 +1,7 @@
 package com.balthazargronon.RCTZeroconf;
 
 import com.balthazargronon.RCTZeroconf.nsd.NsdServiceImpl;
-import com.balthazargronon.RCTZeroconf.rx2dnssd.DnssdImpl;
+import com.balthazargronon.RCTZeroconf.dnssd.DnssdImpl;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
 

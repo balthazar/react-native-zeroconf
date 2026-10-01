@@ -35,9 +35,6 @@ android/src/main/jni/*
 android/src/main/java/com/github/druk/dnssd/*
   - Java DNS-SD API classes
 
-android/src/main/java/com/github/druk/rx2dnssd/*
-  - RxJava2 reactive wrappers for DNS-SD
-
 ================================================================================
 
 mDNSResponder

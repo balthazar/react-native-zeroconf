@@ -22,7 +22,7 @@ import android.os.Looper;
 import android.util.Log;
 
 /**
- * RxDnssd is implementation of RxDnssd with embedded DNS-SD  {@link InternalDNSSD}
+ * DNSSD implementation running the embedded mDNSResponder  {@link InternalDNSSD}
  */
 public class DNSSDEmbedded extends DNSSD {
 

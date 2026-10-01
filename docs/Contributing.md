@@ -10,8 +10,8 @@ Bug reports and pull requests are welcome on [GitHub](https://github.com/balthaz
 | `index.d.ts` | TypeScript definitions, keep in sync with `src/index.js` |
 | `ios/RNZeroconf/` | iOS, macOS and tvOS module (Objective-C, dns_sd) |
 | `react-native-zeroconf.podspec` | CocoaPods spec |
-| `android/src/main/java/com/balthazargronon/RCTZeroconf/` | Android module (`nsd/` and `rx2dnssd/` implementations) |
-| `android/src/main/java/com/github/druk/` | Bundled RxDNSSD Java sources |
+| `android/src/main/java/com/balthazargronon/RCTZeroconf/` | Android module (`nsd/` and `dnssd/` implementations) |
+| `android/src/main/java/com/github/druk/dnssd/` | Bundled DNS-SD Java API, from RxDNSSD |
 | `android/src/main/jni/` | Embedded mDNSResponder, built with `ndkBuild` |
 | `example/` | Expo example app, a network browser |
 | `test/` | Jest tests (`*.test.js`), TypeScript checks (`types/`) and the iOS harness (`ios/`) |
