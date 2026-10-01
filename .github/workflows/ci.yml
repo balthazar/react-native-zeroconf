@@ -60,22 +60,21 @@ jobs:
           npm pack --pack-destination "$RUNNER_TEMP"
       - name: Install the example with the packed library
         working-directory: example
-        env:
-          YARN_NODE_LINKER: node-modules
-          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
         run: |
-          corepack enable
-          yarn install
+          npm ci
           rm -rf node_modules/react-native-zeroconf
           mkdir -p node_modules/react-native-zeroconf
           tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
+      - name: Type check the example
+        working-directory: example
+        run: npm run typecheck
       - name: Build
-        working-directory: example/android
-        # The example enables Jetifier, which runs out of memory on the Hermes AAR and is not needed with AndroidX
+        working-directory: example
         run: |
+          npx expo prebuild --platform android --no-install
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> ~/.gradle/gradle.properties
-          ./gradlew :app:assembleDebug --no-daemon -Pandroid.enableJetifier=false -PreactNativeArchitectures=x86_64
+          cd android && ./gradlew :app:assembleDebug --no-daemon -PreactNativeArchitectures=x86_64
 
   ios:
     name: iOS build
@@ -92,21 +91,18 @@ jobs:
           npm pack --pack-destination "$RUNNER_TEMP"
       - name: Install the example with the packed library
         working-directory: example
-        env:
-          YARN_NODE_LINKER: node-modules
-          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
         run: |
-          corepack enable
-          yarn install
+          npm ci
           rm -rf node_modules/react-native-zeroconf
           mkdir -p node_modules/react-native-zeroconf
           tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
-      - name: Install pods
-        working-directory: example/ios
-        run: pod install
+      - name: Prebuild (installs pods)
+        working-directory: example
+        run: npx expo prebuild --platform ios
       - name: Build
         working-directory: example/ios
         run: |
-          xcodebuild -workspace ZeroConfExample.xcworkspace -scheme ZeroConfExample \
+          set -o pipefail
+          xcodebuild -workspace ZeroconfBrowser.xcworkspace -scheme ZeroconfBrowser \
             -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build | tail -20

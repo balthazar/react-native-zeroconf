@@ -1,11 +1,20 @@
-const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
+// Runs the example against the library source in ../src, no build needed
+const path = require('path')
+const { getDefaultConfig } = require('expo/metro-config')
 
-/**
- * Metro configuration
- * https://reactnative.dev/docs/metro
- *
- * @type {import('metro-config').MetroConfig}
- */
-const config = {};
+const root = path.resolve(__dirname, '..')
+const config = getDefaultConfig(__dirname)
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), config);
+config.watchFolders = [root]
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'react-native-zeroconf') {
+    return { type: 'sourceFile', filePath: path.join(root, 'src/index.js') }
+  }
+  // The library's own node_modules has another React version, use the example's
+  if (/^react(-native)?($|\/)/.test(moduleName)) {
+    return context.resolveRequest({ ...context, originModulePath: path.join(__dirname, 'index.ts') }, moduleName, platform)
+  }
+  return context.resolveRequest(context, moduleName, platform)
+}
+
+module.exports = config

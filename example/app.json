@@ -1,4 +1,38 @@
 {
-  "name": "ZeroConfExample",
-  "displayName": "ZeroConfExample"
+  "expo": {
+    "name": "Zeroconf Browser",
+    "slug": "zeroconf-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.zeroconf.example",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Find the devices and services on your network",
+        "NSBonjourServices": [
+          "_http._tcp",
+          "_https._tcp",
+          "_ipp._tcp",
+          "_ipps._tcp",
+          "_printer._tcp",
+          "_pdl-datastream._tcp",
+          "_airplay._tcp",
+          "_raop._tcp",
+          "_googlecast._tcp",
+          "_spotify-connect._tcp",
+          "_companion-link._tcp",
+          "_hap._tcp",
+          "_ssh._tcp",
+          "_smb._tcp"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.zeroconf.example"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
 }
