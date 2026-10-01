@@ -3,6 +3,7 @@
 Scan and publish from React components, and clean up when they unmount.
 
 - [The `useZeroconf` hook](#the-usezeroconf-hook)
+- [Listing service types](#listing-service-types)
 - [Cleanup in React components](#cleanup-in-react-components)
 - [Recipe: publish while a screen is mounted](#recipe-publish-while-a-screen-is-mounted)
 
@@ -46,6 +47,26 @@ function Devices() {
   return <DeviceList printers={printers.services} speakers={speakers.services} />
 }
 ```
+## Listing service types
+
+`useServiceTypes` lists the service types on the network, and each type can be scanned by its own component:
+
+```tsx
+import { useServiceTypes, useZeroconf } from 'react-native-zeroconf'
+
+function Network() {
+  const { serviceTypes } = useServiceTypes()
+  return serviceTypes.map(t => <ServicesOfType key={`${t.type}.${t.protocol}`} {...t} />)
+}
+
+function ServicesOfType({ type, protocol }) {
+  const { services } = useZeroconf({ type, protocol })
+  return services.map(service => <Text key={service.name}>{service.name} ({type})</Text>)
+}
+```
+
+Listing service types works on Android, and is restricted on iOS: see [Listing service types](Scanning#listing-service-types).
+
 ## Cleanup in React components
 
 When you use a `Zeroconf` instance directly, clean up when the component unmounts:

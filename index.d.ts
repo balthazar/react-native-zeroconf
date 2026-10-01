@@ -91,11 +91,28 @@ export interface ZeroconfEvents {
   resolved: (service: Service) => void
   /** Service removed from the network */
   remove: (name: string) => void
-  /** Services list changed */
+  /** Services or service types list changed */
   update: () => void
+  /** Service type found by `scanServiceTypes` */
+  typeFound: (serviceType: ServiceType) => void
+  /** Service type no longer advertised, during `scanServiceTypes` */
+  typeRemove: (serviceType: ServiceType) => void
   error: (error: ZeroconfError) => void
   published: (service: PublishedService) => void
   unpublished: (service: PublishedService) => void
+}
+
+/** A service type advertised on the network, e.g. `{ type: 'http', protocol: 'tcp' }` for `_http._tcp` */
+export interface ServiceType {
+  type: string
+  protocol: 'tcp' | 'udp'
+}
+
+export interface ServiceTypesScanOptions {
+  /** Defaults to `local.` */
+  domain?: string
+  /** Android only, defaults to `ImplType.DNSSD`: NsdManager can't list service types on Android 14 and later */
+  implType?: ImplType
 }
 
 /** Extends the `events` package EventEmitter */
@@ -120,6 +137,15 @@ export default class Zeroconf {
 
   /** All the services found so far, keyed by name */
   getServices(): Record<string, Service>
+
+  /** Service types found by `scanServiceTypes` */
+  getServiceTypes(): ServiceType[]
+
+  /**
+   * Scan for the service types advertised on the network, emits `typeFound` and `typeRemove`.
+   * On iOS, only types declared in `NSBonjourServices` can then be scanned.
+   */
+  scanServiceTypes(options?: ServiceTypesScanOptions): void
 
   /** Scan for services, defaults to `_http._tcp.` on the `local.` domain */
   scan(options?: ScanOptions): void
@@ -185,3 +211,22 @@ export interface UseZeroconfResult {
  * stops and cleans up on unmount. Each hook runs its own scan, several can run at once.
  */
 export function useZeroconf(options?: UseZeroconfOptions): UseZeroconfResult
+
+export interface UseServiceTypesOptions extends ServiceTypesScanOptions {
+  /** Scan only while true, defaults to `true` */
+  enabled?: boolean
+}
+
+export interface UseServiceTypesResult {
+  /** Service types advertised on the network, updated as they appear and disappear */
+  serviceTypes: ServiceType[]
+  isScanning: boolean
+  /** Last error, reset when a new scan starts */
+  error: ZeroconfError | null
+  stop(): void
+  /** Clears the service types and scans again */
+  restart(): void
+}
+
+/** Lists the service types advertised on the network while mounted */
+export function useServiceTypes(options?: UseServiceTypesOptions): UseServiceTypesResult

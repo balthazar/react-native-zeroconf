@@ -173,6 +173,30 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
         return error;
     }
 
+    public static final String SERVICE_TYPES_TYPE = "services._dns-sd";
+    public static final String SERVICE_TYPES_PROTOCOL = "udp";
+
+    /**
+     * Whether a scan browses _services._dns-sd._udp, whose results are service types
+     */
+    public static boolean isServiceTypesScan(String type, String protocol) {
+        return SERVICE_TYPES_TYPE.equals(type) && SERVICE_TYPES_PROTOCOL.equals(protocol);
+    }
+
+    /**
+     * Service type from a _services._dns-sd._udp result: "_http" and "_tcp.local." give "_http._tcp"
+     */
+    public static String serviceTypeFromResult(String name, @Nullable String regType) {
+        if (regType != null) {
+            for (String label : regType.split("\\.")) {
+                if (label.startsWith("_")) {
+                    return name + "." + label;
+                }
+            }
+        }
+        return name;
+    }
+
     /**
      * Readable description of an NsdManager failure code
      */

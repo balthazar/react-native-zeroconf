@@ -49,6 +49,8 @@
 // Services are reported once per network interface, count them so found/remove are emitted once
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *foundInterfaces;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, RNZResolve *> *resolvingServices;
+// Browsing _services._dns-sd._udp: results are service types, reported as "_http._tcp" and not resolved
+@property (nonatomic, assign) BOOL typesOnly;
 @end
 
 @implementation RNZScan
@@ -176,12 +178,13 @@ RCT_EXPORT_METHOD(scan:(NSString *)scanId
     scan.resolvingServices = [[NSMutableDictionary alloc] init];
 
     NSString *regtype = [NSString stringWithFormat:@"_%@._%@", type, protocol];
+    scan.typesOnly = [regtype isEqualToString:@"_services._dns-sd._udp"];
     DNSServiceRef ref = NULL;
     DNSServiceErrorType error = DNSServiceBrowse(&ref, 0, kDNSServiceInterfaceIndexAny, regtype.UTF8String,
                                                  domain.length > 0 ? domain.UTF8String : NULL,
                                                  RNZBrowseReply, (__bridge void *)scan);
     if (error != kDNSServiceErr_NoError) {
-        [self sendError:[self errorWithCode:error action:@"Browsing services" serviceName:nil] scan:scan];
+        [self sendError:[self browseErrorWithCode:error scan:scan] scan:scan];
         return;
     }
     DNSServiceSetDispatchQueue(ref, RNZ_QUEUE);
@@ -229,7 +232,7 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
         return;
     }
     if (error != kDNSServiceErr_NoError) {
-        [self sendError:[self errorWithCode:error action:@"Browsing services" serviceName:nil] scan:scan];
+        [self sendError:[self browseErrorWithCode:error scan:scan] scan:scan];
         // The browse can't continue after an error
         RNZDeallocateLater(scan.browseRef, scan);
         scan.browseRef = NULL;
@@ -243,12 +246,20 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     if (!serviceName) {
         return;
     }
+    if (scan.typesOnly) {
+        // name is "_http" and regtype "_tcp.local.", the service type is "_http._tcp"
+        NSString *protocol = [[NSString stringWithUTF8String:regtype] componentsSeparatedByString:@"."].firstObject;
+        serviceName = [NSString stringWithFormat:@"%@.%@", serviceName, protocol];
+    }
     NSInteger interfaces = scan.foundInterfaces[serviceName].integerValue;
 
     if (flags & kDNSServiceFlagsAdd) {
         scan.foundInterfaces[serviceName] = @(interfaces + 1);
         if (interfaces == 0) {
             [self sendEvent:@"RNZeroconfFound" scan:scan body:@{ kRNServiceKeysName: serviceName }];
+            if (scan.typesOnly) {
+                return;
+            }
             [self startResolve:serviceName regtype:[NSString stringWithUTF8String:regtype] domain:[NSString stringWithUTF8String:domain] scan:scan];
         }
         return;
@@ -725,6 +736,22 @@ RCT_EXPORT_METHOD(checkLocalNetworkAccess:(NSString *)type
                                            code:[code isKindOfClass:[NSNumber class]] ? [code integerValue] : 0
                                        userInfo:error];
     reject([NSString stringWithFormat:@"%@", code], error[@"message"], nsError);
+}
+
+- (NSDictionary *) browseErrorWithCode:(DNSServiceErrorType)code scan:(RNZScan *)scan
+{
+    if (!scan.typesOnly) {
+        return [self errorWithCode:code action:@"Browsing services" serviceName:nil];
+    }
+    if (code == kDNSServiceErr_NoAuth) {
+        // Declaring _services._dns-sd._udp is not enough on iOS, browsing it is refused without more permissions
+        return @{
+            @"message": @"Listing service types failed: not authorized, it needs _services._dns-sd._udp in NSBonjourServices and may need the com.apple.developer.networking.multicast entitlement",
+            @"code": @(code),
+            @"domain": @"DNSSD",
+        };
+    }
+    return [self errorWithCode:code action:@"Listing service types" serviceName:nil];
 }
 
 - (NSDictionary *) errorWithCode:(DNSServiceErrorType)code action:(NSString *)action serviceName:(NSString *)serviceName

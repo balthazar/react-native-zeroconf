@@ -163,6 +163,20 @@ int main(void) {
       for (int i = 0; i < 100 && eventsNamed(@"RNZeroconfRemove").count == 0; i++) spin(0.05);
       check(eventsNamed(@"RNZeroconfRemove").count == 1 && [eventsNamed(@"RNZeroconfRemove")[0][1][@"scanId"] isEqualToString:@"B"], @"scan B still sees removals after A stopped");
 
+      // Service types: _services._dns-sd._udp reports "_zcdns._tcp" once, without resolving
+      [events removeAllObjects];
+      [z scan:@"T" type:@"services._dns-sd" protocol:@"udp" domain:@"local." resolveTimeout:5];
+      NSPredicate *zcType = [NSPredicate predicateWithBlock:^BOOL(NSArray *e, id b) { return [e[1][@"name"] isEqualToString:@"_zcdns._tcp"]; }];
+      for (int i = 0; i < 100 && [eventsNamed(@"RNZeroconfFound") filteredArrayUsingPredicate:zcType].count == 0; i++) spin(0.05);
+      spin(1.0);
+      NSArray *typesFound = eventsNamed(@"RNZeroconfFound");
+      check([typesFound filteredArrayUsingPredicate:zcType].count == 1, [NSString stringWithFormat:@"service types scan finds _zcdns._tcp once (%lu types)", (unsigned long)typesFound.count]);
+      BOOL allTypes = YES;
+      for (NSArray *e in typesFound) allTypes = allTypes && [e[1][@"name"] hasPrefix:@"_"] && ([e[1][@"name"] hasSuffix:@"._tcp"] || [e[1][@"name"] hasSuffix:@"._udp"]);
+      check(allTypes, @"every found name is a service type");
+      check(eventsNamed(@"RNZeroconfResolved").count == 0, @"service types are not resolved");
+      [z stop:@"T"];
+
       // Teardown with a scan running and a service published
       [z invalidate];
     }

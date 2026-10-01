@@ -7,7 +7,7 @@ const zeroconf = new Zeroconf()
 
 `Zeroconf` extends the [`events`](https://www.npmjs.com/package/events) `EventEmitter` (`on`, `once`, `off`, `removeListener`, `removeAllListeners`, `listenerCount`). The constructor throws if the native module is missing (for example in Expo Go).
 
-**Contents:** [Methods](#methods) | [`useZeroconf`](#usezeroconfoptions) | [Multiple scans](#multiple-scans) | [Events](#events) | [Service object](#service-object) | [TypeScript types](#typescript-types)
+**Contents:** [Methods](#methods) | [`useZeroconf`](#usezeroconfoptions) | [`useServiceTypes`](#useservicetypesoptions) | [Multiple scans](#multiple-scans) | [Events](#events) | [Service object](#service-object) | [TypeScript types](#typescript-types)
 
 Error codes and domains are on the [Errors](Errors) page.
 
@@ -18,6 +18,8 @@ Error codes and domains are on the [Errors](Errors) page.
 | [`scan(options?)`](#scanoptions) | `void` | Start browsing for a service type |
 | [`stop(implType?)`](#stopimpltype) | `void` | Stop this instance's scan |
 | [`getServices()`](#getservices) | `Record<string, Service>` | Services of the current scan, by name |
+| [`scanServiceTypes(options?)`](#scanservicetypesoptions) | `void` | List the service types advertised on the network |
+| [`getServiceTypes()`](#getservicetypes) | `ServiceType[]` | Service types found by `scanServiceTypes()` |
 | [`publishService(options)`](#publishserviceoptions) | `Promise<PublishedService>` | Advertise a service |
 | [`unpublishService(name, implType?)`](#unpublishservicename-impltype) | `Promise` | Withdraw a published service |
 | [`checkLocalNetworkAccess(options?)`](#checklocalnetworkaccessoptions) | `Promise<'granted' \| 'denied' \| 'unknown'>` | iOS Local Network permission |
@@ -55,6 +57,19 @@ Stops this instance's scan and emits `stop`. Scans of other instances keep runni
 ### `getServices()`
 
 Returns the services of this instance's scan, keyed by name. Services that are found but not yet resolved only contain `name`.
+
+### `scanServiceTypes(options?)`
+
+Starts listing the service types advertised on the network (browsing `_services._dns-sd._udp`), emits `typeFound` and `typeRemove`. Like `scan()`, it replaces this instance's scan, and `stop()` stops it. See [Listing service types](Scanning#listing-service-types) for platform support.
+
+| Option | Type | Default | Platform | Description |
+| --- | --- | --- | --- | --- |
+| `domain` | `string` | `'local.'` | all | Domain to browse |
+| `implType` | `'NSD' \| 'DNSSD'` | `'DNSSD'` | Android | `NSD` can't list service types on Android 14 and later |
+
+### `getServiceTypes()`
+
+Returns the service types found by `scanServiceTypes()`, as `[{ type: 'http', protocol: 'tcp' }]`.
 
 ### `publishService(options)`
 
@@ -128,6 +143,10 @@ Returns:
 
 It scans again when the options change, and stops and removes its listeners on unmount. Each hook runs its own scan, so several hooks can scan different types at once.
 
+## `useServiceTypes(options?)`
+
+React hook that lists the service types while the component is mounted. Takes the `scanServiceTypes()` options plus `enabled`, and returns `serviceTypes` (`ServiceType[]`) with the same `isScanning`, `error`, `stop()` and `restart()` as `useZeroconf`.
+
 ## Multiple scans
 
 Each `Zeroconf` instance runs its own scan, and several can run at once.
@@ -149,7 +168,9 @@ On Android, `NSD` and `DNSSD` scans can run concurrently. On iOS, every scanned 
 | `found` | `name: string` | A service appeared (not resolved yet) |
 | `resolved` | `Service` | A service was resolved. On Android 14+ with `NSD`, it can fire again when addresses or TXT records change |
 | `remove` | `name: string` | A service left the network |
-| `update` | none | The list returned by `getServices()` changed |
+| `update` | none | The list returned by `getServices()` or `getServiceTypes()` changed |
+| `typeFound` | `ServiceType` | A service type appeared, during `scanServiceTypes()` |
+| `typeRemove` | `ServiceType` | A service type is no longer advertised, during `scanServiceTypes()` |
 | `error` | `ZeroconfError` | A scan, resolve or publish error |
 | `published` | `PublishedService` | A service was advertised |
 | `unpublished` | `PublishedService` | A service was withdrawn |
@@ -188,6 +209,7 @@ Exported from `react-native-zeroconf`:
 | `ImplType` | `'NSD' \| 'DNSSD'` (also a value: `ImplType.NSD`, `ImplType.DNSSD`) |
 | `Service` | Resolved service |
 | `PublishedService` | `Service` without `ipv4` / `ipv6` |
+| `ServiceType` | `{ type: string, protocol: 'tcp' \| 'udp' }` |
 | `ScanOptions` | Options of `scan()` |
 | `PublishOptions` | Options of `publishService()` |
 | `LocalNetworkAccessOptions` | Options of `checkLocalNetworkAccess()` |
@@ -196,6 +218,9 @@ Exported from `react-native-zeroconf`:
 | `ZeroconfEvents` | Event name to listener signature map |
 | `UseZeroconfOptions` | Options of `useZeroconf()` |
 | `UseZeroconfResult` | Return value of `useZeroconf()` |
+| `ServiceTypesScanOptions` | Options of `scanServiceTypes()` |
+| `UseServiceTypesOptions` | Options of `useServiceTypes()` |
+| `UseServiceTypesResult` | Return value of `useServiceTypes()` |
 
 Listeners are typed by event name:
 

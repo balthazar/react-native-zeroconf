@@ -90,6 +90,15 @@ const withAddressFamilies = service => {
 /**
  * TXT records as ordered [key, value] pairs, from an object or an array of pairs
  */
+// Browsing this type lists the service types on the network instead of services
+const SERVICE_TYPES = { type: 'services._dns-sd', protocol: 'udp' }
+
+// "_http._tcp" -> { type: 'http', protocol: 'tcp' }
+const parseServiceType = name => {
+  const match = /^_([^.]+)\._(tcp|udp)$/.exec(name)
+  return match ? { type: match[1], protocol: match[2] } : null
+}
+
 const toTxtPairs = txt => {
   const entries = Array.isArray(txt) ? txt : Object.entries(txt || {})
   return entries.map(([key, value]) => [String(key), String(value)])
@@ -106,6 +115,8 @@ export default class Zeroconf extends EventEmitter {
     }
 
     this._services = {}
+    this._serviceTypes = {}
+    this._scanningTypes = false
     this._publishedServices = {}
     this._publishedImplTypes = {}
     this._scanImplType = null
@@ -148,6 +159,16 @@ export default class Zeroconf extends EventEmitter {
       }
       const { name } = service
 
+      if (this._scanningTypes) {
+        const serviceType = parseServiceType(name)
+        if (serviceType && !this._serviceTypes[name]) {
+          this._serviceTypes[name] = serviceType
+          this.emit('typeFound', serviceType)
+          this.emit('update')
+        }
+        return
+      }
+
       this._services[name] = { name }
       this.emit('found', name)
       this.emit('update')
@@ -158,6 +179,16 @@ export default class Zeroconf extends EventEmitter {
         return
       }
       const { name } = service
+
+      if (this._scanningTypes) {
+        const serviceType = this._serviceTypes[name]
+        if (serviceType) {
+          delete this._serviceTypes[name]
+          this.emit('typeRemove', serviceType)
+          this.emit('update')
+        }
+        return
+      }
 
       delete this._services[name]
 
@@ -238,20 +269,44 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
+   * Get the service types found by scanServiceTypes, as [{ type, protocol }]
+   */
+  getServiceTypes() {
+    return Object.values(this._serviceTypes)
+  }
+
+  /**
+   * Scan for the service types advertised on the network (_http._tcp, _ipp._tcp...), emits typeFound and typeRemove.
+   * On iOS, only types declared in NSBonjourServices can then be scanned.
+   * On Android it defaults to DNSSD: NsdManager can't list service types on Android 14 and later.
+   *
+   * scanServiceTypes({ domain, implType })
+   */
+  scanServiceTypes({ domain, implType = ImplType.DNSSD } = {}) {
+    this._startScan({ ...SERVICE_TYPES, domain, implType }, true)
+  }
+
+  /**
    * Scan for Zeroconf services, defaults to _http._tcp. on the local. domain
    *
    * scan({ type, protocol, domain, implType, resolveTimeout })
    * scan(type, protocol, domain, implType) is deprecated
    */
   scan(options, protocolArg, domainArg, implTypeArg) {
-    const { type, protocol, domain, implType, resolveTimeout } = withDefaults(
-      SCAN_DEFAULTS,
+    this._startScan(
       isOptionsObject(options)
         ? options
         : { type: options, protocol: protocolArg, domain: domainArg, implType: implTypeArg },
+      false,
     )
+  }
+
+  _startScan(options, scanningTypes) {
+    const { type, protocol, domain, implType, resolveTimeout } = withDefaults(SCAN_DEFAULTS, options)
 
     this._services = {}
+    this._serviceTypes = {}
+    this._scanningTypes = scanningTypes
     this._hasScanned = true
     this.emit('update')
     if (Platform.OS === 'android') {
@@ -336,31 +391,23 @@ export default class Zeroconf extends EventEmitter {
   }
 }
 
-/**
- * Scans while mounted and returns the resolved services.
- * Scans again when the options change, stops and cleans up on unmount.
- * Each hook runs its own scan, several can run at once.
- *
- * const { services, isScanning, error, stop, restart } = useZeroconf({ type: 'http' })
- */
-export function useZeroconf(options = {}) {
-  const { type, protocol, domain, implType, resolveTimeout, enabled = true } = options
+// Runs a scan while mounted and enabled, and again when deps change or on restart
+function useScan(enabled, startScan, read, deps) {
   const zeroconfRef = useRef(null)
-  const [services, setServices] = useState([])
+  const [items, setItems] = useState([])
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState(null)
   const [scanCount, setScanCount] = useState(0)
+  const readRef = useRef(read)
+  readRef.current = read
 
   useEffect(() => {
     const zeroconf = new Zeroconf()
     zeroconfRef.current = zeroconf
-    // Found services only have a name until they are resolved
-    const updateServices = () =>
-      setServices(Object.values(zeroconf.getServices()).filter(service => service.addresses))
     const unsubscribes = [
       zeroconf.subscribe('start', () => setIsScanning(true)),
       zeroconf.subscribe('stop', () => setIsScanning(false)),
-      zeroconf.subscribe('update', updateServices),
+      zeroconf.subscribe('update', () => setItems(readRef.current(zeroconf))),
       zeroconf.subscribe('error', setError),
     ]
     return () => {
@@ -376,11 +423,11 @@ export function useZeroconf(options = {}) {
     if (!zeroconf || !enabled) {
       return undefined
     }
-    setServices([])
+    setItems([])
     setError(null)
-    zeroconf.scan({ type, protocol, domain, implType, resolveTimeout })
+    startScan(zeroconf)
     return () => zeroconf.stop()
-  }, [enabled, type, protocol, domain, implType, resolveTimeout, scanCount])
+  }, [enabled, scanCount, ...deps])
 
   const stop = useCallback(() => {
     if (zeroconfRef.current) {
@@ -389,5 +436,40 @@ export function useZeroconf(options = {}) {
   }, [])
   const restart = useCallback(() => setScanCount(count => count + 1), [])
 
-  return { services, isScanning, error, stop, restart }
+  return { items, isScanning, error, stop, restart }
+}
+
+/**
+ * Scans while mounted and returns the resolved services.
+ * Scans again when the options change, stops and cleans up on unmount.
+ * Each hook runs its own scan, several can run at once.
+ *
+ * const { services, isScanning, error, stop, restart } = useZeroconf({ type: 'http' })
+ */
+export function useZeroconf(options = {}) {
+  const { type, protocol, domain, implType, resolveTimeout, enabled = true } = options
+  const { items, ...scan } = useScan(
+    enabled,
+    zeroconf => zeroconf.scan({ type, protocol, domain, implType, resolveTimeout }),
+    // Found services only have a name until they are resolved
+    zeroconf => Object.values(zeroconf.getServices()).filter(service => service.addresses),
+    [type, protocol, domain, implType, resolveTimeout],
+  )
+  return { services: items, ...scan }
+}
+
+/**
+ * Lists the service types advertised on the network while mounted.
+ *
+ * const { serviceTypes, isScanning, error, stop, restart } = useServiceTypes()
+ */
+export function useServiceTypes(options = {}) {
+  const { domain, implType, enabled = true } = options
+  const { items, ...scan } = useScan(
+    enabled,
+    zeroconf => zeroconf.scanServiceTypes({ domain, implType }),
+    zeroconf => zeroconf.getServiceTypes(),
+    [domain, implType],
+  )
+  return { serviceTypes: items, ...scan }
 }

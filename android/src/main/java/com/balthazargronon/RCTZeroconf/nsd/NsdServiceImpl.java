@@ -92,8 +92,9 @@ public class NsdServiceImpl implements Zeroconf {
         acquireMulticastLock();
 
         final NsdScan scan = new NsdScan(scanId);
+        final boolean typesOnly = ZeroconfModule.isServiceTypesScan(type, protocol);
 
-        if (Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= 34 && !typesOnly) {
             scan.infoCallbacks = new ServiceInfoCallbacks(nsdManager, mCallbackExecutor, new ServiceInfoCallbacks.Listener() {
                 @Override
                 public void onServiceUpdated(NsdServiceInfo serviceInfo) {
@@ -140,6 +141,10 @@ public class NsdServiceImpl implements Zeroconf {
             @Override
             public void onServiceFound(NsdServiceInfo serviceInfo) {
                 Log.d(TAG, "Service found");
+                if (typesOnly) {
+                    sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceTypeToMap(serviceInfo), scanId);
+                    return;
+                }
                 sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceNameToMap(serviceInfo), scanId);
                 if (scan.infoCallbacks != null) {
                     scan.infoCallbacks.register(serviceInfo);
@@ -151,7 +156,7 @@ public class NsdServiceImpl implements Zeroconf {
             @Override
             public void onServiceLost(NsdServiceInfo serviceInfo) {
                 Log.d(TAG, "Service lost");
-                sendScanEvent(ZeroconfModule.EVENT_REMOVE, serviceNameToMap(serviceInfo), scanId);
+                sendScanEvent(ZeroconfModule.EVENT_REMOVE, typesOnly ? serviceTypeToMap(serviceInfo) : serviceNameToMap(serviceInfo), scanId);
                 if (scan.infoCallbacks != null) {
                     scan.infoCallbacks.unregister(serviceInfo.getServiceName());
                 }
@@ -220,6 +225,12 @@ public class NsdServiceImpl implements Zeroconf {
     private void sendScanEvent(String eventName, WritableMap body, String scanId) {
         body.putString(ZeroconfModule.KEY_SCAN_ID, scanId);
         zeroconfModule.sendEvent(getReactApplicationContext(), eventName, body);
+    }
+
+    private static WritableMap serviceTypeToMap(NsdServiceInfo serviceInfo) {
+        WritableMap service = new WritableNativeMap();
+        service.putString(ZeroconfModule.KEY_SERVICE_NAME, ZeroconfModule.serviceTypeFromResult(serviceInfo.getServiceName(), serviceInfo.getServiceType()));
+        return service;
     }
 
     private static WritableMap serviceNameToMap(NsdServiceInfo serviceInfo) {

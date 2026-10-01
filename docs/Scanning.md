@@ -5,6 +5,7 @@ Find the services other devices advertise on the local network, and read what th
 - [Scanning for services](#scanning-for-services)
 - [Multiple scans](#multiple-scans)
 - [Resolved services](#resolved-services)
+- [Listing service types](#listing-service-types)
 - [Common service types](#common-service-types)
 
 ## Scanning for services
@@ -97,6 +98,28 @@ zeroconf.on('resolved', service => {
 ```
 
 > On Android with `NSD`, `host` is the mDNS host name only on Android 16+. Earlier versions usually give the IP address in `host`. Use `implType: 'DNSSD'` if you need the host name there. See [Android Implementations](Android-Implementations).
+## Listing service types
+
+mDNS only finds services of a type you ask for. To see which types are advertised on the network, list them first:
+
+```javascript
+const zeroconf = new Zeroconf()
+
+zeroconf.on('typeFound', ({ type, protocol }) => console.log(`_${type}._${protocol}`))
+zeroconf.on('typeRemove', ({ type, protocol }) => console.log(`gone: _${type}._${protocol}`))
+zeroconf.scanServiceTypes()
+
+// Later
+zeroconf.getServiceTypes() // [{ type: 'http', protocol: 'tcp' }, { type: 'ipp', protocol: 'tcp' }]
+```
+
+Then scan each type you are interested in, with one instance per type or `useZeroconf` per type (see [Multiple scans](#multiple-scans)). Service types are not resolved, `found` and `resolved` are not emitted while listing them. In React, use [`useServiceTypes`](React-Integration#listing-service-types).
+
+| Platform | Support |
+| --- | --- |
+| Android | With `DNSSD`, the default for `scanServiceTypes()`. `NSD` can't list service types on Android 14 and later |
+| iOS | Restricted: browsing `_services._dns-sd._udp` is refused (error `-65555`) even when it is declared in `NSBonjourServices`, it may need Apple's multicast networking entitlement (`com.apple.developer.networking.multicast`). On iOS, apps usually scan a known list of types instead |
+
 ## Common service types
 
 | Service | `type` | `protocol` |

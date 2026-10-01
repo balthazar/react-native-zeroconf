@@ -82,24 +82,28 @@ public class DnssdImpl implements Zeroconf {
 
         // A service is reported once per network interface, count them so found/remove are emitted once
         final Map<String, Integer> foundInterfaces = new HashMap<>();
+        final boolean typesOnly = ZeroconfModule.isServiceTypesScan(type, protocol);
         Disposable browse = rxDnssd.browse(serviceType, "local.")
                 .doOnNext(bonjourService -> {
-                    String name = bonjourService.getServiceName();
+                    String name = typesOnly
+                            ? ZeroconfModule.serviceTypeFromResult(bonjourService.getServiceName(), bonjourService.getRegType())
+                            : bonjourService.getServiceName();
                     Integer count = foundInterfaces.get(name);
                     int interfaces = count == null ? 0 : count;
                     if (!bonjourService.isLost()) {
                         foundInterfaces.put(name, interfaces + 1);
                         if (interfaces == 0) {
-                            sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceNameToMap(bonjourService), scanId);
+                            sendScanEvent(ZeroconfModule.EVENT_FOUND, nameToMap(name), scanId);
                         }
                     } else if (interfaces <= 1) {
                         foundInterfaces.remove(name);
-                        sendScanEvent(ZeroconfModule.EVENT_REMOVE, serviceNameToMap(bonjourService), scanId);
+                        sendScanEvent(ZeroconfModule.EVENT_REMOVE, nameToMap(name), scanId);
                     } else {
                         foundInterfaces.put(name, interfaces - 1);
                     }
                 })
-                .filter(bonjourService -> !bonjourService.isLost())
+                // Service types are not resolved
+                .filter(bonjourService -> !typesOnly && !bonjourService.isLost())
                 // Resolve each service independently so a single failure doesn't end the whole browse
                 .flatMap(bonjourService -> Flowable.just(bonjourService)
                                 .compose(rxDnssd.resolve())
@@ -168,9 +172,9 @@ public class DnssdImpl implements Zeroconf {
         }
     }
 
-    private WritableMap serviceNameToMap(BonjourService serviceInfo) {
+    private WritableMap nameToMap(String name) {
         WritableMap service = new WritableNativeMap();
-        service.putString(ZeroconfModule.KEY_SERVICE_NAME, serviceInfo.getServiceName());
+        service.putString(ZeroconfModule.KEY_SERVICE_NAME, name);
         return service;
     }
 
