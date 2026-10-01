@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, windows]
   pull_request:
 
 concurrency:
@@ -40,6 +40,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: test/ios/run.sh
+
+  windows-native:
+    name: Windows implementation (harness)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run
+        shell: cmd
+        env:
+          RNZEROCONF_DEBUG: '1'
+        run: test\windows\run.cmd
 
   android:
     name: Android build
