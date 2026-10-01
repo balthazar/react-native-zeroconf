@@ -111,7 +111,7 @@ export interface ServiceType {
 export interface ServiceTypesScanOptions {
   /** Defaults to `local.` */
   domain?: string
-  /** Android only, defaults to `ImplType.DNSSD`: NsdManager can't list service types on Android 14 and later */
+  /** Android only, defaults to `ImplType.NSD`. With `NSD`, the list leaves out services published by the phone running the app, `DNSSD` includes them */
   implType?: ImplType
 }
 
@@ -143,7 +143,7 @@ export default class Zeroconf {
 
   /**
    * Scan for the service types advertised on the network, emits `typeFound` and `typeRemove`.
-   * On iOS, only types declared in `NSBonjourServices` can then be scanned.
+   * On iOS it requires the `com.apple.developer.networking.multicast` entitlement.
    */
   scanServiceTypes(options?: ServiceTypesScanOptions): void
 

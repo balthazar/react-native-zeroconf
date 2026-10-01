@@ -65,7 +65,7 @@ Starts listing the service types advertised on the network (browsing `_services.
 | Option | Type | Default | Platform | Description |
 | --- | --- | --- | --- | --- |
 | `domain` | `string` | `'local.'` | all | Domain to browse |
-| `implType` | `'NSD' \| 'DNSSD'` | `'DNSSD'` | Android | `NSD` can't list service types on Android 14 and later |
+| `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | With `NSD`, the list leaves out services published by the phone running the app. `DNSSD`, however, includes them |
 
 ### `getServiceTypes()`
 

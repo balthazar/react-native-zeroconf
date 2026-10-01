@@ -14,13 +14,13 @@ describe('scanServiceTypes', () => {
     expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'services._dns-sd', 'udp', 'local.', 5])
   })
 
-  test('defaults to DNSSD on Android', () => {
+  test('defaults to NSD on Android', () => {
     RN.Platform.OS = 'android'
     const zeroconf = new Zeroconf()
     zeroconf.scanServiceTypes()
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'services._dns-sd', 'udp', 'local.', 'DNSSD'])
-    zeroconf.scanServiceTypes({ implType: ImplType.NSD })
     expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'services._dns-sd', 'udp', 'local.', 'NSD'])
+    zeroconf.scanServiceTypes({ implType: ImplType.DNSSD })
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'services._dns-sd', 'udp', 'local.', 'DNSSD'])
   })
 
   test('reports types, not services', () => {

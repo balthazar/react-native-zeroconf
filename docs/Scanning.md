@@ -117,8 +117,10 @@ Then scan each type you are interested in, with one instance per type or `useZer
 
 | Platform | Support |
 | --- | --- |
-| Android | With `DNSSD`, the default for `scanServiceTypes()`. `NSD` can't list service types on Android 14 and later |
-| iOS | Restricted: browsing `_services._dns-sd._udp` is refused (error `-65555`) even when it is declared in `NSBonjourServices`, it may need Apple's multicast networking entitlement (`com.apple.developer.networking.multicast`). On iOS, apps usually scan a known list of types instead |
+| Android | Yes. With `NSD` (the default), the list leaves out services published by the phone running the app. `DNSSD`, however, includes them |
+| iOS | Requires the multicast entitlement (`com.apple.developer.networking.multicast`), which apps request from Apple. Without it, listing fails with error `-65555`. Apple's [Local Network Privacy FAQ](https://developer.apple.com/forums/thread/663875) lists browsing for service types among the operations that need it. Apps without the entitlement scan a known list of types, declared in `NSBonjourServices` |
+
+On Android, `NsdManager` can't list service types (Android 14 and later read `_services._dns-sd._udp` as a subtype), so with `NSD` the library queries the network itself: it sends the mDNS query from its own socket and repeats it every 10 seconds, a type is removed after 35 seconds without an answer.
 
 ## Common service types
 

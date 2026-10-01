@@ -22,7 +22,7 @@ Errors from the `error` event and from promise rejections are `Error` objects wi
 
 | Domain | Code | Meaning |
 | --- | --- | --- |
-| `DNSSD` | `-65555` | `kDNSServiceErr_NoAuth`. iOS: the service type is missing from `NSBonjourServices` ("not authorized, add the service type to NSBonjourServices in Info.plist"). Also returned by `scanServiceTypes()` on iOS, see [Listing service types](Scanning#listing-service-types) |
+| `DNSSD` | `-65555` | `kDNSServiceErr_NoAuth`. iOS: the service type is missing from `NSBonjourServices` ("not authorized, add the service type to NSBonjourServices in Info.plist"). Also returned by `scanServiceTypes()` on iOS without the multicast entitlement, see [Listing service types](Scanning#listing-service-types) |
 | `DNSSD` | `-65570` | `kDNSServiceErr_PolicyDenied`. iOS: Local Network access denied |
 | `DNSSD` | `-65548` | `kDNSServiceErr_NameConflict`, name already in use |
 | `DNSSD` | `-65540` | `kDNSServiceErr_BadParam` |

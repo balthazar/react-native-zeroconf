@@ -30,8 +30,8 @@ export default function App() {
 }
 
 function Browser() {
-  // Android lists the service types on the network, iOS scans a known list
-  const listed = useServiceTypes({ enabled: Platform.OS === 'android' })
+  // Android lists the service types on the network. iOS needs the multicast entitlement for it, this example scans a known list
+  const listed = useServiceTypes({ implType, enabled: Platform.OS === 'android' })
   const types = Platform.OS === 'android' ? listed.serviceTypes : IOS_TYPES
 
   const [servicesByType, setServicesByType] = useState<Record<string, FoundService[]>>({})

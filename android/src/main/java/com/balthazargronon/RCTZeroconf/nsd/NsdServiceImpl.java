@@ -62,6 +62,8 @@ public class NsdServiceImpl implements Zeroconf {
         NsdManager.DiscoveryListener discoveryListener;
         // Android 14+: services are followed with registerServiceInfoCallback, null before
         @Nullable ServiceInfoCallbacks infoCallbacks;
+        // Service type scans query the network directly, NsdManager can't list types
+        @Nullable ServiceTypesQuery typesQuery;
 
         NsdScan(String scanId) {
             this.scanId = scanId;
@@ -94,7 +96,30 @@ public class NsdServiceImpl implements Zeroconf {
         final NsdScan scan = new NsdScan(scanId);
         final boolean typesOnly = ZeroconfModule.isServiceTypesScan(type, protocol);
 
-        if (Build.VERSION.SDK_INT >= 34 && !typesOnly) {
+        if (typesOnly) {
+            scan.typesQuery = new ServiceTypesQuery(new ServiceTypesQuery.Listener() {
+                @Override
+                public void onTypeFound(String serviceType) {
+                    sendScanEvent(ZeroconfModule.EVENT_FOUND, nameToMap(serviceType), scanId);
+                }
+
+                @Override
+                public void onTypeLost(String serviceType) {
+                    sendScanEvent(ZeroconfModule.EVENT_REMOVE, nameToMap(serviceType), scanId);
+                }
+
+                @Override
+                public void onError(String message) {
+                    zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_EXCEPTION, "Listing service types failed: " + message, null, scanId);
+                }
+            });
+            mScans.put(scanId, scan);
+            scan.typesQuery.start();
+            sendScanEvent(ZeroconfModule.EVENT_START, new WritableNativeMap(), scanId);
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= 34) {
             scan.infoCallbacks = new ServiceInfoCallbacks(nsdManager, mCallbackExecutor, new ServiceInfoCallbacks.Listener() {
                 @Override
                 public void onServiceUpdated(NsdServiceInfo serviceInfo) {
@@ -141,10 +166,6 @@ public class NsdServiceImpl implements Zeroconf {
             @Override
             public void onServiceFound(NsdServiceInfo serviceInfo) {
                 Log.d(TAG, "Service found");
-                if (typesOnly) {
-                    sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceTypeToMap(serviceInfo), scanId);
-                    return;
-                }
                 sendScanEvent(ZeroconfModule.EVENT_FOUND, serviceNameToMap(serviceInfo), scanId);
                 if (scan.infoCallbacks != null) {
                     scan.infoCallbacks.register(serviceInfo);
@@ -156,7 +177,7 @@ public class NsdServiceImpl implements Zeroconf {
             @Override
             public void onServiceLost(NsdServiceInfo serviceInfo) {
                 Log.d(TAG, "Service lost");
-                sendScanEvent(ZeroconfModule.EVENT_REMOVE, typesOnly ? serviceTypeToMap(serviceInfo) : serviceNameToMap(serviceInfo), scanId);
+                sendScanEvent(ZeroconfModule.EVENT_REMOVE, serviceNameToMap(serviceInfo), scanId);
                 if (scan.infoCallbacks != null) {
                     scan.infoCallbacks.unregister(serviceInfo.getServiceName());
                 }
@@ -186,6 +207,12 @@ public class NsdServiceImpl implements Zeroconf {
 
         if (scan.infoCallbacks != null) {
             scan.infoCallbacks.unregisterAll();
+        }
+
+        if (scan.typesQuery != null) {
+            scan.typesQuery.stop();
+            // No discovery listener reports it
+            sendScanEvent(ZeroconfModule.EVENT_STOP, new WritableNativeMap(), scanId);
         }
 
         synchronized (mResolveQueue) {
@@ -227,9 +254,9 @@ public class NsdServiceImpl implements Zeroconf {
         zeroconfModule.sendEvent(getReactApplicationContext(), eventName, body);
     }
 
-    private static WritableMap serviceTypeToMap(NsdServiceInfo serviceInfo) {
+    private static WritableMap nameToMap(String name) {
         WritableMap service = new WritableNativeMap();
-        service.putString(ZeroconfModule.KEY_SERVICE_NAME, ZeroconfModule.serviceTypeFromResult(serviceInfo.getServiceName(), serviceInfo.getServiceType()));
+        service.putString(ZeroconfModule.KEY_SERVICE_NAME, name);
         return service;
     }
 

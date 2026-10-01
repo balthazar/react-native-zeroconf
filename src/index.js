@@ -278,11 +278,11 @@ export default class Zeroconf extends EventEmitter {
   /**
    * Scan for the service types advertised on the network (_http._tcp, _ipp._tcp...), emits typeFound and typeRemove.
    * On iOS, only types declared in NSBonjourServices can then be scanned.
-   * On Android it defaults to DNSSD: NsdManager can't list service types on Android 14 and later.
+   * On iOS it requires the multicast entitlement. On Android with NSD, the list leaves out services published by the phone running the app.
    *
    * scanServiceTypes({ domain, implType })
    */
-  scanServiceTypes({ domain, implType = ImplType.DNSSD } = {}) {
+  scanServiceTypes({ domain, implType } = {}) {
     this._startScan({ ...SERVICE_TYPES, domain, implType }, true)
   }
 

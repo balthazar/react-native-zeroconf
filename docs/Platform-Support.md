@@ -22,7 +22,7 @@
 | Updates re-emitted as `resolved` | | Android 14+ | |
 | `resolveTimeout` | ✅ | | |
 | `checkLocalNetworkAccess()` | ✅ | Resolves `'unknown'` | Resolves `'unknown'` |
-| `scanServiceTypes()` | Restricted, see [Listing service types](Scanning#listing-service-types) | Not on Android 14+ | ✅ |
+| `scanServiceTypes()` | With the multicast entitlement, see [Listing service types](Scanning#listing-service-types) | ✅ Other devices' types | ✅ |
 | Error domain | `DNSSD`, `RNZeroconf` | `NsdManager`, `RNZeroconf` | `DNSSD`, `RNZeroconf` |
 
 ## Architecture

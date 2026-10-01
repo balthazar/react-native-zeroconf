@@ -744,9 +744,9 @@ RCT_EXPORT_METHOD(checkLocalNetworkAccess:(NSString *)type
         return [self errorWithCode:code action:@"Browsing services" serviceName:nil];
     }
     if (code == kDNSServiceErr_NoAuth) {
-        // Declaring _services._dns-sd._udp is not enough on iOS, browsing it is refused without more permissions
+        // Browsing for service types requires the multicast entitlement (Apple's Local Network Privacy FAQ)
         return @{
-            @"message": @"Listing service types failed: not authorized, it needs _services._dns-sd._udp in NSBonjourServices and may need the com.apple.developer.networking.multicast entitlement",
+            @"message": @"Listing service types failed: not authorized, it requires the com.apple.developer.networking.multicast entitlement",
             @"code": @(code),
             @"domain": @"DNSSD",
         };

@@ -65,7 +65,7 @@ function ServicesOfType({ type, protocol }) {
 }
 ```
 
-Listing service types works on Android, and is restricted on iOS: see [Listing service types](Scanning#listing-service-types).
+Listing service types works on Android. On iOS it requires the multicast entitlement, see [Listing service types](Scanning#listing-service-types).
 
 ## Cleanup in React components
 

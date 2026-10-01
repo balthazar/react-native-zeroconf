@@ -49,7 +49,8 @@ export const deviceIcon = (types: string[]): IconName => {
   return known.length ? KNOWN[known[0]].icon : 'devices'
 }
 
-// iOS can't list the types on the network, it scans these instead. They are declared in app.json (NSBonjourServices)
+// Listing the types on the network needs the multicast entitlement on iOS, the example scans these instead.
+// They are declared in app.json (NSBonjourServices)
 export const IOS_TYPES: ServiceType[] = [
   'http',
   'https',

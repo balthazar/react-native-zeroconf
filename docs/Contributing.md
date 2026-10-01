@@ -28,7 +28,7 @@ yarn build     # Babel: src/ -> dist/
 
 ## Example app
 
-A network browser built with Expo: it lists the devices on the network, grouped by host, with their services, addresses and TXT records. On Android it discovers the service types on the network with `useServiceTypes`, on iOS it scans the types declared in `app.json`.
+A network browser built with Expo: it lists the devices on the network, grouped by host, with their services, addresses and TXT records. On Android it discovers the service types on the network with `useServiceTypes`. On iOS that requires the multicast entitlement, so it scans the types declared in `app.json`.
 
 It runs against the library in this checkout (Metro resolves `react-native-zeroconf` to `../src`), so changes to the JavaScript need no build. It needs a development build, not Expo Go:
 
