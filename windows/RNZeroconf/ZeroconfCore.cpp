@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
-#include <cstdlib>
+#include <cwchar>
 #include <cwctype>
 #include <thread>
 
@@ -114,7 +114,7 @@ std::shared_ptr<T> Tracked(void *context) {
 }
 
 bool DebugEnabled() {
-  static const bool enabled = std::getenv("RNZEROCONF_DEBUG") != nullptr;
+  static const bool enabled = GetEnvironmentVariableW(L"RNZEROCONF_DEBUG", nullptr, 0) > 0;
   return enabled;
 }
 

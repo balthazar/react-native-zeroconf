@@ -46,11 +46,19 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the harness
+        run: pip install zeroconf
       - name: Build and run
         shell: cmd
         env:
           RNZEROCONF_DEBUG: '1'
-        run: test\windows\run.cmd
+          RNZEROCONF_PEER: '1'
+        run: |
+          start "" /b python test\windows\peer.py
+          test\windows\run.cmd
 
   android:
     name: Android build
