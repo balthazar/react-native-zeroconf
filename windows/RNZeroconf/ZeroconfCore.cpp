@@ -55,6 +55,11 @@ struct Browse : Operation {
   // Lower-case PTR target -> name reported to JavaScript
   std::map<std::wstring, std::wstring> found;
   std::map<std::wstring, std::shared_ptr<Resolve>> resolves;
+  // Service type scans: the types answered by the network, the others come from this app's publications
+  std::set<std::wstring> networkTypes;
+  // Instances resolved once, and their last TXT and SRV data, to resolve them again when they change
+  std::set<std::wstring> resolved;
+  std::map<std::wstring, std::wstring> recordData;
 };
 
 struct Publication : Operation {
@@ -154,6 +159,19 @@ std::wstring InstanceName(const std::wstring &fullName, const std::wstring &regT
   }
   size_t typeStart = name.find(L"._");
   return typeStart == std::wstring::npos ? name : name.substr(0, typeStart);
+}
+
+// TXT strings or SRV target and port, to notice changes
+std::wstring RecordData(const DNS_RECORD &record) {
+  std::wstring data;
+  if (record.wType == DNS_TYPE_TEXT) {
+    for (DWORD i = 0; i < record.Data.TXT.dwStringCount; i++) {
+      data += std::wstring(record.Data.TXT.pStringArray[i] ? record.Data.TXT.pStringArray[i] : L"") + L'\n';
+    }
+  } else if (record.wType == DNS_TYPE_SRV) {
+    data = std::wstring(record.Data.SRV.pNameTarget ? record.Data.SRV.pNameTarget : L"") + L":" + std::to_wstring(record.Data.SRV.wPort);
+  }
+  return data;
 }
 
 // "_http._tcp.local" -> "_http._tcp"
@@ -381,6 +399,11 @@ void Zeroconf::Scan(
         after.push_back([this, scanId] {
           if (events_.start) events_.start(scanId);
         });
+        if (browse->typesOnly) {
+          for (auto &entry : publications_) {
+            SyncLocalType(entry.second->regType, entry.second->domain, after);
+          }
+        }
       }
     }
   }
@@ -449,6 +472,28 @@ void Zeroconf::OnBrowse(const std::shared_ptr<Browse> &browse, DWORD status, PDN
                    record->wType, record->dwTtl, record->pName ? record->pName : L"",
                    record->wType == DNS_TYPE_PTR && record->Data.PTR.pNameHost ? record->Data.PTR.pNameHost : L"");
         }
+        // Live updates: a resolved service whose TXT or SRV record changes is resolved again
+        if (!browse->typesOnly && (record->wType == DNS_TYPE_TEXT || record->wType == DNS_TYPE_SRV) && record->pName && record->dwTtl > 0) {
+          std::wstring instanceKey = Lower(WithoutTrailingDot(record->pName));
+          std::wstring dataKey = instanceKey + (record->wType == DNS_TYPE_TEXT ? L"#txt" : L"#srv");
+          std::wstring data = RecordData(*record);
+          auto previous = browse->recordData.find(dataKey);
+          bool changed = previous != browse->recordData.end() && previous->second != data;
+          browse->recordData[dataKey] = data;
+          auto foundInstance = browse->found.find(instanceKey);
+          if (changed && foundInstance != browse->found.end() && browse->resolved.count(instanceKey) && !browse->resolves.count(instanceKey)) {
+            auto resolve = std::make_shared<Resolve>(this);
+            resolve->browse = browse;
+            resolve->scanId = browse->scanId;
+            resolve->name = foundInstance->second;
+            resolve->key = instanceKey;
+            resolve->queryName = WithoutTrailingDot(record->pName);
+            resolve->interfaceIndex = browse->interfaceIndex;
+            browse->resolves[instanceKey] = resolve;
+            StartResolve(resolve, after);
+          }
+          continue;
+        }
         if (record->wType != DNS_TYPE_PTR || !record->Data.PTR.pNameHost) {
           continue;
         }
@@ -459,6 +504,13 @@ void Zeroconf::OnBrowse(const std::shared_ptr<Browse> &browse, DWORD status, PDN
 
         // A zero TTL is a goodbye: the service left
         if (record->dwTtl == 0) {
+          if (browse->typesOnly) {
+            browse->networkTypes.erase(key);
+            // Still listed while this app publishes it
+            if (LocallyPublished(key)) {
+              continue;
+            }
+          }
           if (found != browse->found.end()) {
             std::wstring name = found->second;
             browse->found.erase(found);
@@ -467,11 +519,15 @@ void Zeroconf::OnBrowse(const std::shared_ptr<Browse> &browse, DWORD status, PDN
               CancelResolve(resolve->second, after);
               browse->resolves.erase(resolve);
             }
+            browse->resolved.erase(key);
             after.push_back([this, scanId, name] {
               if (events_.remove) events_.remove(scanId, name);
             });
           }
           continue;
+        }
+        if (browse->typesOnly) {
+          browse->networkTypes.insert(key);
         }
         if (found != browse->found.end()) {
           continue;
@@ -605,6 +661,9 @@ void Zeroconf::OnResolve(const std::shared_ptr<Resolve> &resolve, DWORD status, 
         return;
       }
       browse->resolves.erase(entry);
+      if (resolved) {
+        browse->resolved.insert(resolve->key);
+      }
       std::string scanId = resolve->scanId;
       after.push_back([this, resolved, service, error, scanId] {
         if (resolved) {
@@ -807,6 +866,7 @@ void Zeroconf::OnRegister(const std::shared_ptr<Publication> &publication, DWORD
           publications_[registeredName] = publication;
         }
         publication->name = registeredName;
+        SyncLocalType(publication->regType, publication->domain, after);
         Service service = PublishedService(*publication);
         auto onRegistered = publication->onRegistered;
         bool announce = publication->announce;
@@ -820,6 +880,10 @@ void Zeroconf::OnRegister(const std::shared_ptr<Publication> &publication, DWORD
     } else if (publication->state == Publication::State::Deregistering) {
       publication->state = Publication::State::Done;
       Untrack(publication.get());
+      // An update publishes it again right after, keep the type listed
+      if (publication->announce) {
+        SyncLocalType(publication->regType, publication->domain, after);
+      }
       Service service = PublishedService(*publication);
       auto onDeregistered = publication->onDeregistered;
       bool announce = publication->announce;
@@ -831,6 +895,41 @@ void Zeroconf::OnRegister(const std::shared_ptr<Publication> &publication, DWORD
     }
   }
   Run(after);
+}
+
+bool Zeroconf::LocallyPublished(const std::wstring &typeKey) const {
+  for (auto &entry : publications_) {
+    auto &publication = entry.second;
+    if (publication->state == Publication::State::Registered && Lower(publication->regType + L"." + publication->domain) == typeKey) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Zeroconf::SyncLocalType(const std::wstring &regType, const std::wstring &domain, After &after) {
+  std::wstring key = Lower(regType + L"." + domain);
+  bool published = LocallyPublished(key);
+  for (auto &entry : browses_) {
+    auto browse = entry.second;
+    if (!browse->typesOnly || Lower(browse->domain) != Lower(domain)) {
+      continue;
+    }
+    std::string scanId = browse->scanId;
+    auto listed = browse->found.find(key);
+    if (published && listed == browse->found.end()) {
+      browse->found[key] = regType;
+      after.push_back([this, scanId, regType] {
+        if (events_.found) events_.found(scanId, regType);
+      });
+    } else if (!published && listed != browse->found.end() && !browse->networkTypes.count(key)) {
+      std::wstring name = listed->second;
+      browse->found.erase(listed);
+      after.push_back([this, scanId, name] {
+        if (events_.remove) events_.remove(scanId, name);
+      });
+    }
+  }
 }
 
 Service Zeroconf::PublishedService(const Publication &publication) const {

@@ -220,7 +220,8 @@ void RNZeroconf::resolveService(
 }
 
 void RNZeroconf::checkLocalNetworkAccess(React::JSValue, React::JSValue, React::ReactPromise<React::JSValue> promise) noexcept {
-  promise.Resolve(React::JSValue("unknown"));
+  // Nothing to grant on Windows, as on Android before Android 17
+  promise.Resolve(React::JSValue("granted"));
 }
 
 } // namespace winrt::RNZeroconf

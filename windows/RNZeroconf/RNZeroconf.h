@@ -56,7 +56,7 @@ struct RNZeroconf
       React::JSValue options,
       React::ReactPromise<React::JSValue> promise) noexcept;
 
-  // Windows has no Local Network permission to check
+  // Windows has no Local Network permission: resolves "granted"
   REACT_METHOD(checkLocalNetworkAccess)
   void checkLocalNetworkAccess(React::JSValue type, React::JSValue timeout, React::ReactPromise<React::JSValue> promise) noexcept;
 

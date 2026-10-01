@@ -1,0 +1,104 @@
+name: Windows
+
+# The Windows jobs are slow (the app build takes about 15 minutes), they only run when something
+# that affects Windows changes. Run them by hand from the Actions tab before a release.
+on:
+  push:
+    branches: [master, windows]
+    paths:
+      - 'windows/**'
+      - 'test/windows/**'
+      - 'src/**'
+      - 'index.d.ts'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/windows.yml'
+  pull_request:
+    paths:
+      - 'windows/**'
+      - 'test/windows/**'
+      - 'src/**'
+      - 'index.d.ts'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-native:
+    name: Windows implementation (harness)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the harness
+        run: pip install zeroconf
+      - name: Build and run
+        shell: cmd
+        env:
+          RNZEROCONF_DEBUG: '1'
+          RNZEROCONF_PEER: '1'
+        run: |
+          start "" /b python test\windows\peer.py
+          test\windows\run.cmd
+
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: microsoft/setup-msbuild@v2
+      # react-native-windows targets the Windows 11 SDK 10.0.22621, not installed on every runner image
+      - name: Install the Windows SDK 10.0.22621
+        shell: pwsh
+        run: |
+          $sdks = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+          Get-ChildItem $sdks | Select-Object -ExpandProperty Name
+          if (-not (Test-Path "$sdks\10.0.22621.0")) {
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+            $vs = & "$installer\vswhere.exe" -latest -property installationPath
+            $arguments = @('modify', '--installPath', "`"$vs`"", '--add', 'Microsoft.VisualStudio.Component.Windows11SDK.22621', '--quiet', '--norestart', '--nocache')
+            $process = Start-Process -FilePath "$installer\vs_installer.exe" -ArgumentList $arguments -Wait -PassThru
+            Write-Host "vs_installer exit code: $($process.ExitCode)"
+            Get-ChildItem $sdks | Select-Object -ExpandProperty Name
+          }
+      - name: Pack the library
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Create a React Native Windows app with the library
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx --yes @react-native-community/cli@20 init ZeroconfWindows --version 0.84.1 --skip-install --skip-git-init --pm npm
+          cd ZeroconfWindows
+          npm install
+          npm install react-native-windows@^0.84.0
+          npx @react-native-community/cli init-windows --template cpp-app --overwrite --logging
+          npm install "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
+          cp "$GITHUB_WORKSPACE/test/windows/App.tsx" App.tsx
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the self-test
+        run: pip install zeroconf
+      # Builds, installs and launches the app, which runs test/windows/App.tsx against the peer
+      # and reports through a _zcresult._tcp service that check-app.py waits for
+      - name: Build, run the self-test app and check its result
+        working-directory: ${{ runner.temp }}/ZeroconfWindows
+        run: |
+          python "$GITHUB_WORKSPACE/test/windows/peer.py" &
+          npx @react-native-community/cli run-windows --release --no-packager --arch x64 --logging
+          python "$GITHUB_WORKSPACE/test/windows/check-app.py"

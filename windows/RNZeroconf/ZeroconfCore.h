@@ -26,6 +26,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -140,6 +141,9 @@ class Zeroconf {
       ErrorCallback reject);
   void UnpublishWith(const std::wstring &name, bool announce, ServiceCallback resolve, ErrorCallback reject);
   Service PublishedService(const Publication &publication) const;
+  // Service type scans also list the types this app publishes, the network doesn't answer them back
+  void SyncLocalType(const std::wstring &regType, const std::wstring &domain, After &after);
+  bool LocallyPublished(const std::wstring &typeKey) const;
   bool InterfaceIndex(const std::wstring &networkInterface, ULONG &index, Error &error) const;
 
   Events events_;

@@ -2,6 +2,7 @@
 // the Windows DNS-SD stack. Run with test/windows/run.cmd
 #include "ZeroconfCore.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <set>
@@ -223,8 +224,8 @@ int main() {
     WaitFor([&] { return typeFound() && (!withPeer || peerTypeFound()); }, 15);
     std::vector<std::wstring> types;
     for (auto &event : Named("found", "T")) types.push_back(event.subject);
-    // The type of a service published by this machine may not be answered, as on Android
-    printf("info own type _zcwin._tcp listed: %s (types: %s)\n", typeFound() ? "yes" : "no", Join(types).c_str());
+    // The network doesn't answer the types of this machine's services, the library adds its own
+    Check(typeFound(), "service types scan lists the type this app publishes (" + Join(types) + ")");
     if (withPeer) {
       Check(peerTypeFound(), "service types scan finds the peer's _zcpeer._tcp");
     }
@@ -240,6 +241,33 @@ int main() {
       Check(!peer.empty() && peer[0].subject == L"zc-peer" && peer[0].service.port == 45710 &&
                 TxtText(peer[0].service.txt).find("from=python") != std::string::npos,
             "resolves a service published by another stack (" + (peer.empty() ? std::string("nothing") : Text(peer[0].service.host) + " " + std::to_string(peer[0].service.port) + " " + TxtText(peer[0].service.txt)) + ")");
+
+      // Subtypes: zc-peer-sub is only registered under the _zcsub subtype
+      zeroconf.Scan("S", L"zcpeer", L"tcp", L"local.", L"zcsub", L"");
+      auto subResolved = [] { return !Named("resolved", "S").empty(); };
+      WaitFor(subResolved, 15);
+      Sleep(1000);
+      std::vector<std::wstring> subFound, plainFound;
+      for (auto &event : Named("found", "S")) subFound.push_back(event.subject);
+      for (auto &event : Named("found", "P")) plainFound.push_back(event.subject);
+      Check(subFound.size() == 1 && subFound[0] == L"zc-peer-sub", "subtype scan finds only zc-peer-sub (" + Join(subFound) + ")");
+      Check(std::find(plainFound.begin(), plainFound.end(), L"zc-peer-sub") == plainFound.end(), "plain scan doesn't find the subtype-only service (" + Join(plainFound) + ")");
+      zeroconf.Stop("S");
+
+      // Live updates: the peer changes its TXT record, resolved is emitted again
+      wchar_t temp[MAX_PATH] = {};
+      GetTempPathW(MAX_PATH, temp);
+      std::wstring trigger = std::wstring(temp) + L"rnzeroconf-peer-update";
+      HANDLE file = CreateFileW(trigger.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+      if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+      auto updatedPeer = [] {
+        for (auto &event : Named("resolved", "P")) {
+          if (TxtText(event.service.txt).find("v=2") != std::string::npos) return true;
+        }
+        return false;
+      };
+      WaitFor(updatedPeer, 20);
+      Check(updatedPeer(), "resolved again when the peer's TXT record changes (" + std::to_string(Named("resolved", "P").size()) + " resolved events)");
       zeroconf.Stop("P");
     }
 
