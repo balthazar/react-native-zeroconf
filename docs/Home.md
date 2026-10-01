@@ -1,6 +1,6 @@
 # react-native-zeroconf
 
-Discover and publish network services on the local network with Zeroconf (Bonjour, Avahi, mDNS) from React Native, on iOS, macOS, tvOS and Android.
+Discover and publish network services on the local network with Zeroconf (Bonjour, Avahi, mDNS) from React Native, on iOS, macOS, tvOS, Android and Windows.
 
 ```javascript
 import Zeroconf from 'react-native-zeroconf'

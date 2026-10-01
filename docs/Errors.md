@@ -16,6 +16,7 @@ Errors from the `error` event and from promise rejections are `Error` objects wi
 | `'DNSSD'` | iOS | `DNSServiceErrorType` from Apple's dns_sd API (negative number) |
 | `'DNSSD'` | Android (`implType: 'DNSSD'`) | `DNSServiceErrorType` from the embedded mDNSResponder |
 | `'NsdManager'` | Android (`implType: 'NSD'`) | `NsdManager` failure code |
+| `'Windows'` | Windows | Win32 or `DNS_STATUS` code from the Windows DNS-SD functions, `message` has the system description |
 | `'RNZeroconf'` | all | String code from the library |
 
 ## Common codes
@@ -39,7 +40,7 @@ Errors from the `error` event and from promise rejections are `Error` objects wi
 | `RNZeroconf` | `'NOT_PUBLISHED'` | `unpublishService()` with a name that is not published |
 | `RNZeroconf` | `'TIMEOUT'` | iOS: a service could not be resolved within `resolveTimeout` (after one retry). All platforms: `resolveService()` got no answer within `timeout` |
 | `RNZeroconf` | `'UNKNOWN_INTERFACE'` | The `networkInterface` passed doesn't exist |
-| `RNZeroconf` | `'UNSUPPORTED'` | Android `NSD` before Android 13: `networkInterface` is not supported, use `DNSSD` |
+| `RNZeroconf` | `'UNSUPPORTED'` | Android `NSD` before Android 13: `networkInterface` is not supported, use `DNSSD`. Windows: publishing with `subtypes` |
 | `RNZeroconf` | `'TXT_ENTRY_TOO_LONG'` | iOS: a TXT entry over 255 bytes was left out |
 | `RNZeroconf` | `'MISSING_BONJOUR_SERVICES'` | iOS: `checkLocalNetworkAccess()` has no type to test with |
 

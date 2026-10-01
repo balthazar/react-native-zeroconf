@@ -9,6 +9,7 @@ Bug reports and pull requests are welcome on [GitHub](https://github.com/balthaz
 | `src/index.js` | JavaScript API (compiled to `dist/` with Babel) |
 | `index.d.ts` | TypeScript definitions, keep in sync with `src/index.js` |
 | `ios/RNZeroconf/` | iOS, macOS and tvOS module (Objective-C, dns_sd) |
+| `windows/RNZeroconf/` | Windows module (C++): `ZeroconfCore` on `windns.h`, `RNZeroconf` bridges it to React Native |
 | `react-native-zeroconf.podspec` | CocoaPods spec |
 | `android/src/main/java/com/balthazargronon/RCTZeroconf/` | Android module (`nsd/` and `dnssd/` implementations) |
 | `android/src/main/java/com/github/druk/dnssd/` | Bundled DNS-SD Java API, from RxDNSSD |
@@ -55,9 +56,10 @@ cd example/android
 yarn test          # Jest: the JavaScript API against a mocked native module
 yarn typecheck     # index.d.ts against the samples in test/types
 test/ios/run.sh    # macOS: the iOS implementation with AddressSanitizer, against the local mDNSResponder
+test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/ZeroconfCore.cpp) with Visual Studio's C++ tools
 ```
 
-CI runs these on every pull request, and builds the example app for Android and iOS against the packed library.
+CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. On Windows it also runs a second mDNS stack (`test/windows/peer.py`, python-zeroconf) for the harness to discover, and builds and launches a react-native-windows app running `test/windows/App.tsx` against it.
 
 For changes to native code, also test on devices:
 

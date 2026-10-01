@@ -2,7 +2,7 @@
   <img src=".github/banner.png" alt="react-native-zeroconf: Bonjour / mDNS discovery and publishing for React Native, on iOS, Android, macOS, tvOS and Expo" width="100%">
 </p>
 
-Find the services other devices advertise on the local network (printers, speakers, cameras, your own servers) and advertise your own, on iOS, Android, macOS and tvOS.
+Find the services other devices advertise on the local network (printers, speakers, cameras, your own servers) and advertise your own, on iOS, Android, macOS, tvOS and Windows.
 
 **[Read the documentation](https://zeroconf.balthazar.dev)**
 

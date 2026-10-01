@@ -28,6 +28,19 @@ cd macos && pod install
 
 Nothing to do: Gradle picks the module up through autolinking, and the required permissions are merged from the library manifest (see [Permissions and Setup](Permissions-and-Setup#android)). Rebuild the app with `yarn android`.
 
+### Windows (react-native-windows)
+
+The library includes a Windows module (C++, using the DNS-SD functions of Windows). Add Windows to your app with react-native-windows as usual, then install the library: autolinking picks up its `windows` project.
+
+```bash
+npm install react-native-windows
+npx @react-native-community/cli init-windows --template cpp-app --overwrite
+npm install react-native-zeroconf
+npx @react-native-community/cli run-windows
+```
+
+> Tested in CI with react-native-windows 0.84 (New Architecture). Building needs the Windows SDK react-native-windows asks for (10.0.22621), see the [react-native-windows requirements](https://microsoft.github.io/react-native-windows/docs/rnw-dependencies).
+
 ## Expo
 
 The library works in Expo **development builds**. It does **not** work in **Expo Go**, which only contains the native modules bundled by Expo.
@@ -75,6 +88,7 @@ import Zeroconf, { ImplType, Service, ZeroconfError } from 'react-native-zerocon
 | macOS | 10.15 |
 | tvOS | 13.4 |
 | Android | API 21 (Android 5.0) |
+| Windows | Windows 10 with react-native-windows (tested with 0.84) |
 
 See [Platform Support](Platform-Support) for feature differences.
 
