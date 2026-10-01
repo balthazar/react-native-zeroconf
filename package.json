@@ -57,6 +57,11 @@
     "!android/src/main/jni/mdnsresponder/mDNSShared/mDNSResponder.8",
     "!android/build",
     "!android/.gradle",
+    "windows",
+    "!windows/**/*.user",
+    "!windows/**/obj",
+    "!windows/**/bin",
+    "!windows/**/Generated Files",
     "ios",
     "react-native-zeroconf.podspec",
     "NOTICE"

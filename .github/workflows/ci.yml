@@ -60,6 +60,36 @@ jobs:
           start "" /b python test\windows\peer.py
           test\windows\run.cmd
 
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: microsoft/setup-msbuild@v2
+      - name: Pack the library
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Create a React Native Windows app with the library
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx --yes @react-native-community/cli@20 init ZeroconfWindows --version 0.84.1 --skip-install --skip-git-init --pm npm
+          cd ZeroconfWindows
+          npm install
+          npm install react-native-windows@^0.84.0
+          npx @react-native-community/cli init-windows --template cpp-app --overwrite --logging
+          npm install "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
+      - name: Build
+        working-directory: ${{ runner.temp }}/ZeroconfWindows
+        run: npx @react-native-community/cli run-windows --no-launch --no-packager --no-deploy --arch x64 --logging
+
   android:
     name: Android build
     runs-on: ubuntu-latest
