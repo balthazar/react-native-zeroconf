@@ -149,7 +149,7 @@ export interface ServiceType {
 export interface ServiceTypesScanOptions {
   /** Defaults to `local.` */
   domain?: string
-  /** Android only, defaults to `ImplType.NSD`. With `NSD`, the list leaves out services published by the phone running the app, `DNSSD` includes them */
+  /** Android only, defaults to `ImplType.NSD`. With `NSD`, services other apps publish on the same phone are left out (this app's own are included), `DNSSD` includes them */
   implType?: ImplType
   /** Network interface to list the types on, all of them by default */
   networkInterface?: string

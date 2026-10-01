@@ -20,17 +20,17 @@
 | TXT order preserved when publishing | ✅ | System dependent | ✅ | ✅ |
 | IPv4 and IPv6 addresses | ✅ | All on Android 14+, one before | ✅ | One of each |
 | mDNS host name in `host` | ✅ | Android 16+ | ✅ | ✅ |
-| Updates re-emitted as `resolved` | ✅ | Android 14+ | | |
+| Updates re-emitted as `resolved` | ✅ | Android 14+ | | ✅ TXT, host and port |
 | `resolveTimeout` | ✅ | | | |
-| `checkLocalNetworkAccess()` | ✅ | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | Resolves `'unknown'` |
+| `checkLocalNetworkAccess()` | ✅ | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | Resolves `'granted'` (nothing to grant) |
 | Subtypes (`subtype`, `subtypes`) | ✅ | ✅ | ✅ | Scanning only, publishing rejects `'UNSUPPORTED'` |
 | `networkInterface` | ✅ | Android 13+ | ✅ | ✅ Adapter name (`'Wi-Fi'`) or interface index |
 | `updateService()` | ✅ In place | ✅ Publishes again | ✅ In place | ✅ Publishes again |
 | `resolveService()` | ✅ | ✅ | ✅ | ✅ |
-| `scanServiceTypes()` | With the multicast entitlement, see [Listing service types](Scanning#listing-service-types) | ✅ Other devices' types | ✅ | ✅ Other devices' types |
+| `scanServiceTypes()` | With the multicast entitlement, see [Listing service types](Scanning#listing-service-types) | ✅ Except other apps' on the same phone | ✅ | ✅ Except other apps' on the same computer |
 | Error domain | `DNSSD`, `RNZeroconf` | `NsdManager`, `RNZeroconf` | `DNSSD`, `RNZeroconf` | `Windows`, `RNZeroconf` |
 
-> **Windows** is tested in CI: the native code against a second mDNS implementation, and a react-native-windows app running the JavaScript API. Scanning a subtype on Windows is implemented but not covered by these tests yet.
+> **Windows** is tested in CI: the native code against a second mDNS implementation (subtypes, live updates and service types included), and a react-native-windows app running the JavaScript API.
 
 ## Architecture
 

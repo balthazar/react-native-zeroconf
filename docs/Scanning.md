@@ -109,6 +109,7 @@ A resolved service is emitted as `resolved` again when its addresses or TXT reco
 | iOS | Yes |
 | Android `NSD` | Android 14+ |
 | Android `DNSSD` | No, once per address found |
+| Windows | Yes, when the TXT record or the host and port change |
 
 > On Android with `NSD`, `host` is the mDNS host name only on Android 16+. Earlier versions usually give the IP address in `host`. Use `implType: 'DNSSD'` if you need the host name there. See [Android Implementations](Android-Implementations).
 ## Subtypes
@@ -171,7 +172,8 @@ Then scan each type you are interested in, with one instance per type or `useZer
 
 | Platform | Support |
 | --- | --- |
-| Android | Yes. With `NSD` (the default), the list leaves out services published by the phone running the app. `DNSSD`, however, includes them |
+| Android | Yes. With `NSD` (the default), services that other apps publish on the same phone are left out, this app's own are included. `DNSSD` includes them all |
+| Windows | Yes. Services that other apps publish on the same computer are left out, this app's own are included |
 | iOS | Requires the multicast entitlement (`com.apple.developer.networking.multicast`), which apps request from Apple. Without it, listing fails with error `-65555`. Apple's [Local Network Privacy FAQ](https://developer.apple.com/forums/thread/663875) lists browsing for service types among the operations that need it. Apps without the entitlement scan a known list of types, declared in `NSBonjourServices` |
 
 On Android, `NsdManager` can't list service types (Android 14 and later read `_services._dns-sd._udp` as a subtype), so with `NSD` the library queries the network itself: it sends the mDNS query from its own socket and repeats it every 10 seconds, a type is removed after 35 seconds without an answer.

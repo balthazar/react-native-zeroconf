@@ -69,7 +69,7 @@ Starts listing the service types advertised on the network (browsing `_services.
 | Option | Type | Default | Platform | Description |
 | --- | --- | --- | --- | --- |
 | `domain` | `string` | `'local.'` | all | Domain to browse |
-| `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | With `NSD`, the list leaves out services published by the phone running the app. `DNSSD`, however, includes them |
+| `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | With `NSD`, services that other apps publish on the same phone are left out, this app's own are included. `DNSSD` includes them all |
 | `networkInterface` | `string` | all interfaces | all | Interface to list the types on |
 
 ### `getServiceTypes()`
@@ -208,7 +208,7 @@ On Android, `NSD` and `DNSSD` scans can run concurrently. On iOS, every scanned 
 | `start` | none | The scan started |
 | `stop` | none | The scan stopped |
 | `found` | `name: string` | A service appeared (not resolved yet) |
-| `resolved` | `Service` | A service was resolved. It fires again when its addresses or TXT record change, on iOS and on Android 14+ with `NSD` (see [Updates](Scanning#updates)) |
+| `resolved` | `Service` | A service was resolved. It fires again when its addresses or TXT record change, on iOS, Windows and Android 14+ with `NSD` (see [Updates](Scanning#updates)) |
 | `remove` | `name: string` | A service left the network |
 | `update` | none | The list returned by `getServices()` or `getServiceTypes()` changed |
 | `typeFound` | `ServiceType` | A service type appeared, during `scanServiceTypes()` |
