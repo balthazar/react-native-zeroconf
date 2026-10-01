@@ -10,6 +10,7 @@
 #import "RNNetServiceSerializer.h"
 #import <Network/Network.h>
 #import <dns_sd.h>
+#import <net/if.h>
 
 // dns_sd callbacks are delivered on the main queue, and refs must be deallocated on it
 #define RNZ_QUEUE dispatch_get_main_queue()
@@ -18,10 +19,19 @@
 
 @class RNZScan;
 
-// A found service being resolved: DNSServiceResolve for host, port and TXT, then DNSServiceGetAddrInfo for addresses
+// A found service being resolved: DNSServiceResolve for host, port and TXT, then DNSServiceGetAddrInfo for addresses.
+// Once resolved, the address query and a TXT record query stay open, and changes are emitted again.
+// Without a scan, it is a single resolveService() call settling a promise.
 @interface RNZResolve : NSObject
 @property (nonatomic, weak) RNZeroconf *module;
 @property (nonatomic, weak) RNZScan *scan;
+@property (nonatomic, copy) RCTPromiseResolveBlock promiseResolve;
+@property (nonatomic, copy) RCTPromiseRejectBlock promiseReject;
+@property (nonatomic, assign) uint32_t interfaceIndex;
+@property (nonatomic, assign) NSTimeInterval timeoutSeconds;
+@property (nonatomic, assign) DNSServiceRef txtRef;
+@property (nonatomic, assign) BOOL emitted;
+@property (nonatomic, strong) NSDictionary *lastEmitted;
 @property (nonatomic, copy) NSString *name;
 @property (nonatomic, copy) NSString *regtype;
 @property (nonatomic, copy) NSString *domain;
@@ -46,6 +56,7 @@
 @property (nonatomic, copy) NSString *scanId;
 @property (nonatomic, assign) DNSServiceRef browseRef;
 @property (nonatomic, assign) NSTimeInterval resolveTimeoutSeconds;
+@property (nonatomic, assign) uint32_t interfaceIndex;
 // Services are reported once per network interface, count them so found/remove are emitted once
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *foundInterfaces;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, RNZResolve *> *resolvingServices;
@@ -79,10 +90,13 @@
 @property (nonatomic, strong, readonly) NSMutableDictionary<NSString *, RNZPublication *> *publishedServices;
 // Waiting for the register callback
 @property (nonatomic, strong, readonly) NSMutableSet<RNZPublication *> *pendingPublications;
+// resolveService() calls in flight
+@property (nonatomic, strong, readonly) NSMutableSet<RNZResolve *> *singleResolves;
 
 - (void) handleBrowse:(RNZScan *)scan flags:(DNSServiceFlags)flags error:(DNSServiceErrorType)error name:(const char *)name regtype:(const char *)regtype domain:(const char *)domain;
 - (void) handleResolve:(RNZResolve *)resolve error:(DNSServiceErrorType)error host:(const char *)host port:(uint16_t)port txtLength:(uint16_t)txtLength txt:(const unsigned char *)txt;
 - (void) handleAddress:(RNZResolve *)resolve flags:(DNSServiceFlags)flags error:(DNSServiceErrorType)error address:(const struct sockaddr *)address;
+- (void) handleTXT:(RNZResolve *)resolve flags:(DNSServiceFlags)flags error:(DNSServiceErrorType)error length:(uint16_t)length data:(const void *)data;
 - (void) handleRegister:(RNZPublication *)publication flags:(DNSServiceFlags)flags error:(DNSServiceErrorType)error name:(const char *)name;
 
 @end
@@ -109,6 +123,14 @@ static void RNZAddressReply(DNSServiceRef ref, DNSServiceFlags flags, uint32_t i
 {
     RNZResolve *resolve = (__bridge RNZResolve *)context;
     [resolve.module handleAddress:resolve flags:flags error:error address:address];
+}
+
+static void RNZTXTReply(DNSServiceRef ref, DNSServiceFlags flags, uint32_t interfaceIndex, DNSServiceErrorType error,
+                        const char *fullName, uint16_t rrtype, uint16_t rrclass, uint16_t rdlen, const void *rdata,
+                        uint32_t ttl, void *context)
+{
+    RNZResolve *resolve = (__bridge RNZResolve *)context;
+    [resolve.module handleTXT:resolve flags:flags error:error length:rdlen data:rdata];
 }
 
 static void RNZRegisterReply(DNSServiceRef ref, DNSServiceFlags flags, DNSServiceErrorType error,
@@ -155,6 +177,7 @@ RCT_EXPORT_MODULE()
         _scans = [[NSMutableDictionary alloc] init];
         _publishedServices = [[NSMutableDictionary alloc] init];
         _pendingPublications = [[NSMutableSet alloc] init];
+        _singleResolves = [[NSMutableSet alloc] init];
     }
 
     return self;
@@ -162,25 +185,41 @@ RCT_EXPORT_MODULE()
 
 #pragma mark - Scan
 
+// options: resolveTimeout (seconds), subtype, networkInterface
 RCT_EXPORT_METHOD(scan:(NSString *)scanId
                   type:(NSString *)type
                   protocol:(NSString *)protocol
                   domain:(NSString *)domain
-                  resolveTimeout:(double)resolveTimeout)
+                  options:(NSDictionary *)options)
 {
     [self stopScan:scanId];
 
     RNZScan *scan = [[RNZScan alloc] init];
     scan.module = self;
     scan.scanId = scanId;
+    double resolveTimeout = [options[@"resolveTimeout"] respondsToSelector:@selector(doubleValue)] ? [options[@"resolveTimeout"] doubleValue] : 0;
     scan.resolveTimeoutSeconds = resolveTimeout > 0 ? resolveTimeout : 5.0;
     scan.foundInterfaces = [[NSMutableDictionary alloc] init];
     scan.resolvingServices = [[NSMutableDictionary alloc] init];
 
+    uint32_t interfaceIndex = kDNSServiceInterfaceIndexAny;
+    NSDictionary *interfaceError = [self interfaceIndexForName:options[@"networkInterface"] index:&interfaceIndex];
+    if (interfaceError) {
+        [self sendError:interfaceError scan:scan];
+        return;
+    }
+    scan.interfaceIndex = interfaceIndex;
+
     NSString *regtype = [NSString stringWithFormat:@"_%@._%@", type, protocol];
     scan.typesOnly = [regtype isEqualToString:@"_services._dns-sd._udp"];
+    // "_ipp._tcp,_printer" browses the _printer subtype
+    NSString *browseType = regtype;
+    NSString *subtype = [RNZeroconf subtypeLabel:options[@"subtype"]];
+    if (subtype) {
+        browseType = [NSString stringWithFormat:@"%@,%@", regtype, subtype];
+    }
     DNSServiceRef ref = NULL;
-    DNSServiceErrorType error = DNSServiceBrowse(&ref, 0, kDNSServiceInterfaceIndexAny, regtype.UTF8String,
+    DNSServiceErrorType error = DNSServiceBrowse(&ref, 0, interfaceIndex, browseType.UTF8String,
                                                  domain.length > 0 ? domain.UTF8String : NULL,
                                                  RNZBrowseReply, (__bridge void *)scan);
     if (error != kDNSServiceErr_NoError) {
@@ -290,6 +329,8 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     resolve.name = name;
     resolve.regtype = regtype;
     resolve.domain = domain;
+    resolve.interfaceIndex = scan.interfaceIndex;
+    resolve.timeoutSeconds = scan.resolveTimeoutSeconds;
     scan.resolvingServices[name] = resolve;
     [self resolve:resolve];
 }
@@ -300,7 +341,7 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     resolve.addresses = [[NSMutableOrderedSet alloc] init];
 
     DNSServiceRef ref = NULL;
-    DNSServiceErrorType error = DNSServiceResolve(&ref, 0, kDNSServiceInterfaceIndexAny, resolve.name.UTF8String,
+    DNSServiceErrorType error = DNSServiceResolve(&ref, 0, resolve.interfaceIndex, resolve.name.UTF8String,
                                                   resolve.regtype.UTF8String, resolve.domain.UTF8String,
                                                   RNZResolveReply, (__bridge void *)resolve);
     if (error != kDNSServiceErr_NoError) {
@@ -315,12 +356,12 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     resolve.timeoutBlock = dispatch_block_create(0, ^{
         [weakSelf resolveTimedOut:weakResolve];
     });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(resolve.scan.resolveTimeoutSeconds * NSEC_PER_SEC)), RNZ_QUEUE, resolve.timeoutBlock);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(resolve.timeoutSeconds * NSEC_PER_SEC)), RNZ_QUEUE, resolve.timeoutBlock);
 }
 
 - (void) resolveTimedOut:(RNZResolve *)resolve
 {
-    if (!resolve || resolve.finished || resolve.scan.resolvingServices[resolve.name] != resolve) {
+    if (!resolve || resolve.finished || resolve.emitted || ![self isActiveResolve:resolve]) {
         return;
     }
     [self cancelResolve:resolve];
@@ -359,7 +400,7 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     resolve.txt = [RNNetServiceSerializer dictionaryFromTXTRecord:txt length:txtLength];
 
     DNSServiceRef ref = NULL;
-    DNSServiceErrorType addressError = DNSServiceGetAddrInfo(&ref, 0, kDNSServiceInterfaceIndexAny,
+    DNSServiceErrorType addressError = DNSServiceGetAddrInfo(&ref, 0, resolve.interfaceIndex,
                                                              kDNSServiceProtocol_IPv4 | kDNSServiceProtocol_IPv6,
                                                              host, RNZAddressReply, (__bridge void *)resolve);
     if (addressError != kDNSServiceErr_NoError) {
@@ -387,50 +428,152 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     NSString *string = [RNNetServiceSerializer stringFromAddress:address];
     if (string && (flags & kDNSServiceFlagsAdd)) {
         [resolve.addresses addObject:string];
+    } else if (string) {
+        [resolve.addresses removeObject:string];
     }
     if (flags & kDNSServiceFlagsMoreComing) {
         return;
     }
+    [self scheduleEmit:resolve];
+}
 
-    // IPv4 and IPv6 answers can arrive in separate batches, wait briefly before emitting
+// Follows the TXT record of a resolved service
+- (void) watchTXT:(RNZResolve *)resolve
+{
+    char fullName[kDNSServiceMaxDomainName];
+    if (DNSServiceConstructFullName(fullName, resolve.name.UTF8String, resolve.regtype.UTF8String, resolve.domain.UTF8String) != kDNSServiceErr_NoError) {
+        return;
+    }
+    DNSServiceRef ref = NULL;
+    if (DNSServiceQueryRecord(&ref, 0, resolve.interfaceIndex, fullName, kDNSServiceType_TXT, kDNSServiceClass_IN,
+                              RNZTXTReply, (__bridge void *)resolve) != kDNSServiceErr_NoError) {
+        return;
+    }
+    DNSServiceSetDispatchQueue(ref, RNZ_QUEUE);
+    resolve.txtRef = ref;
+}
+
+- (void) handleTXT:(RNZResolve *)resolve flags:(DNSServiceFlags)flags error:(DNSServiceErrorType)error length:(uint16_t)length data:(const void *)data
+{
+    if (resolve.finished || resolve.txtRef == NULL || error != kDNSServiceErr_NoError || !(flags & kDNSServiceFlagsAdd)) {
+        return;
+    }
+    resolve.txt = [RNNetServiceSerializer dictionaryFromTXTRecord:data length:length];
+    [self scheduleEmit:resolve];
+}
+
+// IPv4 and IPv6 answers can arrive in separate batches, wait briefly before emitting
+- (void) scheduleEmit:(RNZResolve *)resolve
+{
     if (resolve.emitBlock) {
         dispatch_block_cancel(resolve.emitBlock);
     }
     __weak RNZeroconf *weakSelf = self;
     __weak RNZResolve *weakResolve = resolve;
     resolve.emitBlock = dispatch_block_create(0, ^{
-        [weakSelf finishResolve:weakResolve];
+        [weakSelf emitResolve:weakResolve];
     });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), RNZ_QUEUE, resolve.emitBlock);
 }
 
-- (void) finishResolve:(RNZResolve *)resolve
+- (void) emitResolve:(RNZResolve *)resolve
 {
-    if (!resolve || resolve.finished || resolve.addresses.count == 0) {
+    if (!resolve || resolve.finished || resolve.addresses.count == 0 || ![self isActiveResolve:resolve]) {
         return;
     }
-    [self cancelResolve:resolve];
-    if (resolve.scan.resolvingServices[resolve.name] == resolve) {
-        [resolve.scan.resolvingServices removeObjectForKey:resolve.name];
-    }
-
-    [self sendEvent:@"RNZeroconfResolved" scan:resolve.scan body:@{
+    NSDictionary *body = @{
         kRNServiceKeysName: resolve.name,
         kRNServiceKeysFullName: [NSString stringWithFormat:@"%@%@.", resolve.host ?: @"", resolve.regtype],
         kRNServiceKeysHost: resolve.host ?: @"",
         kRNServiceKeysPort: @(resolve.port),
         kRNServiceKeysAddresses: resolve.addresses.array,
         kRNServiceTxtRecords: resolve.txt ?: @{},
-    }];
+    };
+
+    if (resolve.promiseResolve) {
+        RCTPromiseResolveBlock promiseResolve = resolve.promiseResolve;
+        [self endSingleResolve:resolve];
+        promiseResolve(body);
+        return;
+    }
+
+    if (!resolve.emitted) {
+        resolve.emitted = YES;
+        if (resolve.timeoutBlock) {
+            dispatch_block_cancel(resolve.timeoutBlock);
+            resolve.timeoutBlock = nil;
+        }
+        [self watchTXT:resolve];
+    }
+    // Emitted again only when something changed
+    if ([body isEqualToDictionary:resolve.lastEmitted]) {
+        return;
+    }
+    resolve.lastEmitted = body;
+    [self sendEvent:@"RNZeroconfResolved" scan:resolve.scan body:body];
 }
 
 - (void) failResolve:(RNZResolve *)resolve error:(NSDictionary *)error
 {
+    if (resolve.promiseReject) {
+        RCTPromiseRejectBlock promiseReject = resolve.promiseReject;
+        [self endSingleResolve:resolve];
+        [self reject:promiseReject error:error];
+        return;
+    }
     [self cancelResolve:resolve];
     if (resolve.scan.resolvingServices[resolve.name] == resolve) {
         [resolve.scan.resolvingServices removeObjectForKey:resolve.name];
     }
     [self sendError:error scan:resolve.scan];
+}
+
+- (BOOL) isActiveResolve:(RNZResolve *)resolve
+{
+    if (resolve.promiseResolve) {
+        return [self.singleResolves containsObject:resolve];
+    }
+    return resolve.scan.resolvingServices[resolve.name] == resolve;
+}
+
+- (void) endSingleResolve:(RNZResolve *)resolve
+{
+    [self cancelResolve:resolve];
+    resolve.promiseResolve = nil;
+    resolve.promiseReject = nil;
+    [self.singleResolves removeObject:resolve];
+}
+
+// resolveService(): resolves one service by name without scanning. options: timeout (seconds), networkInterface
+RCT_EXPORT_METHOD(resolveService:(NSString *)name
+                  type:(NSString *)type
+                  protocol:(NSString *)protocol
+                  domain:(NSString *)domain
+                  options:(NSDictionary *)options
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+    uint32_t interfaceIndex = kDNSServiceInterfaceIndexAny;
+    NSDictionary *interfaceError = [self interfaceIndexForName:options[@"networkInterface"] index:&interfaceIndex];
+    if (interfaceError) {
+        [self reject:reject error:interfaceError];
+        return;
+    }
+    double timeout = [options[@"timeout"] respondsToSelector:@selector(doubleValue)] ? [options[@"timeout"] doubleValue] : 0;
+
+    RNZResolve *single = [[RNZResolve alloc] init];
+    single.module = self;
+    single.name = name;
+    single.regtype = [NSString stringWithFormat:@"_%@._%@", type, protocol];
+    single.domain = domain.length > 0 ? domain : @"local.";
+    single.interfaceIndex = interfaceIndex;
+    single.timeoutSeconds = timeout > 0 ? timeout : 5.0;
+    single.promiseResolve = resolve;
+    single.promiseReject = reject;
+    // The timeout is the caller's, no retry as for scans
+    single.retried = YES;
+    [self.singleResolves addObject:single];
+    [self resolve:single];
 }
 
 // Stops everything in flight for a resolve, safe to call from its own callbacks
@@ -449,6 +592,8 @@ RCT_EXPORT_METHOD(stop:(NSString *)scanId)
     resolve.resolveRef = NULL;
     RNZDeallocateLater(resolve.addressRef, resolve);
     resolve.addressRef = NULL;
+    RNZDeallocateLater(resolve.txtRef, resolve);
+    resolve.txtRef = NULL;
 }
 
 #pragma mark - Publish
@@ -459,9 +604,18 @@ RCT_EXPORT_METHOD(registerService:(NSString *)type
                   name:(NSString *)name
                   port:(int)port
                   txt:(NSArray<NSArray<NSString *> *> *)txt
+                  options:(NSDictionary *)options
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
+    uint32_t interfaceIndex = kDNSServiceInterfaceIndexAny;
+    NSDictionary *interfaceError = [self interfaceIndexForName:options[@"networkInterface"] index:&interfaceIndex];
+    if (interfaceError) {
+        [self sendError:interfaceError];
+        [self reject:reject error:interfaceError];
+        return;
+    }
+
     NSMutableArray<NSString *> *tooLong = [NSMutableArray array];
     NSData *txtRecord = [RNNetServiceSerializer TXTRecordFromPairs:txt ?: @[] tooLong:tooLong];
     for (NSString *key in tooLong) {
@@ -490,9 +644,19 @@ RCT_EXPORT_METHOD(registerService:(NSString *)type
     publication.resolve = resolve;
     publication.reject = reject;
 
+    // "_ipp._tcp,_printer,_color" registers the subtypes too
+    NSMutableString *registerType = [publication.regtype mutableCopy];
+    NSArray *subtypes = [options[@"subtypes"] isKindOfClass:[NSArray class]] ? options[@"subtypes"] : @[];
+    for (id subtype in subtypes) {
+        NSString *label = [RNZeroconf subtypeLabel:subtype];
+        if (label) {
+            [registerType appendFormat:@",%@", label];
+        }
+    }
+
     DNSServiceRef ref = NULL;
-    DNSServiceErrorType error = DNSServiceRegister(&ref, 0, kDNSServiceInterfaceIndexAny, name.UTF8String,
-                                                   publication.regtype.UTF8String,
+    DNSServiceErrorType error = DNSServiceRegister(&ref, 0, interfaceIndex, name.UTF8String,
+                                                   registerType.UTF8String,
                                                    domain.length > 0 ? domain.UTF8String : NULL,
                                                    NULL, htons((uint16_t)port),
                                                    (uint16_t)txtRecord.length, txtRecord.length > 0 ? txtRecord.bytes : NULL,
@@ -574,6 +738,74 @@ RCT_EXPORT_METHOD(unregisterService:(NSString *)serviceName
     NSDictionary *serviceInfo = [self publicationInfo:publication];
     [self sendEvent:@"RNZeroconfServiceUnregistered" body:serviceInfo];
     resolve(serviceInfo);
+}
+
+// Replaces the TXT record of a published service
+RCT_EXPORT_METHOD(updateService:(NSString *)serviceName
+                  txt:(NSArray<NSArray<NSString *> *> *)txt
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+    RNZPublication *publication = self.publishedServices[serviceName];
+    if (!publication) {
+        [self reject:reject error:@{
+            @"message": [NSString stringWithFormat:@"Service %@ is not published", serviceName],
+            @"code": @"NOT_PUBLISHED",
+            @"domain": @"RNZeroconf",
+            @"serviceName": serviceName,
+        }];
+        return;
+    }
+
+    NSMutableArray<NSString *> *tooLong = [NSMutableArray array];
+    NSData *txtRecord = [RNNetServiceSerializer TXTRecordFromPairs:txt ?: @[] tooLong:tooLong];
+    for (NSString *key in tooLong) {
+        [self sendError:@{
+            @"message": [NSString stringWithFormat:@"TXT record entry %@ is longer than 255 bytes", key],
+            @"code": @"TXT_ENTRY_TOO_LONG",
+            @"domain": @"RNZeroconf",
+            @"serviceName": serviceName,
+        }];
+    }
+    // An empty TXT record is a single empty string
+    static const uint8_t emptyTXT = 0;
+    DNSServiceErrorType error = DNSServiceUpdateRecord(publication.ref, NULL, 0,
+                                                       txtRecord.length > 0 ? (uint16_t)txtRecord.length : 1,
+                                                       txtRecord.length > 0 ? txtRecord.bytes : &emptyTXT, 0);
+    if (error != kDNSServiceErr_NoError) {
+        [self reject:reject error:[self errorWithCode:error action:@"Updating service" serviceName:serviceName]];
+        return;
+    }
+    publication.txt = [RNNetServiceSerializer dictionaryFromTXTRecord:txtRecord.bytes length:(uint16_t)txtRecord.length];
+    resolve([self publicationInfo:publication]);
+}
+
+// "printer" or "_printer" -> "_printer"
++ (NSString *) subtypeLabel:(id)subtype
+{
+    if (![subtype isKindOfClass:[NSString class]] || [subtype length] == 0) {
+        return nil;
+    }
+    return [subtype hasPrefix:@"_"] ? subtype : [@"_" stringByAppendingString:subtype];
+}
+
+// The index of a network interface by name ("en0"), kDNSServiceInterfaceIndexAny without one
+- (NSDictionary *) interfaceIndexForName:(id)name index:(uint32_t *)index
+{
+    *index = kDNSServiceInterfaceIndexAny;
+    if (![name isKindOfClass:[NSString class]] || [name length] == 0) {
+        return nil;
+    }
+    unsigned int found = if_nametoindex([name UTF8String]);
+    if (found == 0) {
+        return @{
+            @"message": [NSString stringWithFormat:@"Unknown network interface %@", name],
+            @"code": @"UNKNOWN_INTERFACE",
+            @"domain": @"RNZeroconf",
+        };
+    }
+    *index = found;
+    return nil;
 }
 
 - (BOOL) isNameInUse:(NSString *)name
@@ -698,6 +930,10 @@ RCT_EXPORT_METHOD(checkLocalNetworkAccess:(NSString *)type
         publication.ref = NULL;
     }
     [self.pendingPublications removeAllObjects];
+    for (RNZResolve *single in [self.singleResolves allObjects]) {
+        [self cancelResolve:single];
+    }
+    [self.singleResolves removeAllObjects];
 }
 
 #pragma mark - Events and errors

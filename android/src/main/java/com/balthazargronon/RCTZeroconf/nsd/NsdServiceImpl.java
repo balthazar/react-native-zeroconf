@@ -2,6 +2,7 @@ package com.balthazargronon.RCTZeroconf.nsd;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.net.Network;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
@@ -12,6 +13,7 @@ import android.util.Log;
 
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
+import com.balthazargronon.RCTZeroconf.ZeroconfOptions;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 
@@ -71,12 +73,15 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     private static class PendingResolve {
-        final String scanId;
+        @Nullable final String scanId;
         final NsdServiceInfo serviceInfo;
+        // resolveService(): settled instead of emitting events
+        @Nullable final Promise promise;
 
-        PendingResolve(String scanId, NsdServiceInfo serviceInfo) {
+        PendingResolve(@Nullable String scanId, NsdServiceInfo serviceInfo, @Nullable Promise promise) {
             this.scanId = scanId;
             this.serviceInfo = serviceInfo;
+            this.promise = promise;
         }
     }
 
@@ -87,17 +92,27 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     @Override
-    public void scan(final String scanId, String type, String protocol, String domain) {
+    public void scan(final String scanId, String type, String protocol, String domain, ZeroconfOptions options) {
         final NsdManager nsdManager = getNsdManager();
 
         this.stop(scanId);
-        acquireMulticastLock();
 
         final NsdScan scan = new NsdScan(scanId);
         final boolean typesOnly = ZeroconfModule.isServiceTypesScan(type, protocol);
 
+        Network network = null;
+        if (options.networkInterface != null && !typesOnly) {
+            String networkError = checkNetworkSupport(options.networkInterface);
+            network = networkError == null ? ZeroconfModule.findNetwork(reactApplicationContext, options.networkInterface) : null;
+            if (network == null) {
+                sendNetworkError(networkError, options.networkInterface, null, scanId);
+                return;
+            }
+        }
+        acquireMulticastLock();
+
         if (typesOnly) {
-            scan.typesQuery = new ServiceTypesQuery(new ServiceTypesQuery.Listener() {
+            scan.typesQuery = new ServiceTypesQuery(options.networkInterface, new ServiceTypesQuery.Listener() {
                 @Override
                 public void onTypeFound(String serviceType) {
                     sendScanEvent(ZeroconfModule.EVENT_FOUND, nameToMap(serviceType), scanId);
@@ -185,8 +200,34 @@ public class NsdServiceImpl implements Zeroconf {
         };
 
         mScans.put(scanId, scan);
-        String serviceType = String.format("_%s._%s.", type, protocol);
-        nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, scan.discoveryListener);
+        // "_ipp._tcp,_printer" browses the _printer subtype
+        String serviceType = options.subtype != null
+                ? ZeroconfOptions.withSubtypes(String.format("_%s._%s", type, protocol), Collections.singletonList(options.subtype))
+                : String.format("_%s._%s.", type, protocol);
+        if (network != null && Build.VERSION.SDK_INT >= 33) {
+            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, network, mCallbackExecutor, scan.discoveryListener);
+        } else {
+            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, scan.discoveryListener);
+        }
+    }
+
+    // Choosing the network of NSD requests needs Android 13, null when supported
+    @Nullable
+    private static String checkNetworkSupport(String networkInterface) {
+        return Build.VERSION.SDK_INT >= 33 ? null : ZeroconfModule.ERROR_CODE_UNSUPPORTED;
+    }
+
+    private void sendNetworkError(@Nullable String code, String networkInterface, @Nullable Promise promise, @Nullable String scanId) {
+        boolean unsupported = ZeroconfModule.ERROR_CODE_UNSUPPORTED.equals(code);
+        String errorCode = unsupported ? ZeroconfModule.ERROR_CODE_UNSUPPORTED : ZeroconfModule.ERROR_CODE_UNKNOWN_INTERFACE;
+        String message = unsupported
+                ? "Choosing the network interface needs Android 13 or later with NSD, use DNSSD"
+                : "Unknown network interface " + networkInterface;
+        if (promise != null) {
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, errorCode, message, null);
+        } else {
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, errorCode, message, null, scanId);
+        }
     }
 
     @Override
@@ -267,22 +308,119 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     @Override
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, Promise promise) {
-        String serviceType = String.format("_%s._%s.", type, protocol);
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, ZeroconfOptions options, Promise promise) {
+        Network network = null;
+        if (options.networkInterface != null) {
+            String networkError = checkNetworkSupport(options.networkInterface);
+            network = networkError == null ? ZeroconfModule.findNetwork(reactApplicationContext, options.networkInterface) : null;
+            if (network == null) {
+                sendNetworkError(networkError, options.networkInterface, promise, null);
+                return;
+            }
+        }
+        // "_ipp._tcp,_printer,_color" registers the subtypes too
+        String serviceType = options.subtypes.isEmpty()
+                ? String.format("_%s._%s.", type, protocol)
+                : ZeroconfOptions.withSubtypes(String.format("_%s._%s", type, protocol), options.subtypes);
+        ServiceRegistrationListener listener = new ServiceRegistrationListener(promise, serviceType, port, network);
+        getNsdManager().registerService(listener.buildServiceInfo(name, txt), NsdManager.PROTOCOL_DNS_SD, listener);
+    }
 
-        final NsdManager nsdManager = this.getNsdManager();
-        NsdServiceInfo serviceInfo  = new NsdServiceInfo();
+    /**
+     * NsdManager can't update a registration: unregisters and registers again with the new TXT record,
+     * without emitting unpublished and published
+     */
+    @Override
+    public void updateService(String serviceName, final ReadableArray txt, final Promise promise) {
+        final ServiceRegistrationListener previous = mPublishedServices.remove(serviceName);
+        if (previous == null) {
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_NOT_PUBLISHED, "Service " + serviceName + " is not published", serviceName);
+            return;
+        }
+        final ServiceRegistrationListener next = new ServiceRegistrationListener(promise, previous.serviceType, previous.port, previous.network);
+        next.announceRegistered = false;
+        final NsdServiceInfo serviceInfo = next.buildServiceInfo(serviceName, txt);
+        previous.announceUnregistered = false;
+        previous.afterUnregistered = () -> getNsdManager().registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, next);
+        getNsdManager().unregisterService(previous);
+    }
+
+    @Override
+    public void resolveService(String name, String type, String protocol, String domain, ZeroconfOptions options, final Promise promise) {
+        final NsdServiceInfo serviceInfo = new NsdServiceInfo();
         serviceInfo.setServiceName(name);
-        serviceInfo.setServiceType(serviceType);
-        serviceInfo.setPort(port);
-
-        for (int i = 0; i < txt.size(); i++) {
-            ReadableArray pair = txt.getArray(i);
-            serviceInfo.setAttribute(pair.getString(0), pair.getString(1));
+        serviceInfo.setServiceType(String.format("_%s._%s", type, protocol));
+        if (options.networkInterface != null) {
+            String networkError = checkNetworkSupport(options.networkInterface);
+            Network network = networkError == null ? ZeroconfModule.findNetwork(reactApplicationContext, options.networkInterface) : null;
+            if (network == null) {
+                sendNetworkError(networkError, options.networkInterface, promise, null);
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= 33) {
+                serviceInfo.setNetwork(network);
+            }
         }
 
-        nsdManager.registerService(
-                serviceInfo, NsdManager.PROTOCOL_DNS_SD, new ServiceRegistrationListener(promise));
+        if (Build.VERSION.SDK_INT < 34) {
+            // One resolve at a time before Android 14, shares the queue of the scans
+            synchronized (mResolveQueue) {
+                mResolveQueue.add(new PendingResolve(null, serviceInfo, promise));
+            }
+            resolveNext();
+            return;
+        }
+
+        final boolean[] settled = { false };
+        final NsdManager nsdManager = getNsdManager();
+        final NsdManager.ServiceInfoCallback[] callback = new NsdManager.ServiceInfoCallback[1];
+        final Runnable finish = () -> {
+            try {
+                nsdManager.unregisterServiceInfoCallback(callback[0]);
+            } catch (IllegalArgumentException e) {
+                // Already unregistered
+            }
+        };
+        callback[0] = new NsdManager.ServiceInfoCallback() {
+            @Override
+            public void onServiceInfoCallbackRegistrationFailed(int errorCode) {
+                synchronized (settled) {
+                    if (settled[0]) return;
+                    settled[0] = true;
+                }
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + name + " failed: " + ZeroconfModule.describeNsdError(errorCode), name);
+            }
+
+            @Override
+            public void onServiceUpdated(NsdServiceInfo updated) {
+                if (getHostAddresses(updated).isEmpty()) {
+                    return;
+                }
+                synchronized (settled) {
+                    if (settled[0]) return;
+                    settled[0] = true;
+                }
+                promise.resolve(serviceInfoToMap(updated));
+                mHandler.post(finish);
+            }
+
+            @Override
+            public void onServiceLost() {
+            }
+
+            @Override
+            public void onServiceInfoCallbackUnregistered() {
+            }
+        };
+        nsdManager.registerServiceInfoCallback(serviceInfo, mCallbackExecutor, callback[0]);
+        mHandler.postDelayed(() -> {
+            synchronized (settled) {
+                if (settled[0]) return;
+                settled[0] = true;
+            }
+            finish.run();
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_TIMEOUT, "Resolving service " + name + " failed: timed out", name);
+        }, (long) (options.timeoutSeconds * 1000));
     }
 
     @Override
@@ -322,7 +460,7 @@ public class NsdServiceImpl implements Zeroconf {
 
     private void enqueueResolve(String scanId, NsdServiceInfo serviceInfo) {
         synchronized (mResolveQueue) {
-            mResolveQueue.add(new PendingResolve(scanId, serviceInfo));
+            mResolveQueue.add(new PendingResolve(scanId, serviceInfo, null));
         }
         resolveNext();
     }
@@ -337,7 +475,7 @@ public class NsdServiceImpl implements Zeroconf {
             mIsResolving = true;
         }
         try {
-            getNsdManager().resolveService(next.serviceInfo, new ZeroResolveListener(next.scanId));
+            getNsdManager().resolveService(next.serviceInfo, new ZeroResolveListener(next.scanId, next.promise));
         } catch (Throwable e) {
             Log.e(TAG, "resolveService failed", e);
             String serviceName = next.serviceInfo.getServiceName();
@@ -354,10 +492,12 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     private class ZeroResolveListener implements NsdManager.ResolveListener {
-        private final String scanId;
+        @Nullable private final String scanId;
+        @Nullable private final Promise promise;
 
-        ZeroResolveListener(String scanId) {
+        ZeroResolveListener(@Nullable String scanId, @Nullable Promise promise) {
             this.scanId = scanId;
+            this.promise = promise;
         }
 
         @Override
@@ -365,22 +505,27 @@ public class NsdServiceImpl implements Zeroconf {
             if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
                 // Another resolve (possibly from another app or listener) is in flight: retry shortly
                 synchronized (mResolveQueue) {
-                    mResolveQueue.addFirst(new PendingResolve(scanId, serviceInfo));
+                    mResolveQueue.addFirst(new PendingResolve(scanId, serviceInfo, promise));
                     mIsResolving = false;
                 }
                 mHandler.postDelayed(NsdServiceImpl.this::resolveNext, RESOLVE_RETRY_DELAY_MS);
                 return;
             }
-            if (mScans.containsKey(scanId)) {
-                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName(), scanId);
+            String message = "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode);
+            if (promise != null) {
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, message, serviceInfo.getServiceName());
+            } else if (mScans.containsKey(scanId)) {
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, message, serviceInfo.getServiceName(), scanId);
             }
             onResolveDone();
         }
 
         @Override
         public void onServiceResolved(NsdServiceInfo serviceInfo) {
-            // The scan may have been stopped while resolving
-            if (mScans.containsKey(scanId)) {
+            if (promise != null) {
+                promise.resolve(serviceInfoToMap(serviceInfo));
+            } else if (mScans.containsKey(scanId)) {
+                // The scan may have been stopped while resolving
                 sendScanEvent(ZeroconfModule.EVENT_RESOLVE, serviceInfoToMap(serviceInfo), scanId);
             }
             onResolveDone();
@@ -390,9 +535,50 @@ public class NsdServiceImpl implements Zeroconf {
     private class ServiceRegistrationListener implements NsdManager.RegistrationListener {
         @Nullable private Promise registerPromise;
         @Nullable private Promise unregisterPromise;
+        // What it was registered with, to register it again on updates
+        final String serviceType;
+        final int port;
+        @Nullable final Network network;
+        // Updates replace the registration without emitting unpublished and published
+        boolean announceRegistered = true;
+        boolean announceUnregistered = true;
+        @Nullable Runnable afterUnregistered;
+        // The registration callback doesn't carry the TXT record, report the one registered
+        private final Map<String, String> txt = new java.util.LinkedHashMap<>();
 
-        ServiceRegistrationListener(@Nullable Promise registerPromise) {
+        ServiceRegistrationListener(@Nullable Promise registerPromise, String serviceType, int port, @Nullable Network network) {
             this.registerPromise = registerPromise;
+            this.serviceType = serviceType;
+            this.port = port;
+            this.network = network;
+        }
+
+        NsdServiceInfo buildServiceInfo(String name, ReadableArray txt) {
+            NsdServiceInfo serviceInfo = new NsdServiceInfo();
+            serviceInfo.setServiceName(name);
+            serviceInfo.setServiceType(serviceType);
+            serviceInfo.setPort(port);
+            if (network != null && Build.VERSION.SDK_INT >= 33) {
+                serviceInfo.setNetwork(network);
+            }
+            this.txt.clear();
+            for (int i = 0; i < txt.size(); i++) {
+                ReadableArray pair = txt.getArray(i);
+                serviceInfo.setAttribute(pair.getString(0), pair.getString(1));
+                this.txt.put(pair.getString(0), pair.getString(1));
+            }
+            return serviceInfo;
+        }
+
+        WritableMap registeredToMap(NsdServiceInfo serviceInfo) {
+            WritableMap service = serviceInfoToMap(serviceInfo);
+            WritableMap txtMap = new WritableNativeMap();
+            for (Map.Entry<String, String> entry : txt.entrySet()) {
+                txtMap.putString(entry.getKey(), entry.getValue());
+            }
+            service.putMap(ZeroconfModule.KEY_SERVICE_TXT, txtMap);
+            service.putInt(ZeroconfModule.KEY_SERVICE_PORT, port);
+            return service;
         }
 
         @Override
@@ -404,10 +590,11 @@ public class NsdServiceImpl implements Zeroconf {
             final String serviceName = NsdServiceInfo.getServiceName();
             mPublishedServices.put(serviceName, this);
 
-            WritableMap service = serviceInfoToMap(NsdServiceInfo);
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_PUBLISHED, service);
+            if (announceRegistered) {
+                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_PUBLISHED, registeredToMap(NsdServiceInfo));
+            }
             if (registerPromise != null) {
-                registerPromise.resolve(serviceInfoToMap(NsdServiceInfo));
+                registerPromise.resolve(registeredToMap(NsdServiceInfo));
                 registerPromise = null;
             }
         }
@@ -424,10 +611,15 @@ public class NsdServiceImpl implements Zeroconf {
         public void onServiceUnregistered(NsdServiceInfo nsdServiceInfo) {
             // Service has been unregistered.  This only happens when you call
             // NsdManager.unregisterService() and pass in this listener.
-            final WritableMap service = serviceInfoToMap(nsdServiceInfo);
-            zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_UNREGISTERED, service);
+            if (announceUnregistered) {
+                zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_UNREGISTERED, registeredToMap(nsdServiceInfo));
+            }
+            if (afterUnregistered != null) {
+                afterUnregistered.run();
+                afterUnregistered = null;
+            }
             if (unregisterPromise != null) {
-                unregisterPromise.resolve(serviceInfoToMap(nsdServiceInfo));
+                unregisterPromise.resolve(registeredToMap(nsdServiceInfo));
                 unregisterPromise = null;
             }
         }

@@ -27,6 +27,11 @@
 #include "mDNSEmbeddedAPI.h"		// The interface we're building on top of
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <string.h>
+
+// react-native-zeroconf: subtype parsing from uds_daemon.c, built into the same library
+extern mDNSs32 ChopSubTypes(char *regtype);
+extern AuthRecord *AllocateSubTypes(mDNSs32 NumSubTypes, char *p);
 
 extern mDNS mDNSStorage;		// We need to pass the address of this storage to the lower-layer functions
 
@@ -242,16 +247,20 @@ DNSServiceErrorType DNSServiceRegister
 	mDNSIPPort port;
 	unsigned int size = sizeof(RDataBody);
 	AuthRecord *SubTypes = mDNSNULL;
-	mDNSu32 NumSubTypes = 0;
+	mDNSs32 NumSubTypes = 0;
+	// react-native-zeroconf: "_type._tcp,_subtype1,_subtype2" registers subtypes, as with the daemon
+	char typeAndSubtypes[MAX_ESCAPED_DOMAIN_NAME];
 	mDNS_DirectOP_Register *x;
 	(void)flags;			// Unused
-	(void)interfaceIndex;	// Unused
 
 	// Check parameters
 	if (!name) name = "";
 	if (!name[0]) n = mDNSStorage.nicelabel;
 	else if (!MakeDomainLabelFromLiteralString(&n, name))                              { errormsg = "Bad Instance Name"; goto badparam; }
-	if (!regtype || !*regtype || !MakeDomainNameFromDNSNameString(&t, regtype))        { errormsg = "Bad Service Type";  goto badparam; }
+	if (!regtype || !*regtype || strlen(regtype) >= sizeof(typeAndSubtypes))           { errormsg = "Bad Service Type";  goto badparam; }
+	strcpy(typeAndSubtypes, regtype);
+	NumSubTypes = ChopSubTypes(typeAndSubtypes);	// Cuts the subtypes off the type
+	if (NumSubTypes < 0 || !MakeDomainNameFromDNSNameString(&t, typeAndSubtypes))      { errormsg = "Bad Service Type";  goto badparam; }
 	if (!MakeDomainNameFromDNSNameString(&d, (domain && *domain) ? domain : "local.")) { errormsg = "Bad Domain";        goto badparam; }
 	if (!MakeDomainNameFromDNSNameString(&h, (host   && *host  ) ? host   : ""))       { errormsg = "Bad Target Host";   goto badparam; }
 	if (!ConstructServiceName(&srv, &n, &t, &d))                                       { errormsg = "Bad Name";          goto badparam; }
@@ -271,16 +280,22 @@ DNSServiceErrorType DNSServiceRegister
 	x->autorename = !(flags & kDNSServiceFlagsNoAutoRename);
 	x->name = n;
 	x->host = h;
+	if (NumSubTypes > 0)
+		{
+		SubTypes = AllocateSubTypes(NumSubTypes, typeAndSubtypes);
+		if (!SubTypes) { mDNSPlatformMemFree(x); err = mStatus_BadParamErr; errormsg = "Bad Subtype"; goto fail; }
+		}
 
 	// Do the operation
+	// react-native-zeroconf: registers on the requested interface instead of always any
 	err = mDNS_RegisterService(&mDNSStorage, &x->s,
 		&x->name, &t, &d,		// Name, type, domain
 		&x->host, port,			// Host and port
 		txtRecord, txtLen,		// TXT data, length
-		SubTypes, NumSubTypes,	// Subtypes
-		mDNSInterface_Any,		// Interface ID
+		SubTypes, (mDNSu32)NumSubTypes,	// Subtypes
+		mDNSPlatformInterfaceIDfromInterfaceIndex(&mDNSStorage, interfaceIndex),	// Interface ID
 		RegCallback, x, 0);		// Callback, context, flags
-	if (err) { mDNSPlatformMemFree(x); errormsg = "mDNS_RegisterService"; goto fail; }
+	if (err) { if (SubTypes) mDNSPlatformMemFree(SubTypes); mDNSPlatformMemFree(x); errormsg = "mDNS_RegisterService"; goto fail; }
 
 	// Succeeded: Wrap up and return
 	*sdRef = (DNSServiceRef)x;
@@ -301,6 +316,14 @@ fail:
 // is run against this Extension, it will get a reasonable error code instead of just
 // failing to launch (Strong Link) or calling an unresolved symbol and crashing (Weak Link)
 #if !MDNS_BUILDINGSTUBLIBRARY
+// react-native-zeroconf: frees the TXT data replaced by DNSServiceUpdateRecord
+static void UpdateCallback(mDNS *const m, AuthRecord *const rr, RData *oldrd, mDNSu16 oldrdlen)
+	{
+	(void)m;		// Unused
+	(void)oldrdlen;	// Unused
+	if (oldrd != &rr->rdatastorage) mDNSPlatformMemFree(oldrd);
+	}
+
 DNSServiceErrorType DNSServiceAddRecord
 	(
 	DNSServiceRef                       sdRef,
@@ -332,13 +355,23 @@ DNSServiceErrorType DNSServiceUpdateRecord
 	uint32_t                            ttl
 	)
 	{
-	(void)sdRef;		// Unused
-	(void)RecordRef;	// Unused
+	// react-native-zeroconf: updates the primary TXT record of a registration, as uds_daemon.c update_record does
+	mDNS_DirectOP_Register *x = (mDNS_DirectOP_Register*)sdRef;
+	unsigned int size;
+	RData *newrd;
+	mStatus err;
 	(void)flags;		// Unused
-	(void)rdlen;		// Unused
-	(void)rdata;		// Unused
-	(void)ttl;			// Unused
-	return(kDNSServiceErr_Unsupported);
+	if (!x || RecordRef || x->disposefn != DNSServiceRegisterDispose) return(kDNSServiceErr_Unsupported);
+	size = rdlen > sizeof(RDataBody) ? rdlen : sizeof(RDataBody);
+	newrd = (RData *)mDNSPlatformMemAllocate(sizeof(RData) - sizeof(RDataBody) + size);
+	if (!newrd) return(kDNSServiceErr_NoMemory);
+	newrd->MaxRDLength = (mDNSu16)size;
+	mDNSPlatformMemCopy(&newrd->u, rdata, rdlen);
+	// A TXT record can't be empty, use a single empty string
+	if (rdlen == 0) { rdlen = 1; newrd->u.txt.c[0] = 0; }
+	err = mDNS_Update(&mDNSStorage, &x->s.RR_TXT, ttl, rdlen, newrd, UpdateCallback);
+	if (err) mDNSPlatformMemFree(newrd);
+	return(err);
 	}
 
 DNSServiceErrorType DNSServiceRemoveRecord
@@ -409,11 +442,19 @@ DNSServiceErrorType DNSServiceBrowse
 	const char *errormsg = "Unknown";
 	domainname t, d;
 	mDNS_DirectOP_Browse *x;
+	// react-native-zeroconf: "_type._tcp,_subtype" browses a subtype, as uds_daemon.c handle_browse_request does
+	char typeAndSubtype[MAX_ESCAPED_DOMAIN_NAME];
+	mDNSs32 NumSubTypes;
 	(void)flags;			// Unused
-	(void)interfaceIndex;	// Unused
 
 	// Check parameters
-	if (!regtype[0] || !MakeDomainNameFromDNSNameString(&t, regtype))      { errormsg = "Illegal regtype"; goto badparam; }
+	if (!regtype[0] || strlen(regtype) >= sizeof(typeAndSubtype))           { errormsg = "Illegal regtype"; goto badparam; }
+	strcpy(typeAndSubtype, regtype);
+	t.c[0] = 0;
+	NumSubTypes = ChopSubTypes(typeAndSubtype);
+	if (NumSubTypes < 0 || NumSubTypes > 1)                                  { errormsg = "Illegal regtype"; goto badparam; }
+	if (NumSubTypes == 1 && !AppendDNSNameString(&t, typeAndSubtype + strlen(typeAndSubtype) + 1)) { errormsg = "Illegal regtype"; goto badparam; }
+	if (!typeAndSubtype[0] || !AppendDNSNameString(&t, typeAndSubtype))     { errormsg = "Illegal regtype"; goto badparam; }
 	if (!MakeDomainNameFromDNSNameString(&d, *domain ? domain : "local.")) { errormsg = "Illegal domain";  goto badparam; }
 
 	// Allocate memory, and handle failure
@@ -427,7 +468,7 @@ DNSServiceErrorType DNSServiceBrowse
 	x->q.QuestionContext = x;
 
 	// Do the operation
-	err = mDNS_StartBrowse(&mDNSStorage, &x->q, &t, &d, mDNSInterface_Any, (flags & kDNSServiceFlagsForceMulticast) != 0, FoundInstance, x);
+	err = mDNS_StartBrowse(&mDNSStorage, &x->q, &t, &d, mDNSPlatformInterfaceIDfromInterfaceIndex(&mDNSStorage, interfaceIndex), (flags & kDNSServiceFlagsForceMulticast) != 0, FoundInstance, x);
 	if (err) { mDNSPlatformMemFree(x); errormsg = "mDNS_StartBrowse"; goto fail; }
 
 	// Succeeded: Wrap up and return
@@ -495,8 +536,6 @@ DNSServiceErrorType DNSServiceResolve
 	mDNS_DirectOP_Resolve *x;
 
 	(void)flags;			// Unused
-	(void)interfaceIndex;	// Unused
-
 	// Check parameters
 	if (!name[0]    || !MakeDomainLabelFromLiteralString(&n, name  )) { errormsg = "Bad Instance Name"; goto badparam; }
 	if (!regtype[0] || !MakeDomainNameFromDNSNameString(&t, regtype)) { errormsg = "Bad Service Type";  goto badparam; }
@@ -515,7 +554,7 @@ DNSServiceErrorType DNSServiceResolve
 	x->TXT       = mDNSNULL;
 
 	x->qSRV.ThisQInterval       = -1;		// So that DNSServiceResolveDispose() knows whether to cancel this question
-	x->qSRV.InterfaceID         = mDNSInterface_Any;
+	x->qSRV.InterfaceID         = mDNSPlatformInterfaceIDfromInterfaceIndex(&mDNSStorage, interfaceIndex);
 	x->qSRV.Target              = zeroAddr;
 	AssignDomainName(&x->qSRV.qname, &srv);
 	x->qSRV.qtype               = kDNSType_SRV;
@@ -535,7 +574,7 @@ DNSServiceErrorType DNSServiceResolve
 	x->qSRV.QuestionContext     = x;
 
 	x->qTXT.ThisQInterval       = -1;		// So that DNSServiceResolveDispose() knows whether to cancel this question
-	x->qTXT.InterfaceID         = mDNSInterface_Any;
+	x->qTXT.InterfaceID         = mDNSPlatformInterfaceIDfromInterfaceIndex(&mDNSStorage, interfaceIndex);
 	x->qTXT.Target              = zeroAddr;
 	AssignDomainName(&x->qTXT.qname, &srv);
 	x->qTXT.qtype               = kDNSType_TXT;
@@ -653,8 +692,6 @@ DNSServiceErrorType DNSServiceQueryRecord
 	mDNS_DirectOP_QueryRecord *x;
 
 	(void)flags;			// Unused
-	(void)interfaceIndex;	// Unused
-
 	// Allocate memory, and handle failure
 	x = (mDNS_DirectOP_QueryRecord *)mDNSPlatformMemAllocate(sizeof(*x));
 	if (!x) { err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; }
@@ -665,7 +702,7 @@ DNSServiceErrorType DNSServiceQueryRecord
 	x->context   = context;
 
 	x->q.ThisQInterval       = -1;		// So that DNSServiceResolveDispose() knows whether to cancel this question
-	x->q.InterfaceID         = mDNSInterface_Any;
+	x->q.InterfaceID         = mDNSPlatformInterfaceIDfromInterfaceIndex(&mDNSStorage, interfaceIndex);
 	x->q.Target              = zeroAddr;
 	MakeDomainNameFromDNSNameString(&x->q.qname, fullname);
 	x->q.qtype               = rrtype;

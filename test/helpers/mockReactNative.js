@@ -26,6 +26,13 @@ const RNZeroconf = new Proxy(
 
 module.exports = {
   Platform: { OS: 'ios' },
+  PermissionsAndroid: {
+    RESULTS: { GRANTED: 'granted', DENIED: 'denied', NEVER_ASK_AGAIN: 'never_ask_again' },
+    request(permission) {
+      calls.push(['PermissionsAndroid.request', permission])
+      return Promise.resolve(nativeResults['PermissionsAndroid.request'] || 'denied')
+    },
+  },
   NativeModules: { RNZeroconf },
   DeviceEventEmitter: {
     addListener(name, fn) {

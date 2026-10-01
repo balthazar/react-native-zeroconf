@@ -31,7 +31,21 @@ const scans = () => RN.callsNamed('scan')
 
 test('scans on mount with the options', () => {
   renderHook({ type: 'http', resolveTimeout: 7 })
-  expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', 7])
+  expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', { resolveTimeout: 7 }])
+})
+
+test('passes the subtype and network interface, and scans again when they change', () => {
+  const { rerender } = renderHook({ type: 'ipp', subtype: 'printer', networkInterface: 'en0' })
+  expect(RN.lastCallWithoutScanId()).toEqual([
+    'scan',
+    'ipp',
+    'tcp',
+    'local.',
+    { resolveTimeout: 5, subtype: 'printer', networkInterface: 'en0' },
+  ])
+  rerender({ type: 'ipp', subtype: 'scanner', networkInterface: 'en0' })
+  expect(scans()).toHaveLength(2)
+  expect(RN.lastCallWithoutScanId()[4]).toMatchObject({ subtype: 'scanner' })
 })
 
 test('lists resolved services only, and follows removals', () => {

@@ -13,11 +13,13 @@ static NSMutableArray<NSArray *> *events;
 @end
 
 @interface RNZeroconf (Test)
-- (void)scan:(NSString *)scanId type:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain resolveTimeout:(double)resolveTimeout;
+- (void)scan:(NSString *)scanId type:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain options:(NSDictionary *)options;
 - (void)stop:(NSString *)scanId;
 - (void)startResolve:(NSString *)name regtype:(NSString *)regtype domain:(NSString *)domain scan:(id)scan;
 @property (nonatomic, strong, readonly) NSMutableDictionary *scans;
-- (void)registerService:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain name:(NSString *)name port:(int)port txt:(NSArray *)txt resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
+- (void)registerService:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain name:(NSString *)name port:(int)port txt:(NSArray *)txt options:(NSDictionary *)options resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
+- (void)updateService:(NSString *)serviceName txt:(NSArray *)txt resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
+- (void)resolveService:(NSString *)name type:(NSString *)type protocol:(NSString *)protocol domain:(NSString *)domain options:(NSDictionary *)options resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
 - (void)unregisterService:(NSString *)serviceName resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
 @end
 
@@ -62,7 +64,7 @@ int main(void) {
       // Publish, with ordered TXT
       __block NSDictionary *published = nil; __block NSString *pubErr = nil;
       [z registerService:@"zcdns" protocol:@"tcp" domain:@"local." name:@"zc-dnssd" port:45690 txt:@[@[@"b", @"2"], @[@"a", @"1"], @[@"u", @"café"]]
-                 resolve:^(id r) { published = r; } reject:^(NSString *c, NSString *m, NSError *e) { pubErr = c; }];
+                 options:@{} resolve:^(id r) { published = r; } reject:^(NSString *c, NSString *m, NSError *e) { pubErr = c; }];
       for (int i = 0; i < 100 && !published && !pubErr; i++) spin(0.05);
       check([published[@"name"] isEqualToString:@"zc-dnssd"], [NSString stringWithFormat:@"publish resolves with name (%@ %@)", published[@"name"], pubErr]);
       check(eventsNamed(@"RNZeroconfServiceRegistered").count == 1, @"published event emitted once");
@@ -70,13 +72,13 @@ int main(void) {
       // Same name again: registered under another name
       __block NSDictionary *dup = nil;
       [z registerService:@"zcdns" protocol:@"tcp" domain:@"local." name:@"zc-dnssd" port:45691 txt:@[]
-                 resolve:^(id r) { dup = r; } reject:^(NSString *c, NSString *m, NSError *e) { dup = @{@"name": [@"REJECTED " stringByAppendingString:c]}; }];
+                 options:@{} resolve:^(id r) { dup = r; } reject:^(NSString *c, NSString *m, NSError *e) { dup = @{@"name": [@"REJECTED " stringByAppendingString:c]}; }];
       for (int i = 0; i < 100 && !dup; i++) spin(0.05);
       check(dup && ![dup[@"name"] isEqualToString:@"zc-dnssd"] && ![dup[@"name"] hasPrefix:@"REJECTED"], [NSString stringWithFormat:@"duplicate name is renamed (%@)", dup[@"name"]]);
 
       // Scan: found once per service, resolved with host/port/addresses/txt
       [events removeAllObjects];
-      [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." resolveTimeout:5];
+      [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"resolveTimeout": @5}];
       for (int i = 0; i < 100 && eventsNamed(@"RNZeroconfResolved").count < 2; i++) spin(0.05);
       spin(1.0);
       NSMutableArray *foundNames = [NSMutableArray array];
@@ -106,13 +108,13 @@ int main(void) {
       check([unknown isEqualToString:@"NOT_PUBLISHED"], @"unpublish unknown rejects NOT_PUBLISHED");
       __block NSString *bad = nil; __block NSDictionary *badInfo = nil;
       [z registerService:@"zcdns" protocol:@"nope" domain:@"local." name:@"zc-bad" port:1 txt:@[]
-                 resolve:^(id r) { bad = @"RESOLVED"; } reject:^(NSString *c, NSString *m, NSError *e) { bad = c; badInfo = e.userInfo; }];
+                 options:@{} resolve:^(id r) { bad = @"RESOLVED"; } reject:^(NSString *c, NSString *m, NSError *e) { bad = c; badInfo = e.userInfo; }];
       for (int i = 0; i < 60 && !bad; i++) spin(0.05);
       check(bad && ![bad isEqualToString:@"RESOLVED"] && [badInfo[@"domain"] isEqualToString:@"DNSSD"], [NSString stringWithFormat:@"bad publish rejects with DNSSD error (%@ %@)", bad, badInfo[@"message"]]);
 
       // Retry: resolving a service that doesn't exist, 1s timeout, one TIMEOUT error after ~2s
       [z stop:nil];
-      [z scan:@"A" type:@"zcnone" protocol:@"tcp" domain:@"local." resolveTimeout:1];
+      [z scan:@"A" type:@"zcnone" protocol:@"tcp" domain:@"local." options:@{@"resolveTimeout": @1}];
       [events removeAllObjects];
       NSDate *t0 = [NSDate date];
       [z startResolve:@"zc-ghost" regtype:@"_zcdns._tcp." domain:@"local." scan:z.scans[@"A"]];
@@ -125,24 +127,24 @@ int main(void) {
 
       // Stress: 300 scan cycles with random short waits and stops
       for (int i = 0; i < 300; i++) {
-        [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." resolveTimeout:5];
+        [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"resolveTimeout": @5}];
         spin((arc4random_uniform(20)) / 1000.0);
         if (arc4random_uniform(3) == 0) { [z stop:nil]; spin((arc4random_uniform(5)) / 1000.0); }
       }
       [events removeAllObjects];
-      [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." resolveTimeout:5];
+      [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"resolveTimeout": @5}];
       for (int i = 0; i < 100 && eventsNamed(@"RNZeroconfResolved").count == 0; i++) spin(0.05);
       check(eventsNamed(@"RNZeroconfResolved").count >= 1, @"scan still resolves after 300 rapid scan/stop cycles");
 
       // Two scans at once, for different types, each event tagged with its scan
       __block NSDictionary *otherPub = nil;
       [z registerService:@"zcother" protocol:@"tcp" domain:@"local." name:@"zc-other" port:45692 txt:@[]
-                 resolve:^(id r) { otherPub = r; } reject:^(NSString *c, NSString *m, NSError *e) {}];
+                 options:@{} resolve:^(id r) { otherPub = r; } reject:^(NSString *c, NSString *m, NSError *e) {}];
       for (int i = 0; i < 100 && !otherPub; i++) spin(0.05);
       [z stop:nil];
       [events removeAllObjects];
-      [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." resolveTimeout:5];
-      [z scan:@"B" type:@"zcother" protocol:@"tcp" domain:@"local." resolveTimeout:5];
+      [z scan:@"A" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"resolveTimeout": @5}];
+      [z scan:@"B" type:@"zcother" protocol:@"tcp" domain:@"local." options:@{@"resolveTimeout": @5}];
       for (int i = 0; i < 100 && eventsNamed(@"RNZeroconfResolved").count < 2; i++) spin(0.05);
       spin(1.0);
       NSMutableSet *resolvedA = [NSMutableSet set], *resolvedB = [NSMutableSet set];
@@ -165,7 +167,7 @@ int main(void) {
 
       // Service types: _services._dns-sd._udp reports "_zcdns._tcp" once, without resolving
       [events removeAllObjects];
-      [z scan:@"T" type:@"services._dns-sd" protocol:@"udp" domain:@"local." resolveTimeout:5];
+      [z scan:@"T" type:@"services._dns-sd" protocol:@"udp" domain:@"local." options:@{@"resolveTimeout": @5}];
       NSPredicate *zcType = [NSPredicate predicateWithBlock:^BOOL(NSArray *e, id b) { return [e[1][@"name"] isEqualToString:@"_zcdns._tcp"]; }];
       for (int i = 0; i < 100 && [eventsNamed(@"RNZeroconfFound") filteredArrayUsingPredicate:zcType].count == 0; i++) spin(0.05);
       spin(1.0);
@@ -176,6 +178,65 @@ int main(void) {
       check(allTypes, @"every found name is a service type");
       check(eventsNamed(@"RNZeroconfResolved").count == 0, @"service types are not resolved");
       [z stop:@"T"];
+
+      // Live updates: a resolved service is emitted again when its TXT record changes
+      [events removeAllObjects];
+      [z scan:@"L" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{}];
+      NSPredicate *dnssdResolved = [NSPredicate predicateWithBlock:^BOOL(NSArray *e, id b) { return [e[0] isEqualToString:@"RNZeroconfResolved"] && [e[1][@"name"] isEqualToString:@"zc-dnssd"]; }];
+      for (int i = 0; i < 100 && [events filteredArrayUsingPredicate:dnssdResolved].count == 0; i++) spin(0.05);
+      spin(1.0);
+      NSUInteger before = [events filteredArrayUsingPredicate:dnssdResolved].count;
+      check(before == 1, [NSString stringWithFormat:@"resolved once before any change (%lu)", (unsigned long)before]);
+      __block NSDictionary *updated = nil; __block NSString *updateErr = nil;
+      [z updateService:@"zc-dnssd" txt:@[@[@"v", @"2"]] resolve:^(id r) { updated = r; } reject:^(NSString *c, NSString *m, NSError *e) { updateErr = c; }];
+      check([updated[@"txt"][@"v"] isEqualToString:@"2"], [NSString stringWithFormat:@"updateService resolves with the new TXT (%@ %@)", updated[@"txt"], updateErr]);
+      NSPredicate *withV2 = [NSPredicate predicateWithBlock:^BOOL(NSArray *e, id b) { return [e[0] isEqualToString:@"RNZeroconfResolved"] && [e[1][@"name"] isEqualToString:@"zc-dnssd"] && [e[1][@"txt"][@"v"] isEqualToString:@"2"]; }];
+      for (int i = 0; i < 100 && [events filteredArrayUsingPredicate:withV2].count == 0; i++) spin(0.05);
+      check([events filteredArrayUsingPredicate:withV2].count == 1, @"resolved again with the updated TXT record");
+      spin(1.0);
+      check([events filteredArrayUsingPredicate:dnssdResolved].count == before + 1, @"no duplicate resolved without a change");
+      [z stop:@"L"];
+      __block NSString *updateUnknown = nil;
+      [z updateService:@"never" txt:@[] resolve:^(id r) { updateUnknown = @"RESOLVED"; } reject:^(NSString *c, NSString *m, NSError *e) { updateUnknown = c; }];
+      check([updateUnknown isEqualToString:@"NOT_PUBLISHED"], @"updateService of an unknown service rejects NOT_PUBLISHED");
+
+      // resolveService: one service by name, without scanning
+      __block NSDictionary *single = nil; __block NSString *singleErr = nil;
+      [z resolveService:@"zc-dnssd" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{} resolve:^(id r) { single = r; } reject:^(NSString *c, NSString *m, NSError *e) { singleErr = c; }];
+      for (int i = 0; i < 100 && !single && !singleErr; i++) spin(0.05);
+      check([single[@"port"] intValue] == 45690 && [single[@"txt"][@"v"] isEqualToString:@"2"] && [single[@"addresses"] count] > 0, [NSString stringWithFormat:@"resolveService resolves port, TXT and addresses (%@ %@)", single[@"port"], singleErr]);
+      __block NSString *missing = nil;
+      NSDate *missingStart = [NSDate date];
+      [z resolveService:@"zc-missing" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"timeout": @1} resolve:^(id r) { missing = @"RESOLVED"; } reject:^(NSString *c, NSString *m, NSError *e) { missing = c; }];
+      for (int i = 0; i < 100 && !missing; i++) spin(0.05);
+      check([missing isEqualToString:@"TIMEOUT"] && -[missingStart timeIntervalSinceNow] < 1.5, [NSString stringWithFormat:@"resolveService of a missing service rejects TIMEOUT after %.1fs (%@)", -[missingStart timeIntervalSinceNow], missing]);
+
+      // Subtypes: a subtype scan only finds the services registered with it
+      __block NSDictionary *withSub = nil;
+      [z registerService:@"zcdns" protocol:@"tcp" domain:@"local." name:@"zc-sub" port:45693 txt:@[] options:@{@"subtypes": @[@"zcsub"]}
+                 resolve:^(id r) { withSub = r; } reject:^(NSString *c, NSString *m, NSError *e) {}];
+      for (int i = 0; i < 100 && !withSub; i++) spin(0.05);
+      [events removeAllObjects];
+      [z scan:@"S" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"subtype": @"zcsub"}];
+      for (int i = 0; i < 100 && eventsNamed(@"RNZeroconfResolved").count == 0; i++) spin(0.05);
+      spin(1.0);
+      NSMutableSet *subNames = [NSMutableSet set];
+      for (NSArray *e in eventsNamed(@"RNZeroconfFound")) [subNames addObject:e[1][@"name"]];
+      check([subNames isEqualToSet:[NSSet setWithObject:@"zc-sub"]], [NSString stringWithFormat:@"subtype scan finds only zc-sub (%@)", subNames]);
+      [z stop:@"S"];
+      [z unregisterService:@"zc-sub" resolve:^(id r) {} reject:^(NSString *c, NSString *m, NSError *e) {}];
+
+      // Network interface: lo0 finds the local services, an unknown interface is an error
+      [events removeAllObjects];
+      [z scan:@"I" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"networkInterface": @"lo0"}];
+      for (int i = 0; i < 100 && [events filteredArrayUsingPredicate:dnssdResolved].count == 0; i++) spin(0.05);
+      NSArray *loResolved = [events filteredArrayUsingPredicate:dnssdResolved];
+      check(loResolved.count == 1, [NSString stringWithFormat:@"scan on lo0 resolves zc-dnssd (%@)", loResolved.firstObject[1][@"addresses"]]);
+      [z stop:@"I"];
+      [events removeAllObjects];
+      [z scan:@"X" type:@"zcdns" protocol:@"tcp" domain:@"local." options:@{@"networkInterface": @"nope0"}];
+      NSArray *ifErrors = eventsNamed(@"RNZeroconfError");
+      check(ifErrors.count == 1 && [ifErrors[0][1][@"code"] isEqual:@"UNKNOWN_INTERFACE"] && [ifErrors[0][1][@"scanId"] isEqualToString:@"X"], @"unknown interface reports UNKNOWN_INTERFACE");
 
       // Teardown with a scan running and a service published
       [z invalidate];

@@ -58,7 +58,11 @@ class ServiceTypesQuery {
     @Nullable private MulticastSocket socket;
     @Nullable private Thread thread;
 
-    ServiceTypesQuery(Listener listener) {
+    // Network interface name ("wlan0"), or null for the Wi-Fi / Ethernet one
+    @Nullable private final String interfaceName;
+
+    ServiceTypesQuery(@Nullable String interfaceName, Listener listener) {
+        this.interfaceName = interfaceName;
         this.listener = listener;
     }
 
@@ -81,9 +85,9 @@ class ServiceTypesQuery {
 
     private void run() {
         try {
-            NetworkInterface networkInterface = findInterface();
+            NetworkInterface networkInterface = interfaceName != null ? NetworkInterface.getByName(interfaceName) : findInterface();
             if (networkInterface == null) {
-                listener.onError("no network interface with IPv4 multicast");
+                listener.onError(interfaceName != null ? "unknown network interface " + interfaceName : "no network interface with IPv4 multicast");
                 return;
             }
             InetAddress group = InetAddress.getByName("224.0.0.251");

@@ -10,7 +10,7 @@ public interface Zeroconf {
     /**
      * @param scanId id of the JS instance starting the scan, several scans can run at once
      */
-    void scan(String scanId, String type, String protocol, String domain);
+    void scan(String scanId, String type, String protocol, String domain, ZeroconfOptions options);
 
     void stop(String scanId);
 
@@ -25,7 +25,17 @@ public interface Zeroconf {
      * @param txt TXT records as ordered [key, value] pairs
      * @param promise resolved with the service once registered
      */
-    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, Promise promise);
+    public void registerService(String type, String protocol, String domain, String name, int port, ReadableArray txt, ZeroconfOptions options, Promise promise);
+
+    /**
+     * Replaces the TXT record of a published service
+     */
+    void updateService(String serviceName, ReadableArray txt, Promise promise);
+
+    /**
+     * Resolves one service by name, without scanning
+     */
+    void resolveService(String name, String type, String protocol, String domain, ZeroconfOptions options, Promise promise);
 
     /**
      * Unregister every service published through this implementation

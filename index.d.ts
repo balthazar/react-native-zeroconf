@@ -38,6 +38,13 @@ export interface ScanOptions {
   implType?: ImplType
   /** iOS only, seconds to try resolving a service before retrying once and giving up. Defaults to `5` */
   resolveTimeout?: number
+  /** Only find services registered with this subtype, e.g. `'printer'` */
+  subtype?: string
+  /**
+   * Network interface to scan on, e.g. `'en0'` on iOS or `'wlan0'` on Android. All of them by default.
+   * Android `NSD` needs Android 13 or later for it
+   */
+  networkInterface?: string
 }
 
 export interface PublishOptions {
@@ -53,6 +60,34 @@ export interface PublishOptions {
   txt?: TxtRecord
   /** Android only, defaults to `NSD` */
   implType?: ImplType
+  /** Subtypes to register the service with, e.g. `['printer']` */
+  subtypes?: string[]
+  /** Network interface to publish on, all of them by default. Android `NSD` needs Android 13 or later for it */
+  networkInterface?: string
+}
+
+export interface UpdateOptions {
+  /** The new TXT record, replaces the current one */
+  txt?: TxtRecord
+  /** Android only, defaults to the implementation the service was published with */
+  implType?: ImplType
+}
+
+export interface ResolveOptions {
+  /** Name of the service */
+  name: string
+  /** Service type without underscore, e.g. `'http'`. Defaults to `'http'` */
+  type?: string
+  /** Defaults to `'tcp'` */
+  protocol?: string
+  /** Defaults to `'local.'` */
+  domain?: string
+  /** Android only, defaults to `NSD` */
+  implType?: ImplType
+  /** Seconds before rejecting with code `'TIMEOUT'`, defaults to `5` */
+  timeout?: number
+  /** Network interface to resolve on, all of them by default */
+  networkInterface?: string
 }
 
 /**
@@ -61,7 +96,7 @@ export interface PublishOptions {
  * - `DNSSD`: DNSServiceErrorType, on iOS and from Android's embedded mDNSResponder,
  *   e.g. `-65555` type missing from NSBonjourServices, `-65570` Local Network access denied
  * - `NsdManager`: Android NsdManager failure code
- * - `RNZeroconf`: the library's own errors, e.g. `'EXCEPTION'`
+ * - `RNZeroconf`: the library's own errors, e.g. `'EXCEPTION'`, `'TIMEOUT'`, `'UNKNOWN_INTERFACE'`
  */
 export interface ZeroconfError extends Error {
   code: number | string
@@ -75,8 +110,10 @@ export interface LocalNetworkAccessOptions {
   type?: string
   /** Defaults to `'tcp'` */
   protocol?: string
-  /** Seconds to wait for an answer, defaults to `5` */
+  /** iOS: seconds to wait for an answer, defaults to `5` */
   timeout?: number
+  /** Android: request `ACCESS_LOCAL_NETWORK` when it is missing, defaults to `true` */
+  request?: boolean
 }
 
 /** Published services don't carry the address family fields */
@@ -113,6 +150,8 @@ export interface ServiceTypesScanOptions {
   domain?: string
   /** Android only, defaults to `ImplType.NSD`. With `NSD`, the list leaves out services published by the phone running the app, `DNSSD` includes them */
   implType?: ImplType
+  /** Network interface to list the types on, all of them by default */
+  networkInterface?: string
 }
 
 /** Extends the `events` package EventEmitter */
@@ -153,8 +192,9 @@ export default class Zeroconf {
   scan(type?: string, protocol?: string, domain?: string, implType?: ImplType): void
 
   /**
-   * Checks the iOS Local Network permission. Can show the permission prompt when it hasn't been answered yet.
-   * Resolves `'unknown'` on Android, which has no equivalent permission to check.
+   * Checks the Local Network permission. iOS can show the permission prompt when it hasn't been answered yet.
+   * Android 17 (API 37): apps targeting API 37 need `ACCESS_LOCAL_NETWORK`, requested when missing unless
+   * `request` is `false`. Resolves `'granted'` when there is nothing to grant.
    */
   checkLocalNetworkAccess(
     options?: LocalNetworkAccessOptions,
@@ -188,6 +228,15 @@ export default class Zeroconf {
    * @param implType Android only, defaults to the implementation the service was published with
    */
   unpublishService(name: string, implType?: ImplType): Promise<PublishedService | null>
+
+  /**
+   * Replace the TXT record of a published service, resolves with the updated service.
+   * Android `NSD` has no update: the service is published again under the same name.
+   */
+  updateService(name: string, options: UpdateOptions): Promise<PublishedService>
+
+  /** Resolve one service by name without scanning. Rejects with code `'TIMEOUT'` when it doesn't answer in time */
+  resolveService(options: ResolveOptions): Promise<Service>
 }
 
 export interface UseZeroconfOptions extends ScanOptions {

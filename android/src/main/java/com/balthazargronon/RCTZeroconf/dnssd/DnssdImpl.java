@@ -7,6 +7,7 @@ import android.util.Log;
 
 import com.balthazargronon.RCTZeroconf.Zeroconf;
 import com.balthazargronon.RCTZeroconf.ZeroconfModule;
+import com.balthazargronon.RCTZeroconf.ZeroconfOptions;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableArray;
@@ -53,6 +54,7 @@ public class DnssdImpl implements Zeroconf {
     private final ReactApplicationContext reactApplicationContext;
     private final DNSSD dnssd;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private WifiManager.MulticastLock multicastLock;
 
     // Running scans, keyed by the id of the JS instance that started them
@@ -63,6 +65,7 @@ public class DnssdImpl implements Zeroconf {
     private static class Scan {
         final String scanId;
         final boolean typesOnly;
+        int ifIndex = DNSSD.ALL_INTERFACES;
         DNSSDService browse;
         // A service is reported once per network interface, count them so found/remove are emitted once
         final Map<String, Integer> foundInterfaces = new HashMap<>();
@@ -76,6 +79,8 @@ public class DnssdImpl implements Zeroconf {
 
     private static class Resolve {
         final String name;
+        // resolveService(): settled instead of emitting events
+        @Nullable Promise promise;
         final List<DNSSDService> operations = new ArrayList<>();
         String fullName;
         String host;
@@ -125,19 +130,29 @@ public class DnssdImpl implements Zeroconf {
     // Scan
 
     @Override
-    public void scan(final String scanId, final String type, final String protocol, final String domain) {
-        executor.execute(() -> startScan(scanId, type, protocol, domain));
+    public void scan(final String scanId, final String type, final String protocol, final String domain, final ZeroconfOptions options) {
+        executor.execute(() -> startScan(scanId, type, protocol, domain, options));
     }
 
-    private void startScan(String scanId, String type, String protocol, String domain) {
+    private void startScan(String scanId, String type, String protocol, String domain, ZeroconfOptions options) {
         stopScan(scanId);
 
         final Scan scan = new Scan(scanId, ZeroconfModule.isServiceTypesScan(type, protocol));
+        final int ifIndex = interfaceIndex(options.networkInterface);
+        if (ifIndex < 0) {
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_UNKNOWN_INTERFACE, "Unknown network interface " + options.networkInterface, null, scanId);
+            return;
+        }
+        scan.ifIndex = ifIndex;
+        // "_ipp._tcp,_printer" browses the _printer subtype
         String regType = String.format("_%s._%s", type, protocol);
+        if (options.subtype != null) {
+            regType = ZeroconfOptions.withSubtypes(regType, java.util.Collections.singletonList(options.subtype));
+        }
         Log.d(TAG, "Starting DNSSD scan " + scanId + " for " + regType);
         acquireMulticastLock();
         try {
-            scan.browse = dnssd.browse(0, DNSSD.ALL_INTERFACES, regType, domainOrLocal(domain), new BrowseListener() {
+            scan.browse = dnssd.browse(0, ifIndex, regType, domainOrLocal(domain), new BrowseListener() {
                 @Override
                 public void serviceFound(DNSSDService browser, int flags, int ifIndex, String serviceName, String regType, String domain) {
                     executor.execute(() -> onServiceFound(scan, ifIndex, serviceName, regType, domain));
@@ -181,7 +196,7 @@ public class DnssdImpl implements Zeroconf {
         sendScanEvent(ZeroconfModule.EVENT_FOUND, nameToMap(name), scan.scanId);
         // Service types are not resolved
         if (!scan.typesOnly) {
-            startResolve(scan, ifIndex, serviceName, regType, domain);
+            startResolve(scan, ifIndex, serviceName, regType, domain, null);
         }
     }
 
@@ -239,9 +254,11 @@ public class DnssdImpl implements Zeroconf {
 
     // Resolve: host, port and TXT record, then the host's IPv4 and IPv6 addresses
 
-    private void startResolve(final Scan scan, int ifIndex, final String serviceName, String regType, String domain) {
-        final Resolve resolve = new Resolve(serviceName);
-        scan.resolves.put(serviceName, resolve);
+    private void startResolve(@Nullable final Scan scan, int ifIndex, final String serviceName, String regType, String domain, @Nullable Resolve existing) {
+        final Resolve resolve = existing != null ? existing : new Resolve(serviceName);
+        if (scan != null) {
+            scan.resolves.put(serviceName, resolve);
+        }
         try {
             resolve.operations.add(dnssd.resolve(0, ifIndex, serviceName, regType, domain, new ResolveListener() {
                 @Override
@@ -268,7 +285,7 @@ public class DnssdImpl implements Zeroconf {
         }
     }
 
-    private void queryAddresses(final Scan scan, final Resolve resolve, int ifIndex) {
+    private void queryAddresses(@Nullable final Scan scan, final Resolve resolve, int ifIndex) {
         QueryListener listener = new QueryListener() {
             @Override
             public void queryAnswered(DNSSDService query, int flags, int ifIndex, String fullName, int rrtype, int rrclass, byte[] rdata, int ttl) {
@@ -280,6 +297,12 @@ public class DnssdImpl implements Zeroconf {
                         resolve.addresses.add(InetAddress.getByAddress(rdata).getHostAddress());
                     } catch (UnknownHostException e) {
                         Log.w(TAG, "Invalid address record for " + resolve.host, e);
+                        return;
+                    }
+                    if (scan == null) {
+                        // resolveService() settles with the first address
+                        endSingleResolve(resolve);
+                        resolve.promise.resolve(resolveToMap(resolve));
                         return;
                     }
                     // Emitted for each address, the first one is usable right away
@@ -301,12 +324,21 @@ public class DnssdImpl implements Zeroconf {
         }
     }
 
-    private boolean isCurrent(Scan scan, Resolve resolve) {
+    private boolean isCurrent(@Nullable Scan scan, Resolve resolve) {
+        if (scan == null) {
+            return singleResolves.contains(resolve);
+        }
         return scans.get(scan.scanId) == scan && scan.resolves.get(resolve.name) == resolve;
     }
 
-    private void onResolveFailed(Scan scan, Resolve resolve, int errorCode) {
+    private void onResolveFailed(@Nullable Scan scan, Resolve resolve, int errorCode) {
         if (!isCurrent(scan, resolve)) {
+            return;
+        }
+        if (scan == null) {
+            endSingleResolve(resolve);
+            String message = "Resolving service " + resolve.name + " failed: " + ZeroconfModule.describeDnssdError(errorCode);
+            ZeroconfModule.reject(resolve.promise, ZeroconfModule.ERROR_DOMAIN_DNSSD, errorCode, message, resolve.name);
             return;
         }
         scan.resolves.remove(resolve.name);
@@ -314,28 +346,68 @@ public class DnssdImpl implements Zeroconf {
         sendError(errorCode, "Resolving service " + resolve.name + " failed: ", resolve.name, scan.scanId);
     }
 
+    // resolveService(): one service by name, without scanning
+
+    private final Set<Resolve> singleResolves = new LinkedHashSet<>();
+
+    @Override
+    public void resolveService(final String name, final String type, final String protocol, final String domain, final ZeroconfOptions options, final Promise promise) {
+        executor.execute(() -> {
+            int ifIndex = interfaceIndex(options.networkInterface);
+            if (ifIndex < 0) {
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_UNKNOWN_INTERFACE, "Unknown network interface " + options.networkInterface, null);
+                return;
+            }
+            final Resolve resolve = new Resolve(name);
+            resolve.promise = promise;
+            singleResolves.add(resolve);
+            acquireMulticastLock();
+            startResolve(null, ifIndex, name, String.format("_%s._%s", type, protocol), domainOrLocal(domain), resolve);
+            // DNSSD gives up silently after its own timeout, settle the promise before
+            mainHandler.postDelayed(() -> executor.execute(() -> {
+                if (!singleResolves.contains(resolve)) {
+                    return;
+                }
+                endSingleResolve(resolve);
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_TIMEOUT, "Resolving service " + name + " failed: timed out", name);
+            }), (long) (options.timeoutSeconds * 1000));
+        });
+    }
+
+    private void endSingleResolve(Resolve resolve) {
+        if (singleResolves.remove(resolve)) {
+            resolve.stop();
+            releaseMulticastLock();
+        }
+    }
+
     // Publish
 
     @Override
-    public void registerService(final String type, final String protocol, final String domain, final String name, final int port, final ReadableArray txt, final Promise promise) {
+    public void registerService(final String type, final String protocol, final String domain, final String name, final int port, final ReadableArray txt, final ZeroconfOptions options, final Promise promise) {
         // Read the TXT record on the calling thread, the array belongs to the bridge call
         final Map<String, String> txtMap = getTxtRecordMap(txt);
-        executor.execute(() -> startPublication(type, protocol, domain, name, port, txtMap, promise));
+        executor.execute(() -> startPublication(type, protocol, domain, name, port, txtMap, options, promise));
     }
 
-    private void startPublication(String type, String protocol, String domain, String name, int port, Map<String, String> txt, Promise promise) {
+    private void startPublication(String type, String protocol, String domain, String name, int port, Map<String, String> txt, ZeroconfOptions options, Promise promise) {
+        int ifIndex = interfaceIndex(options.networkInterface);
+        if (ifIndex < 0) {
+            String message = "Unknown network interface " + options.networkInterface;
+            zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_UNKNOWN_INTERFACE, message, name, null);
+            ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_UNKNOWN_INTERFACE, message, name);
+            return;
+        }
         Publication previous = publications.remove(name);
         if (previous != null) {
             previous.registration.stop();
         }
 
         final Publication publication = new Publication(name, port, txt, promise);
-        TXTRecord txtRecord = new TXTRecord();
-        for (Map.Entry<String, String> entry : txt.entrySet()) {
-            txtRecord.set(entry.getKey(), entry.getValue());
-        }
+        // "_ipp._tcp,_printer,_color" registers the subtypes too
+        String regType = ZeroconfOptions.withSubtypes(String.format("_%s._%s", type, protocol), options.subtypes);
         try {
-            publication.registration = dnssd.register(0, DNSSD.ALL_INTERFACES, name, String.format("_%s._%s", type, protocol), null, null, port, txtRecord, new RegisterListener() {
+            publication.registration = dnssd.register(0, ifIndex, name, regType, null, null, port, toTXTRecord(txt), new RegisterListener() {
                 @Override
                 public void serviceRegistered(DNSSDRegistration registration, int flags, String serviceName, String regType, String domain) {
                     executor.execute(() -> onRegistered(publication, serviceName, regType, domain));
@@ -387,6 +459,42 @@ public class DnssdImpl implements Zeroconf {
     }
 
     @Override
+    public void updateService(final String serviceName, final ReadableArray txt, final Promise promise) {
+        final Map<String, String> txtMap = getTxtRecordMap(txt);
+        executor.execute(() -> {
+            Publication publication = findPublication(serviceName);
+            if (publication == null || !publication.registered) {
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_NOT_PUBLISHED, "Service " + serviceName + " is not published", serviceName);
+                return;
+            }
+            try {
+                publication.registration.getTXTRecord().update(0, toTXTRecord(txtMap).getRawBytes(), 0);
+            } catch (DNSSDException e) {
+                String message = "Updating service " + serviceName + " failed: " + ZeroconfModule.describeDnssdError(e.getErrorCode());
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_DNSSD, e.getErrorCode(), message, serviceName);
+                return;
+            }
+            publication.txt.clear();
+            publication.txt.putAll(txtMap);
+            promise.resolve(publicationToMap(publication));
+        });
+    }
+
+    @Nullable
+    private Publication findPublication(String serviceName) {
+        // By the requested name, or the name it was published under when it was renamed
+        Publication publication = publications.get(serviceName);
+        if (publication == null) {
+            for (Publication candidate : publications.values()) {
+                if (candidate.name.equals(serviceName)) {
+                    return candidate;
+                }
+            }
+        }
+        return publication;
+    }
+
+    @Override
     public void unregisterService(final String serviceName, @Nullable final Promise promise) {
         executor.execute(() -> stopPublication(serviceName, promise));
     }
@@ -401,16 +509,7 @@ public class DnssdImpl implements Zeroconf {
     }
 
     private void stopPublication(String serviceName, @Nullable Promise promise) {
-        // By the requested name, or the name it was published under when it was renamed
-        Publication publication = publications.get(serviceName);
-        if (publication == null) {
-            for (Publication candidate : publications.values()) {
-                if (candidate.name.equals(serviceName)) {
-                    publication = candidate;
-                    break;
-                }
-            }
-        }
+        Publication publication = findPublication(serviceName);
         if (publication == null) {
             ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_NOT_PUBLISHED, "Service " + serviceName + " is not published", serviceName);
             return;
@@ -432,6 +531,23 @@ public class DnssdImpl implements Zeroconf {
     }
 
     // Helpers
+
+    // The index of a network interface by name, DNSSD.ALL_INTERFACES without one, -1 when it doesn't exist
+    private static int interfaceIndex(@Nullable String networkInterface) {
+        if (networkInterface == null) {
+            return DNSSD.ALL_INTERFACES;
+        }
+        int index = DNSSD.getIfIndexForName(networkInterface);
+        return index > 0 ? index : -1;
+    }
+
+    private static TXTRecord toTXTRecord(Map<String, String> txt) {
+        TXTRecord txtRecord = new TXTRecord();
+        for (Map.Entry<String, String> entry : txt.entrySet()) {
+            txtRecord.set(entry.getKey(), entry.getValue());
+        }
+        return txtRecord;
+    }
 
     private static String domainOrLocal(@Nullable String domain) {
         return domain == null || domain.isEmpty() ? "local." : domain;

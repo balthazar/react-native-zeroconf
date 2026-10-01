@@ -15,19 +15,19 @@ describe('publishService', () => {
     RN.Platform.OS = 'android'
     const txt = { b: 1, a: true }
     new Zeroconf().publishService({ type: 'http', protocol: 'tcp', name: 'a', port: 80, txt, implType: ImplType.DNSSD })
-    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'a', 80, [['b', '1'], ['a', 'true']], 'DNSSD'])
+    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'a', 80, [['b', '1'], ['a', 'true']], 'DNSSD', {}])
     expect(txt).toEqual({ b: 1, a: true })
   })
 
   test('takes TXT records as pairs to keep number-like keys in order', () => {
     new Zeroconf().publishService({ type: 'http', protocol: 'tcp', name: 'c', port: 82, txt: [['2', 'x'], ['1', 'y']] })
-    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'c', 82, [['2', 'x'], ['1', 'y']]])
+    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'c', 82, [['2', 'x'], ['1', 'y']], {}])
   })
 
   test('still takes the deprecated positional form', () => {
     RN.Platform.OS = 'android'
     new Zeroconf().publishService('http', 'tcp', undefined, 'b', 81)
-    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'b', 81, [], 'NSD'])
+    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'b', 81, [], 'NSD', {}])
   })
 
   test('resolves with the published service, possibly renamed', async () => {
@@ -61,6 +61,58 @@ describe('publishService', () => {
     await new Promise(resolve => setTimeout(resolve, 20))
     process.off('unhandledRejection', unhandled)
     expect(unhandled).not.toHaveBeenCalled()
+  })
+})
+
+describe('publish options', () => {
+  test('pass subtypes and the network interface', () => {
+    new Zeroconf().publishService({ type: 'ipp', protocol: 'tcp', name: 'p', port: 631, subtypes: ['printer'], networkInterface: 'en0' })
+    expect(RN.lastCall()).toEqual(['registerService', 'ipp', 'tcp', 'local.', 'p', 631, [], { subtypes: ['printer'], networkInterface: 'en0' }])
+  })
+})
+
+describe('updateService', () => {
+  test('sends the new TXT record', async () => {
+    RN.setNativeResult('updateService', { name: 'a', txt: { v: '2' } })
+    await expect(new Zeroconf().updateService('a', { txt: { v: 2 } })).resolves.toMatchObject({ txt: { v: '2' } })
+    expect(RN.lastCall()).toEqual(['updateService', 'a', [['v', '2']]])
+  })
+
+  test('uses the implementation the service was published with on Android', () => {
+    RN.Platform.OS = 'android'
+    const zeroconf = new Zeroconf()
+    zeroconf.publishService({ type: 'http', protocol: 'tcp', name: 'a', port: 80, implType: ImplType.DNSSD })
+    zeroconf.updateService('a', { txt: { v: '2' } })
+    expect(RN.lastCall()).toEqual(['updateService', 'a', [['v', '2']], 'DNSSD'])
+  })
+
+  test('rejects NOT_PUBLISHED for unknown services', async () => {
+    RN.setNativeResult('updateService', () =>
+      nativeRejection('NOT_PUBLISHED', { message: 'Service x is not published', code: 'NOT_PUBLISHED', domain: 'RNZeroconf', serviceName: 'x' }),
+    )
+    await expect(new Zeroconf().updateService('x', { txt: {} })).rejects.toMatchObject({ code: 'NOT_PUBLISHED' })
+  })
+})
+
+describe('resolveService', () => {
+  test('resolves with address families', async () => {
+    RN.setNativeResult('resolveService', { name: 'p', port: 631, addresses: ['fe80::1', '10.0.0.3'], txt: {} })
+    const service = await new Zeroconf().resolveService({ name: 'p', type: 'ipp' })
+    expect(service).toMatchObject({ addresses: ['10.0.0.3', 'fe80::1'], ipv4: ['10.0.0.3'], ipv6: ['fe80::1'] })
+    expect(RN.lastCall()).toEqual(['resolveService', 'p', 'ipp', 'tcp', 'local.', { timeout: 5 }])
+  })
+
+  test('passes the implementation and options on Android', () => {
+    RN.Platform.OS = 'android'
+    new Zeroconf().resolveService({ name: 'p', type: 'ipp', implType: ImplType.DNSSD, timeout: 10, networkInterface: 'wlan0' })
+    expect(RN.lastCall()).toEqual(['resolveService', 'p', 'ipp', 'tcp', 'local.', 'DNSSD', { timeout: 10, networkInterface: 'wlan0' }])
+  })
+
+  test('rejects with TIMEOUT', async () => {
+    RN.setNativeResult('resolveService', () =>
+      nativeRejection('TIMEOUT', { message: 'Resolving service p failed: timed out', code: 'TIMEOUT', domain: 'RNZeroconf', serviceName: 'p' }),
+    )
+    await expect(new Zeroconf().resolveService({ name: 'p' })).rejects.toMatchObject({ code: 'TIMEOUT', serviceName: 'p' })
   })
 })
 
@@ -101,9 +153,27 @@ describe('checkLocalNetworkAccess', () => {
     expect(RN.lastCall()).toEqual(['checkLocalNetworkAccess', '_dns._udp', 5])
   })
 
-  test('resolves unknown on Android without calling native code', async () => {
+  test('resolves granted on Android when there is nothing to grant', async () => {
     RN.Platform.OS = 'android'
-    await expect(new Zeroconf().checkLocalNetworkAccess()).resolves.toBe('unknown')
-    expect(RN.callsNamed('checkLocalNetworkAccess')).toEqual([])
+    RN.setNativeResult('checkLocalNetworkAccess', 'granted')
+    await expect(new Zeroconf().checkLocalNetworkAccess()).resolves.toBe('granted')
+    expect(RN.callsNamed('PermissionsAndroid.request')).toEqual([])
+  })
+
+  test('requests ACCESS_LOCAL_NETWORK on Android when it is missing', async () => {
+    RN.Platform.OS = 'android'
+    RN.setNativeResult('checkLocalNetworkAccess', 'denied')
+    RN.setNativeResult('PermissionsAndroid.request', 'granted')
+    await expect(new Zeroconf().checkLocalNetworkAccess()).resolves.toBe('granted')
+    expect(RN.callsNamed('PermissionsAndroid.request')).toEqual([
+      ['PermissionsAndroid.request', 'android.permission.ACCESS_LOCAL_NETWORK'],
+    ])
+  })
+
+  test('only checks on Android with request: false', async () => {
+    RN.Platform.OS = 'android'
+    RN.setNativeResult('checkLocalNetworkAccess', 'denied')
+    await expect(new Zeroconf().checkLocalNetworkAccess({ request: false })).resolves.toBe('denied')
+    expect(RN.callsNamed('PermissionsAndroid.request')).toEqual([])
   })
 })

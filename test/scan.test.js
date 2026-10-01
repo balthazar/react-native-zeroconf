@@ -6,17 +6,17 @@ beforeEach(() => RN.reset())
 describe('scan on iOS', () => {
   test('defaults to _http._tcp on local. with a 5s resolve timeout', () => {
     new Zeroconf().scan()
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', 5])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', { resolveTimeout: 5 }])
   })
 
   test('takes an options object', () => {
     new Zeroconf().scan({ type: 'printer', resolveTimeout: 15 })
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', 15])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', { resolveTimeout: 15 }])
   })
 
   test('still takes the deprecated positional form', () => {
     new Zeroconf().scan('ssh', 'udp')
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'udp', 'local.', 5])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'udp', 'local.', { resolveTimeout: 5 }])
   })
 
   test('stop passes the scan id', () => {
@@ -35,17 +35,17 @@ describe('scan on Android', () => {
 
   test('defaults to NSD', () => {
     new Zeroconf().scan()
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', 'NSD'])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', 'NSD', {}])
   })
 
   test('passes implType, not resolveTimeout', () => {
     new Zeroconf().scan({ type: 'printer', implType: ImplType.DNSSD, resolveTimeout: 15 })
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', 'DNSSD'])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', 'DNSSD', {}])
   })
 
   test('ignores undefined options instead of overriding the defaults', () => {
     new Zeroconf().scan({ type: 'ssh', domain: undefined })
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'tcp', 'local.', 'NSD'])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'tcp', 'local.', 'NSD', {}])
   })
 
   test('stop defaults to the implementation used by the last scan', () => {
@@ -61,7 +61,33 @@ describe('scan on Android', () => {
     zeroconf.scan({ type: 'ssh' })
     const [stop, scan] = RN.callsWithoutScanId().slice(-2)
     expect(stop).toEqual(['stop', 'DNSSD'])
-    expect(scan).toEqual(['scan', 'ssh', 'tcp', 'local.', 'NSD'])
+    expect(scan).toEqual(['scan', 'ssh', 'tcp', 'local.', 'NSD', {}])
+  })
+})
+
+describe('scan options', () => {
+  test('pass the subtype and network interface on iOS', () => {
+    new Zeroconf().scan({ type: 'ipp', subtype: 'printer', networkInterface: 'en0' })
+    expect(RN.lastCallWithoutScanId()).toEqual([
+      'scan',
+      'ipp',
+      'tcp',
+      'local.',
+      { resolveTimeout: 5, subtype: 'printer', networkInterface: 'en0' },
+    ])
+  })
+
+  test('pass the subtype and network interface on Android', () => {
+    RN.Platform.OS = 'android'
+    new Zeroconf().scan({ type: 'ipp', subtype: '_printer', networkInterface: 'wlan0' })
+    expect(RN.lastCallWithoutScanId()).toEqual([
+      'scan',
+      'ipp',
+      'tcp',
+      'local.',
+      'NSD',
+      { subtype: '_printer', networkInterface: 'wlan0' },
+    ])
   })
 })
 

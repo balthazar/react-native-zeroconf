@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, NativeModules, DeviceEventEmitter } from 'react-native'
+import { Platform, NativeModules, DeviceEventEmitter, PermissionsAndroid } from 'react-native'
 import { EventEmitter } from 'events'
 
 const RNZeroconf = NativeModules.RNZeroconf
@@ -37,6 +37,13 @@ const withDefaults = (defaults, options) => {
 }
 
 const isOptionsObject = value => value !== null && typeof value === 'object'
+
+// Options passed to native code, without the undefined ones
+const nativeOptions = options =>
+  Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined))
+
+// Android 17 (API 37) runtime permission, enforced for apps targeting API 37 or declaring it
+const ACCESS_LOCAL_NETWORK = 'android.permission.ACCESS_LOCAL_NETWORK'
 
 // Each instance runs its own scan, identified by this id in native events
 let instanceCount = 0
@@ -282,8 +289,8 @@ export default class Zeroconf extends EventEmitter {
    *
    * scanServiceTypes({ domain, implType })
    */
-  scanServiceTypes({ domain, implType } = {}) {
-    this._startScan({ ...SERVICE_TYPES, domain, implType }, true)
+  scanServiceTypes({ domain, implType, networkInterface } = {}) {
+    this._startScan({ ...SERVICE_TYPES, domain, implType, networkInterface }, true)
   }
 
   /**
@@ -302,7 +309,8 @@ export default class Zeroconf extends EventEmitter {
   }
 
   _startScan(options, scanningTypes) {
-    const { type, protocol, domain, implType, resolveTimeout } = withDefaults(SCAN_DEFAULTS, options)
+    const { type, protocol, domain, implType, resolveTimeout, subtype, networkInterface } =
+      withDefaults(SCAN_DEFAULTS, options)
 
     this._services = {}
     this._serviceTypes = {}
@@ -315,9 +323,22 @@ export default class Zeroconf extends EventEmitter {
         RNZeroconf.stop(this._scanId, this._scanImplType)
       }
       this._scanImplType = implType
-      RNZeroconf.scan(this._scanId, type, protocol, domain, implType)
+      RNZeroconf.scan(
+        this._scanId,
+        type,
+        protocol,
+        domain,
+        implType,
+        nativeOptions({ subtype, networkInterface }),
+      )
     } else {
-      RNZeroconf.scan(this._scanId, type, protocol, domain, resolveTimeout)
+      RNZeroconf.scan(
+        this._scanId,
+        type,
+        protocol,
+        domain,
+        nativeOptions({ resolveTimeout, subtype, networkInterface }),
+      )
     }
   }
 
@@ -334,13 +355,22 @@ export default class Zeroconf extends EventEmitter {
   }
 
   /**
-   * Checks the iOS Local Network permission, resolves 'granted', 'denied' or 'unknown'.
-   * Uses a service type from NSBonjourServices (the first one by default) and can show the permission prompt.
-   * Android has no equivalent permission to check and resolves 'unknown'.
+   * Checks the Local Network permission, resolves 'granted', 'denied' or 'unknown'.
+   * iOS: uses a service type from NSBonjourServices (the first one by default) and can show the permission prompt.
+   * Android: apps targeting Android 17 (API 37) need ACCESS_LOCAL_NETWORK on Android 17 devices, it is requested
+   * when missing unless request is false. 'granted' when there is nothing to grant.
    */
-  checkLocalNetworkAccess({ type, protocol = 'tcp', timeout = 5 } = {}) {
+  async checkLocalNetworkAccess({ type, protocol = 'tcp', timeout = 5, request = true } = {}) {
     if (Platform.OS === 'android') {
-      return Promise.resolve('unknown')
+      if (!RNZeroconf.checkLocalNetworkAccess) {
+        return 'unknown'
+      }
+      const status = await asPromise(RNZeroconf.checkLocalNetworkAccess())
+      if (status !== 'denied' || !request) {
+        return status
+      }
+      const result = await PermissionsAndroid.request(ACCESS_LOCAL_NETWORK)
+      return result === PermissionsAndroid.RESULTS.GRANTED ? 'granted' : 'denied'
     }
     const serviceType = type ? `_${type}._${protocol}` : null
     return asPromise(RNZeroconf.checkLocalNetworkAccess(serviceType, timeout))
@@ -354,28 +384,68 @@ export default class Zeroconf extends EventEmitter {
    * publishService(type, protocol, domain, name, port, txt, implType) is deprecated
    */
   publishService(options, protocolArg, domainArg, nameArg, portArg, txtArg, implTypeArg) {
-    const { type, protocol, domain, name, port, txt, implType } = withDefaults(
-      PUBLISH_DEFAULTS,
-      isOptionsObject(options)
-        ? options
-        : {
-            type: options,
-            protocol: protocolArg,
-            domain: domainArg,
-            name: nameArg,
-            port: portArg,
-            txt: txtArg,
-            implType: implTypeArg,
-          },
-    )
+    const { type, protocol, domain, name, port, txt, implType, subtypes, networkInterface } =
+      withDefaults(
+        PUBLISH_DEFAULTS,
+        isOptionsObject(options)
+          ? options
+          : {
+              type: options,
+              protocol: protocolArg,
+              domain: domainArg,
+              name: nameArg,
+              port: portArg,
+              txt: txtArg,
+              implType: implTypeArg,
+            },
+      )
     const txtRecord = toTxtPairs(txt)
+    const native = nativeOptions({ subtypes, networkInterface })
     if (Platform.OS === 'android') {
       this._publishedImplTypes[name] = implType
       return asPromise(
-        RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, implType),
+        RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, implType, native),
       )
     }
-    return asPromise(RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord))
+    return asPromise(
+      RNZeroconf.registerService(type, protocol, domain, name, port, txtRecord, native),
+    )
+  }
+
+  /**
+   * Replace the TXT record of a published service, resolves with the updated service.
+   * Android NSD has no update, the service is published again under the same name.
+   *
+   * updateService(name, { txt })
+   */
+  updateService(
+    name,
+    { txt = {}, implType = this._publishedImplTypes[name] || ImplType.NSD } = {},
+  ) {
+    const txtRecord = toTxtPairs(txt)
+    if (Platform.OS === 'android') {
+      return asPromise(RNZeroconf.updateService(name, txtRecord, implType))
+    }
+    return asPromise(RNZeroconf.updateService(name, txtRecord))
+  }
+
+  /**
+   * Resolve one service by name without scanning, for a device found before.
+   * Resolves with the service, rejects with code 'TIMEOUT' when it doesn't answer in time.
+   *
+   * resolveService({ name, type, protocol, domain, implType, timeout, networkInterface })
+   */
+  resolveService(options) {
+    const { name, type, protocol, domain, implType, timeout, networkInterface } = withDefaults(
+      { ...SCAN_DEFAULTS, timeout: 5 },
+      options,
+    )
+    const native = nativeOptions({ timeout, networkInterface })
+    const promise =
+      Platform.OS === 'android'
+        ? RNZeroconf.resolveService(name, type, protocol, domain, implType, native)
+        : RNZeroconf.resolveService(name, type, protocol, domain, native)
+    return asPromise(asPromise(promise).then(service => service && withAddressFamilies(service)))
   }
 
   /**
@@ -447,13 +517,31 @@ function useScan(enabled, startScan, read, deps) {
  * const { services, isScanning, error, stop, restart } = useZeroconf({ type: 'http' })
  */
 export function useZeroconf(options = {}) {
-  const { type, protocol, domain, implType, resolveTimeout, enabled = true } = options
+  const {
+    type,
+    protocol,
+    domain,
+    implType,
+    resolveTimeout,
+    subtype,
+    networkInterface,
+    enabled = true,
+  } = options
   const { items, ...scan } = useScan(
     enabled,
-    zeroconf => zeroconf.scan({ type, protocol, domain, implType, resolveTimeout }),
+    zeroconf =>
+      zeroconf.scan({
+        type,
+        protocol,
+        domain,
+        implType,
+        resolveTimeout,
+        subtype,
+        networkInterface,
+      }),
     // Found services only have a name until they are resolved
     zeroconf => Object.values(zeroconf.getServices()).filter(service => service.addresses),
-    [type, protocol, domain, implType, resolveTimeout],
+    [type, protocol, domain, implType, resolveTimeout, subtype, networkInterface],
   )
   return { services: items, ...scan }
 }
@@ -464,12 +552,12 @@ export function useZeroconf(options = {}) {
  * const { serviceTypes, isScanning, error, stop, restart } = useServiceTypes()
  */
 export function useServiceTypes(options = {}) {
-  const { domain, implType, enabled = true } = options
+  const { domain, implType, networkInterface, enabled = true } = options
   const { items, ...scan } = useScan(
     enabled,
-    zeroconf => zeroconf.scanServiceTypes({ domain, implType }),
+    zeroconf => zeroconf.scanServiceTypes({ domain, implType, networkInterface }),
     zeroconf => zeroconf.getServiceTypes(),
-    [domain, implType],
+    [domain, implType, networkInterface],
   )
   return { serviceTypes: items, ...scan }
 }
