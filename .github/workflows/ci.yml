@@ -100,9 +100,20 @@ jobs:
           npm install react-native-windows@^0.84.0
           npx @react-native-community/cli init-windows --template cpp-app --overwrite --logging
           npm install "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
-      - name: Build
+          cp "$GITHUB_WORKSPACE/test/windows/App.tsx" App.tsx
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the self-test
+        run: pip install zeroconf
+      # Builds, installs and launches the app, which runs test/windows/App.tsx against the peer
+      # and reports through a _zcresult._tcp service that check-app.py waits for
+      - name: Build, run the self-test app and check its result
         working-directory: ${{ runner.temp }}/ZeroconfWindows
-        run: npx @react-native-community/cli run-windows --no-launch --no-packager --no-deploy --arch x64 --logging
+        run: |
+          python "$GITHUB_WORKSPACE/test/windows/peer.py" &
+          npx @react-native-community/cli run-windows --release --no-packager --arch x64 --logging
+          python "$GITHUB_WORKSPACE/test/windows/check-app.py"
 
   android:
     name: Android build
