@@ -72,6 +72,20 @@ jobs:
         with:
           node-version: 22
       - uses: microsoft/setup-msbuild@v2
+      # react-native-windows targets the Windows 11 SDK 10.0.22621, not installed on every runner image
+      - name: Install the Windows SDK 10.0.22621
+        shell: pwsh
+        run: |
+          $sdks = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+          Get-ChildItem $sdks | Select-Object -ExpandProperty Name
+          if (-not (Test-Path "$sdks\10.0.22621.0")) {
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+            $vs = & "$installer\vswhere.exe" -latest -property installationPath
+            $arguments = @('modify', '--installPath', "`"$vs`"", '--add', 'Microsoft.VisualStudio.Component.Windows11SDK.22621', '--quiet', '--norestart', '--nocache')
+            $process = Start-Process -FilePath "$installer\vs_installer.exe" -ArgumentList $arguments -Wait -PassThru
+            Write-Host "vs_installer exit code: $($process.ExitCode)"
+            Get-ChildItem $sdks | Select-Object -ExpandProperty Name
+          }
       - name: Pack the library
         run: |
           yarn install --frozen-lockfile

@@ -96,11 +96,12 @@ export interface ResolveOptions {
  * - `DNSSD`: DNSServiceErrorType, on iOS and from Android's embedded mDNSResponder,
  *   e.g. `-65555` type missing from NSBonjourServices, `-65570` Local Network access denied
  * - `NsdManager`: Android NsdManager failure code
+ * - `Windows`: Win32 / DNS_STATUS code from the Windows DNS-SD functions
  * - `RNZeroconf`: the library's own errors, e.g. `'EXCEPTION'`, `'TIMEOUT'`, `'UNKNOWN_INTERFACE'`
  */
 export interface ZeroconfError extends Error {
   code: number | string
-  domain: 'DNSSD' | 'NsdManager' | 'RNZeroconf'
+  domain: 'DNSSD' | 'NsdManager' | 'RNZeroconf' | 'Windows'
   /** The service the error is about, when there is one */
   serviceName?: string
 }
