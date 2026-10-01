@@ -48,7 +48,7 @@ switch (access) {
 
 - It uses the first entry of `NSBonjourServices` unless you pass `type` (and `protocol`). The type must be declared, otherwise it rejects with code `'MISSING_BONJOUR_SERVICES'`.
 - It can trigger the permission prompt if the user has not answered it yet, so call it at a moment where the prompt makes sense.
-- On Android it always resolves `'unknown'`.
+- On Android it checks the Android 17 local network permission instead, see below.
 
 ### iOS errors in short
 
@@ -68,7 +68,31 @@ The library manifest declares these permissions and they are merged into your ap
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 ```
 
-None of them is a runtime (dangerous) permission, so there is nothing to request at runtime.
+None of them is a runtime (dangerous) permission.
+
+### Android 17 local network permission
+
+Android 17 (API 37) adds `ACCESS_LOCAL_NETWORK`, a runtime permission "required to be able to advertise and connect to local network devices". It is enforced on Android 17 devices for:
+
+- apps targeting API 37 or later,
+- apps that declare it in their manifest, whatever their target.
+
+Without it, discovery fails with `NsdManager` error `7` (`FAILURE_PERMISSION_DENIED`) and publishing fails. The library does not declare it, so apps targeting an earlier API keep working as before. When your app targets API 37, declare it:
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+```
+
+(in Expo: `expo.android.permissions` in `app.json`), then request it before scanning or publishing:
+
+```javascript
+const access = await zeroconf.checkLocalNetworkAccess()
+if (access === 'granted') {
+  zeroconf.scan({ type: 'http' })
+}
+```
+
+On Android, `checkLocalNetworkAccess()` resolves `'granted'` when the permission is not enforced, otherwise it shows the system prompt when the permission is missing (pass `request: false` to only check) and resolves `'granted'` or `'denied'`.
 
 > The Android emulator does not pass multicast traffic by default, so discovery usually finds nothing there. Use a real device, or see [Android Emulator](Android-Emulator).
 

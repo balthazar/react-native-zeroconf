@@ -22,7 +22,9 @@ Error codes and domains are on the [Errors](Errors) page.
 | [`getServiceTypes()`](#getservicetypes) | `ServiceType[]` | Service types found by `scanServiceTypes()` |
 | [`publishService(options)`](#publishserviceoptions) | `Promise<PublishedService>` | Advertise a service |
 | [`unpublishService(name, implType?)`](#unpublishservicename-impltype) | `Promise` | Withdraw a published service |
-| [`checkLocalNetworkAccess(options?)`](#checklocalnetworkaccessoptions) | `Promise<'granted' \| 'denied' \| 'unknown'>` | iOS Local Network permission |
+| [`updateService(name, options)`](#updateservicename-options) | `Promise<PublishedService>` | Replace the TXT record of a published service |
+| [`resolveService(options)`](#resolveserviceoptions) | `Promise<Service>` | Resolve one service by name, without scanning |
+| [`checkLocalNetworkAccess(options?)`](#checklocalnetworkaccessoptions) | `Promise<'granted' \| 'denied' \| 'unknown'>` | Local Network permission (iOS, Android 17) |
 | [`subscribe(event, listener)`](#subscribeevent-listener) | `() => void` | Add a listener, get a function removing it |
 | [`addDeviceListeners()`](#adddevicelisteners--removedevicelisteners) | `void` | Attach native event listeners (done by the constructor) |
 | [`removeDeviceListeners()`](#adddevicelisteners--removedevicelisteners) | `void` | Detach native event listeners |
@@ -38,6 +40,8 @@ Starts browsing. Clears the list returned by `getServices()` and emits `update`.
 | `domain` | `string` | `'local.'` | all | Domain to browse |
 | `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | Discovery backend, see [Android Implementations](Android-Implementations) |
 | `resolveTimeout` | `number` | `5` | iOS | Seconds to try resolving each service. A timeout is retried once, then reported as an `error` with code `'TIMEOUT'` |
+| `subtype` | `string` | none | all | Only find services registered with this subtype, e.g. `'printer'`. See [Subtypes](Scanning#subtypes) |
+| `networkInterface` | `string` | all interfaces | all | Interface to scan on, e.g. `'en0'`, `'wlan0'`. Android `NSD` needs Android 13+. See [Choosing a network interface](Scanning#choosing-a-network-interface) |
 
 ```javascript
 zeroconf.scan()
@@ -66,6 +70,7 @@ Starts listing the service types advertised on the network (browsing `_services.
 | --- | --- | --- | --- | --- |
 | `domain` | `string` | `'local.'` | all | Domain to browse |
 | `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | With `NSD`, the list leaves out services published by the phone running the app. `DNSSD`, however, includes them |
+| `networkInterface` | `string` | all interfaces | all | Interface to list the types on |
 
 ### `getServiceTypes()`
 
@@ -84,6 +89,8 @@ Advertises a service. Resolves with the service once it is advertised, rejects w
 | `port` | `number` | required | all | Port |
 | `txt` | `object \| [key, value][]` | `{}` | all | TXT record. Pairs keep an explicit order, see [TXT records](Publishing#txt-records) |
 | `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | Backend used to publish |
+| `subtypes` | `string[]` | none | all | Subtypes to register, e.g. `['printer']`. See [Subtypes](Publishing#subtypes) |
+| `networkInterface` | `string` | all interfaces | all | Interface to publish on. Android `NSD` needs Android 13+ |
 
 > **Use the resolved name.** The published name can differ from `name` when that name is already taken. Pass `service.name` to `unpublishService()`.
 
@@ -100,13 +107,17 @@ Withdraws a published service. Resolves once it is no longer advertised and emit
 
 ### `checkLocalNetworkAccess(options?)`
 
-**iOS.** Resolves `'granted'`, `'denied'` or `'unknown'`. iOS has no API to read the Local Network permission, so this advertises a temporary service and browses for it. It can show the permission prompt if the user has not answered it yet. **Android** always resolves `'unknown'`.
+Resolves `'granted'`, `'denied'` or `'unknown'`.
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `type` | `string` | first entry of `NSBonjourServices` | Service type to test with, must be declared in `NSBonjourServices` |
-| `protocol` | `string` | `'tcp'` | Protocol |
-| `timeout` | `number` | `5` | Seconds before concluding `'denied'` or `'unknown'` |
+- **iOS:** iOS has no API to read the Local Network permission, so this advertises a temporary service and browses for it. It can show the permission prompt if the user has not answered it yet.
+- **Android:** on Android 17 (API 37) devices, the `ACCESS_LOCAL_NETWORK` runtime permission is enforced for apps targeting API 37 and for apps declaring it. When it is missing, it is requested (the system prompt shows) unless `request` is `false`. Resolves `'granted'` when there is nothing to grant (earlier versions, or an app not concerned).
+
+| Option | Type | Default | Platform | Description |
+| --- | --- | --- | --- | --- |
+| `type` | `string` | first entry of `NSBonjourServices` | iOS | Service type to test with, must be declared in `NSBonjourServices` |
+| `protocol` | `string` | `'tcp'` | iOS | Protocol |
+| `timeout` | `number` | `5` | iOS | Seconds before concluding `'denied'` or `'unknown'` |
+| `request` | `boolean` | `true` | Android | Request `ACCESS_LOCAL_NETWORK` when it is missing |
 
 Rejects with code `'MISSING_BONJOUR_SERVICES'` when no type is given and `NSBonjourServices` is empty. See [Permissions and Setup](Permissions-and-Setup#the-local-network-prompt).
 
@@ -143,6 +154,37 @@ Returns:
 
 It scans again when the options change, and stops and removes its listeners on unmount. Each hook runs its own scan, so several hooks can scan different types at once.
 
+### `updateService(name, options)`
+
+Replaces the TXT record of a published service and resolves with the updated `PublishedService`. Scanning devices receive the change as a new `resolved` event. Rejects with code `'NOT_PUBLISHED'` for an unknown name. See [Updating the TXT record](Publishing#updating-the-txt-record).
+
+| Option | Type | Default | Platform | Description |
+| --- | --- | --- | --- | --- |
+| `txt` | `TxtRecord` | `{}` | all | The new TXT record |
+| `implType` | `'NSD' \| 'DNSSD'` | implementation the service was published with | Android | Android `NSD` publishes the service again under the same name, `DNSSD` and iOS update it in place |
+
+```javascript
+await zeroconf.updateService('My Web Server', { txt: { state: 'busy' } })
+```
+
+### `resolveService(options)`
+
+Resolves one service by name without scanning, and resolves with a `Service`. Rejects with code `'TIMEOUT'` when the service doesn't answer in time. No events are emitted. See [Resolving a single service](Scanning#resolving-a-single-service).
+
+| Option | Type | Default | Platform | Description |
+| --- | --- | --- | --- | --- |
+| `name` | `string` | required | all | Service name |
+| `type` | `string` | `'http'` | all | Service type without underscore |
+| `protocol` | `string` | `'tcp'` | all | `'tcp'` or `'udp'` |
+| `domain` | `string` | `'local.'` | all | Domain |
+| `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | Implementation |
+| `timeout` | `number` | `5` | all | Seconds before rejecting with `'TIMEOUT'` |
+| `networkInterface` | `string` | all interfaces | all | Interface to resolve on |
+
+```javascript
+const printer = await zeroconf.resolveService({ name: 'Office Printer', type: 'ipp' })
+```
+
 ## `useServiceTypes(options?)`
 
 React hook that lists the service types while the component is mounted. Takes the `scanServiceTypes()` options plus `enabled`, and returns `serviceTypes` (`ServiceType[]`) with the same `isScanning`, `error`, `stop()` and `restart()` as `useZeroconf`.
@@ -166,7 +208,7 @@ On Android, `NSD` and `DNSSD` scans can run concurrently. On iOS, every scanned 
 | `start` | none | The scan started |
 | `stop` | none | The scan stopped |
 | `found` | `name: string` | A service appeared (not resolved yet) |
-| `resolved` | `Service` | A service was resolved. On Android 14+ with `NSD`, it can fire again when addresses or TXT records change |
+| `resolved` | `Service` | A service was resolved. It fires again when its addresses or TXT record change, on iOS and on Android 14+ with `NSD` (see [Updates](Scanning#updates)) |
 | `remove` | `name: string` | A service left the network |
 | `update` | none | The list returned by `getServices()` or `getServiceTypes()` changed |
 | `typeFound` | `ServiceType` | A service type appeared, during `scanServiceTypes()` |
@@ -218,6 +260,8 @@ Exported from `react-native-zeroconf`:
 | `ZeroconfEvents` | Event name to listener signature map |
 | `UseZeroconfOptions` | Options of `useZeroconf()` |
 | `UseZeroconfResult` | Return value of `useZeroconf()` |
+| `UpdateOptions` | Options of `updateService()` |
+| `ResolveOptions` | Options of `resolveService()` |
 | `ServiceTypesScanOptions` | Options of `scanServiceTypes()` |
 | `UseServiceTypesOptions` | Options of `useServiceTypes()` |
 | `UseServiceTypesResult` | Return value of `useServiceTypes()` |

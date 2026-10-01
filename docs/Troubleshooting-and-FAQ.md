@@ -50,6 +50,10 @@ zeroconf.scan({ type: 'ipp', resolveTimeout: 15 })
 
 The emulator does not support multicast by default, and mDNS needs multicast (`224.0.0.251:5353`). Use a real device, or the advanced setup in [Android Emulator](Android-Emulator).
 
+### Android 17: `NsdManager` error `7`, or publishing fails with "Missing local network permission"
+
+The app targets API 37, or declares `ACCESS_LOCAL_NETWORK` in its manifest, and the user hasn't granted it. Request it with `checkLocalNetworkAccess()` before scanning or publishing. See [Permissions and Setup](Permissions-and-Setup#android-17-local-network-permission).
+
 ### Android: discovery stops or is unreliable
 
 `NsdManager` is known to stop silently, fail resolves, or be throttled by OEM battery optimizations. Try, in order:
@@ -115,9 +119,12 @@ Yes. Each `Zeroconf` instance runs its own scan and receives only its own scan's
 The podspec supports macOS 10.15 and tvOS 13.4. See [Platform Support](Platform-Support).
 
 **Do I need to request Android permissions at runtime?**
-No. The permissions used are normal permissions, merged from the library manifest.
+Not before Android 17. On Android 17, apps targeting API 37 (or declaring the permission) need `ACCESS_LOCAL_NETWORK`: request it with `checkLocalNetworkAccess()`, see [Permissions and Setup](Permissions-and-Setup#android-17-local-network-permission).
 
-**Can I browse all service types (`_services._dns-sd._udp`)?**
-TODO: not documented yet.
+**Can I list every service type on the network (`_services._dns-sd._udp`)?**
+Yes on Android, with `scanServiceTypes()` or `useServiceTypes()`. On iOS it requires the multicast entitlement from Apple. See [Listing service types](Scanning#listing-service-types).
+
+**How do I reconnect to a device I found before?**
+Resolve it by name with `resolveService()`, no scan needed. See [Resolving a single service](Scanning#resolving-a-single-service).
 
 **Still stuck?** Open an [issue](https://github.com/balthazar/react-native-zeroconf/issues) with the platform, OS version, `implType`, the service type, and the `domain` and `code` of any error.

@@ -19,9 +19,13 @@
 | TXT order preserved when publishing | ✅ | System dependent | ✅ |
 | IPv4 and IPv6 addresses | ✅ | All on Android 14+, one before | ✅ |
 | mDNS host name in `host` | ✅ | Android 16+ | ✅ |
-| Updates re-emitted as `resolved` | | Android 14+ | |
+| Updates re-emitted as `resolved` | ✅ | Android 14+ | |
 | `resolveTimeout` | ✅ | | |
-| `checkLocalNetworkAccess()` | ✅ | Resolves `'unknown'` | Resolves `'unknown'` |
+| `checkLocalNetworkAccess()` | ✅ | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) |
+| Subtypes (`subtype`, `subtypes`) | ✅ | ✅ | ✅ |
+| `networkInterface` | ✅ | Android 13+ | ✅ |
+| `updateService()` | ✅ In place | ✅ Publishes again | ✅ In place |
+| `resolveService()` | ✅ | ✅ | ✅ |
 | `scanServiceTypes()` | With the multicast entitlement, see [Listing service types](Scanning#listing-service-types) | ✅ Other devices' types | ✅ |
 | Error domain | `DNSSD`, `RNZeroconf` | `NsdManager`, `RNZeroconf` | `DNSSD`, `RNZeroconf` |
 

@@ -5,6 +5,9 @@ Find the services other devices advertise on the local network, and read what th
 - [Scanning for services](#scanning-for-services)
 - [Multiple scans](#multiple-scans)
 - [Resolved services](#resolved-services)
+- [Subtypes](#subtypes)
+- [Choosing a network interface](#choosing-a-network-interface)
+- [Resolving a single service](#resolving-a-single-service)
 - [Listing service types](#listing-service-types)
 - [Common service types](#common-service-types)
 
@@ -97,7 +100,58 @@ zeroconf.on('resolved', service => {
 })
 ```
 
+### Updates
+
+A resolved service is emitted as `resolved` again when its addresses or TXT record change, so update your list by `service.name` rather than appending:
+
+| Platform | `resolved` again on changes |
+| --- | --- |
+| iOS | Yes |
+| Android `NSD` | Android 14+ |
+| Android `DNSSD` | No, once per address found |
+
 > On Android with `NSD`, `host` is the mDNS host name only on Android 16+. Earlier versions usually give the IP address in `host`. Use `implType: 'DNSSD'` if you need the host name there. See [Android Implementations](Android-Implementations).
+## Subtypes
+
+Services can be registered with subtypes (`_printer._sub._ipp._tcp`), for example to tell color printers apart. Scan a subtype to only find those services:
+
+```javascript
+zeroconf.scan({ type: 'ipp', subtype: 'printer' })
+```
+
+`subtype` takes the label with or without the leading underscore. Publish with subtypes using `subtypes: ['printer']` (see [Publishing](Publishing#subtypes)). Subtypes work on iOS and with both Android implementations.
+
+## Choosing a network interface
+
+By default, scans use every network interface. Pass `networkInterface` to use one, by its system name:
+
+```javascript
+zeroconf.scan({ type: 'http', networkInterface: Platform.OS === 'ios' ? 'en0' : 'wlan0' })
+```
+
+- Common names: `en0` (iOS Wi-Fi), `wlan0` (Android Wi-Fi), `eth0` (Android Ethernet).
+- An interface that doesn't exist emits an `error` with code `'UNKNOWN_INTERFACE'`.
+- Android `NSD` needs Android 13 or later for it, earlier versions emit an `error` with code `'UNSUPPORTED'`. `DNSSD` supports every version.
+
+`publishService()` and `resolveService()` take the same option.
+
+## Resolving a single service
+
+To reach a service you found before, resolve it by name instead of scanning again:
+
+```javascript
+try {
+  const printer = await zeroconf.resolveService({ name: 'Office Printer', type: 'ipp' })
+  console.log(printer.ipv4[0], printer.port)
+} catch (error) {
+  if (error.code === 'TIMEOUT') {
+    // Not on the network right now
+  }
+}
+```
+
+It resolves once with a `Service` and doesn't emit events. `timeout` (seconds, default `5`) sets how long to wait before rejecting with code `'TIMEOUT'`.
+
 ## Listing service types
 
 mDNS only finds services of a type you ask for. To see which types are advertised on the network, list them first:

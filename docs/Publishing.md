@@ -4,6 +4,9 @@ Advertise your own services on the local network, with their TXT records.
 
 - [Publishing a service](#publishing-a-service)
 - [TXT records](#txt-records)
+- [Updating the TXT record](#updating-the-txt-record)
+- [Subtypes](#subtypes)
+- [Choosing a network interface](#choosing-a-network-interface)
 
 ## Publishing a service
 
@@ -58,6 +61,36 @@ txt: [
 Values are converted to strings. On iOS, a `key=value` entry longer than 255 bytes is left out of the record and reported through an `error` event with code `'TXT_ENTRY_TOO_LONG'` (the service is still published).
 
 Received TXT records are exposed as `service.txt`, an object of strings.
+
+## Updating the TXT record
+
+Change the TXT record of a published service without unpublishing it, for example to announce a new state:
+
+```javascript
+await zeroconf.updateService(service.name, { txt: { state: 'busy' } })
+```
+
+The new record replaces the previous one. Devices scanning the service receive it as a new `resolved` event (see [Scanning](Scanning#updates)). It rejects with code `'NOT_PUBLISHED'` if nothing is published under that name.
+
+> Android `NSD` has no way to update a registration: the service is unpublished and published again under the same name, without `unpublished` and `published` events. iOS and Android `DNSSD` update the record in place.
+
+## Subtypes
+
+Register subtypes so others can scan for them (see [Scanning](Scanning#subtypes)):
+
+```javascript
+await zeroconf.publishService({
+  type: 'ipp',
+  protocol: 'tcp',
+  name: 'Office Printer',
+  port: 631,
+  subtypes: ['printer', 'color'],
+})
+```
+
+## Choosing a network interface
+
+Pass `networkInterface` (for example `'en0'` or `'wlan0'`) to publish on one interface instead of all of them. The same rules as for [scanning](Scanning#choosing-a-network-interface) apply.
 
 ---
 

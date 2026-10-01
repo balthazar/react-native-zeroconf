@@ -10,7 +10,7 @@ zeroconf.on('resolved', service => console.log(service.name, service.addresses, 
 zeroconf.scan({ type: 'http' })
 ```
 
-> **Documentation for 0.16.** These docs describe the 0.16 API (options objects, promises, structured errors). Coming from 0.15 or earlier? Read the [Migration Guide](Migration-Guide).
+> **Documentation for 0.17.** Upgrading from an earlier version? Read the [Migration Guide](Migration-Guide).
 
 ## Start here
 
@@ -27,7 +27,7 @@ zeroconf.scan({ type: 'http' })
 | Choose between `NSD` and `DNSSD` on Android | [Android Implementations](Android-Implementations) |
 | Test on the Android emulator | [Android Emulator](Android-Emulator) |
 | Fix "nothing is found", `-65555` / `-65570`, Expo Go crashes... | [Troubleshooting and FAQ](Troubleshooting-and-FAQ) |
-| Upgrade from 0.15 | [Migration Guide](Migration-Guide) |
+| Upgrade from an earlier version | [Migration Guide](Migration-Guide) |
 | Check what each platform supports | [Platform Support](Platform-Support) |
 | Build the library and the example app | [Contributing](Contributing) |
 
@@ -36,9 +36,13 @@ zeroconf.scan({ type: 'http' })
 - **React hook**: `useZeroconf()` scans while a component is mounted and returns the resolved services.
 - **Discovery**: `scan()` emits `found`, then `resolved` with host, port, addresses (IPv4 first) and TXT records.
 - **Multiple scans**: each `Zeroconf` instance (and each `useZeroconf` hook) runs its own scan, so several service types can be browsed at once.
+- **Service types**: `scanServiceTypes()` lists the service types advertised on the network (Android, or iOS with the multicast entitlement).
+- **Live updates**: `resolved` fires again when a service's addresses or TXT record change.
+- **Subtypes and interfaces**: scan or publish subtypes, and pick a network interface.
+- **Single services**: `resolveService()` reaches a known service by name, `updateService()` changes a published TXT record.
 - **Publishing**: `publishService()` returns a promise with the service as advertised (its name can be renamed on conflict).
 - **Structured errors**: every error carries `code`, `domain` and, when relevant, `serviceName`.
-- **iOS Local Network permission**: `checkLocalNetworkAccess()` tells you whether the user denied access.
+- **Local Network permission**: `checkLocalNetworkAccess()` checks iOS Local Network access and the Android 17 `ACCESS_LOCAL_NETWORK` permission.
 - **Two Android backends**: the system `NsdManager` (`NSD`, default) or an embedded mDNSResponder (`DNSSD`).
 - **TypeScript**: type definitions ship with the package.
 
