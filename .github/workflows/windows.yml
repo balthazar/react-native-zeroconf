@@ -4,7 +4,7 @@ name: Windows
 # that affects Windows changes. Run them by hand from the Actions tab before a release.
 on:
   push:
-    branches: [master, windows]
+    branches: [master]
     paths:
       - 'windows/**'
       - 'test/windows/**'
