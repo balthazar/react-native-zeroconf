@@ -98,10 +98,14 @@ jobs:
           rm -rf node_modules/react-native-zeroconf
           mkdir -p node_modules/react-native-zeroconf
           tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
-      - uses: hendrikmuhs/ccache-action@v1.2
+      - name: Install ccache
+        run: brew install ccache
+      # React Native's ccache wrapper uses its own config file, so ccache keeps its default directory
+      - uses: actions/cache@v6
         with:
-          key: ios-example
-          max-size: 1G
+          path: ~/Library/Caches/ccache
+          key: ccache-ios-${{ github.run_id }}
+          restore-keys: ccache-ios-
       - uses: actions/cache@v6
         with:
           path: ~/Library/Caches/CocoaPods
@@ -114,11 +118,12 @@ jobs:
         run: npx expo prebuild --platform ios
       - name: Build
         working-directory: example/ios
-        env:
-          # React Native's ccache wrapper uses its own config file, which doesn't have the action's cache_dir
-          CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           set -o pipefail
+          ccache -z
           xcodebuild -workspace ZeroconfBrowser.xcworkspace -scheme ZeroconfBrowser \
             -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build | tail -20
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { tail -50 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+          tail -5 "$RUNNER_TEMP/xcodebuild.log"
+          echo "Compilations through ccache: $(grep -c ccache-clang "$RUNNER_TEMP/xcodebuild.log" || true)"
+          ccache -s
