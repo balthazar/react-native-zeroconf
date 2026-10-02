@@ -84,7 +84,7 @@ import Zeroconf, { ImplType, Service, ZeroconfError } from 'react-native-zerocon
 | Platform | Minimum |
 | --- | --- |
 | React Native | 0.60 (peer dependency `>=0.60`) |
-| iOS | React Native's own minimum (falls back to 13.4 on older React Native) |
+| iOS | 13.4, or React Native's minimum if higher |
 | macOS | 10.15 |
 | tvOS | 13.4 |
 | Android | API 21 (Android 5.0) |

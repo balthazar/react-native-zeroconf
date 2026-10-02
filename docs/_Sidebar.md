@@ -21,7 +21,7 @@
 
 **Help**
 - [Troubleshooting and FAQ](Troubleshooting-and-FAQ)
-- [Migration Guide (0.15 to 0.16)](Migration-Guide)
+- [Migration Guide](Migration-Guide)
 
 **Project**
 - [Contributing](Contributing)

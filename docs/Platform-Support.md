@@ -2,33 +2,36 @@
 
 | Platform | Minimum | Implementation |
 | --- | --- | --- |
-| iOS | React Native's minimum (13.4 on React Native versions that don't define one) | Apple dns_sd C API |
-| macOS (react-native-macos) | 10.15 | Apple dns_sd C API |
+| iOS | 13.4 or React Native's minimum | Apple dns_sd C API |
+| macOS | 10.15 | Apple dns_sd C API, with react-native-macos |
 | tvOS | 13.4 | Apple dns_sd C API |
-| Android | API 21 (Android 5.0) | `NsdManager` (`NSD`) or embedded mDNSResponder (`DNSSD`) |
-| Windows (react-native-windows) | Windows 10 | DNS-SD functions of `windns.h` |
-| Expo | Development builds only (tested with SDK 54) | Same as the native platform |
-| Expo Go | Not supported | |
+| Android | API 21 (Android 5.0) | `NsdManager` or embedded mDNSResponder |
+| Windows | Windows 10 | `windns.h`, with react-native-windows |
+| Expo | Development builds, SDK 54 tested | Same as the native platform |
+| Expo Go | ❌ | |
 
 ## Features
 
+✅ supported, 🟡 partial or conditional (hover or tap it for details), ❌ not supported.
+
 | Feature | iOS | Android `NSD` | Android `DNSSD` | Windows |
-| --- | --- | --- | --- | --- |
+| --- | :---: | :---: | :---: | :---: |
 | Discovery | ✅ | ✅ | ✅ | ✅ |
 | Publishing | ✅ | ✅ | ✅ | ✅ |
 | TXT records | ✅ | ✅ | ✅ | ✅ |
-| TXT order preserved when publishing | ✅ | System dependent | ✅ | ✅ |
-| IPv4 and IPv6 addresses | ✅ | All on Android 14+, one before | ✅ | One of each |
-| mDNS host name in `host` | ✅ | Android 16+ | ✅ | ✅ |
-| Updates re-emitted as `resolved` | ✅ | Android 14+ | | ✅ TXT, host and port |
-| `resolveTimeout` | ✅ | | | |
-| `checkLocalNetworkAccess()` | ✅ | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | ✅ `ACCESS_LOCAL_NETWORK` (Android 17) | Resolves `'granted'` (nothing to grant) |
-| Subtypes (`subtype`, `subtypes`) | ✅ | ✅ | ✅ | Scanning only, publishing rejects `'UNSUPPORTED'` |
-| `networkInterface` | ✅ | Android 13+ | ✅ | ✅ Adapter name (`'Wi-Fi'`) or interface index |
-| `updateService()` | ✅ In place | ✅ Publishes again | ✅ In place | ✅ Publishes again |
+| TXT order kept when publishing | ✅ | <span title="Depends on the Android version and device">🟡</span> | ✅ | ✅ |
+| IPv4 and IPv6 addresses | ✅ | <span title="All addresses on Android 14+, one before">🟡</span> | ✅ | <span title="One IPv4 and one IPv6 address">🟡</span> |
+| mDNS host name in `host` | ✅ | <span title="Android 16+">🟡</span> | ✅ | ✅ |
+| Updates re-emitted as `resolved` | ✅ | <span title="Android 14+">🟡</span> | ❌ | <span title="TXT record, host and port">🟡</span> |
+| `resolveTimeout` | ✅ | ❌ | ❌ | ❌ |
+| `checkLocalNetworkAccess()` | ✅ | <span title="Checks the ACCESS_LOCAL_NETWORK permission of Android 17">✅</span> | <span title="Checks the ACCESS_LOCAL_NETWORK permission of Android 17">✅</span> | <span title="Resolves 'granted', there is nothing to grant">✅</span> |
+| Subtypes (`subtype`, `subtypes`) | ✅ | ✅ | ✅ | <span title="Scanning only, publishing subtypes rejects 'UNSUPPORTED'">🟡</span> |
+| `networkInterface` | ✅ | <span title="Android 13+">🟡</span> | ✅ | <span title="Adapter name ('Wi-Fi') or interface index">✅</span> |
+| `updateService()` | ✅ | <span title="Publishes the service again instead of updating it in place">✅</span> | ✅ | <span title="Publishes the service again instead of updating it in place">✅</span> |
 | `resolveService()` | ✅ | ✅ | ✅ | ✅ |
-| `scanServiceTypes()` | With the multicast entitlement, see [Listing service types](Scanning#listing-service-types) | ✅ Except other apps' on the same phone | ✅ | ✅ Except other apps' on the same computer |
-| Error domain | `DNSSD`, `RNZeroconf` | `NsdManager`, `RNZeroconf` | `DNSSD`, `RNZeroconf` | `Windows`, `RNZeroconf` |
+| [`scanServiceTypes()`](Scanning#listing-service-types) | <span title="Requires Apple's multicast entitlement, see Listing service types on the Scanning page">🟡</span> | <span title="The types published by other apps on the same device are not listed">🟡</span> | ✅ | <span title="The types published by other apps on the same device are not listed">🟡</span> |
+
+Errors use the `RNZeroconf` domain, plus `DNSSD` on iOS and Android `DNSSD`, `NsdManager` on Android `NSD`, and `Windows` on Windows. See [Errors](Errors).
 
 > **Windows** is tested in CI: the native code against a second mDNS implementation (subtypes, live updates and service types included), and a react-native-windows app running the JavaScript API.
 
@@ -36,7 +39,7 @@
 
 | | Supported |
 | --- | --- |
-| New Architecture | ✅ (tested with Expo SDK 54) |
+| New Architecture | ✅ tested with Expo SDK 54 |
 | TypeScript | ✅ bundled types |
 | Android 16 KB page size | ✅ native libraries aligned |
 

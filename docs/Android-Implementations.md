@@ -4,13 +4,16 @@ On Android you choose the backend per call with `implType`:
 
 | | `NSD` (default) | `DNSSD` |
 | --- | --- | --- |
-| Engine | Android's `NsdManager` | Apple mDNSResponder embedded in the library (from Discord's RxDNSSD fork) |
-| Depends on | The system NSD service, varies by Android version and manufacturer | Only the library's own native code |
-| `host` field | mDNS host name on Android 16+, usually the IP before | mDNS host name |
-| Addresses | All on Android 14+, a single one before | All |
-| TXT order when publishing | Decided by the system | Preserved |
-| Resolving | Android 14+: services followed with `registerServiceInfoCallback` (parallel, updates re-emitted). Older: one resolve at a time | Per service |
+| Engine | Android's `NsdManager` | mDNSResponder embedded in the library |
+| Depends on | The system NSD service, varies by device | Only the library's native code |
+| mDNS host name in `host` | <span title="Android 16+, usually the IP before">🟡</span> | ✅ |
+| All addresses | <span title="Android 14+, one before">🟡</span> | ✅ |
+| TXT order kept when publishing | <span title="Decided by the system">🟡</span> | ✅ |
+| Updates re-emitted as `resolved` | <span title="Android 14+">🟡</span> | ❌ |
+| Concurrent resolves | <span title="Android 14+, one at a time before">🟡</span> | ✅ |
 | Error domain | `'NsdManager'` | `'DNSSD'` |
+
+The embedded mDNSResponder comes from Discord's RxDNSSD fork.
 
 ```javascript
 import Zeroconf, { ImplType } from 'react-native-zeroconf'

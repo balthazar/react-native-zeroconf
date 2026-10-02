@@ -105,6 +105,7 @@ main { min-width: 0; }
 .table-wrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); border-radius: 8px; }
 .page table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
 .page th, .page td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.page th[align=center], .page td[align=center] { text-align: center; }
 .page th { background: var(--surface); font-weight: 700; }
 .page tr:last-child td { border-bottom: none; }
 .page hr { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
@@ -117,6 +118,9 @@ main { min-width: 0; }
 .hljs-title, .hljs-title.function_, .hljs-title.class_ { color: var(--syn-title); }
 .hljs-attr, .hljs-attribute, .hljs-name, .hljs-tag, .hljs-property { color: var(--syn-attr); }
 .hljs-variable, .hljs-params { color: var(--fg); }
+.page [data-tip] { cursor: help; border-bottom: 1px dotted var(--muted); outline: none; }
+.tip-pop { position: fixed; z-index: 50; max-width: 260px; padding: 6px 10px; border-radius: 6px; background: var(--fg); color: var(--bg); font-size: 13px; line-height: 1.4; pointer-events: none; opacity: 0; transition: opacity 0.12s; }
+.tip-pop.visible { opacity: 1; }
 .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 .missing { color: var(--warn); }
 
@@ -218,7 +222,38 @@ main { min-width: 0; }
       t.parentNode.insertBefore(wrap, t);
       wrap.appendChild(t);
     });
+    // Notes on table cells: the title becomes a tooltip shown on hover, focus or tap
+    root.querySelectorAll('td span[title]').forEach(function (span) {
+      span.setAttribute('data-tip', span.title);
+      span.removeAttribute('title');
+      span.tabIndex = 0;
+    });
   }
+
+  var tip = document.createElement('div');
+  tip.className = 'tip-pop';
+  tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tip);
+  function showTip(el) {
+    tip.textContent = el.getAttribute('data-tip');
+    tip.classList.add('visible');
+    var r = el.getBoundingClientRect();
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 8));
+    var top = r.top - tip.offsetHeight - 6;
+    if (top < 8) top = r.bottom + 6;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hideTip() { tip.classList.remove('visible'); }
+  document.addEventListener('mouseover', function (e) {
+    var el = e.target.closest && e.target.closest('[data-tip]');
+    if (el) showTip(el); else hideTip();
+  });
+  document.addEventListener('focusin', function (e) {
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tip')) showTip(e.target);
+  });
+  document.addEventListener('focusout', hideTip);
+  window.addEventListener('scroll', hideTip, true);
 
   var current = null;
 
