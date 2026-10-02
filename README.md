@@ -2,6 +2,14 @@
   <a href="https://zeroconf.balthazar.dev"><img src=".github/banner.png" alt="react-native-zeroconf: Bonjour / mDNS discovery and publishing for React Native, on iOS, Android, Windows, macOS, tvOS and Expo" width="100%"></a>
 </p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/react-native-zeroconf"><img src="https://img.shields.io/npm/v/react-native-zeroconf?style=flat" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/react-native-zeroconf"><img src="https://img.shields.io/npm/dm/react-native-zeroconf?style=flat" alt="npm downloads"></a>
+  <a href="https://github.com/balthazar/react-native-zeroconf/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/balthazar/react-native-zeroconf/ci.yml?branch=master&label=tests&style=flat" alt="tests"></a>
+  <a href="https://github.com/balthazar/react-native-zeroconf/actions/workflows/windows.yml"><img src="https://img.shields.io/github/actions/workflow/status/balthazar/react-native-zeroconf/windows.yml?branch=master&label=windows&style=flat" alt="windows"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/react-native-zeroconf?style=flat" alt="license"></a>
+</p>
+
 Find the services other devices advertise on the local network (printers, speakers, cameras, your own servers) and advertise your own, on iOS, Android, macOS, tvOS and Windows.
 
 **[Read the documentation](https://zeroconf.balthazar.dev)**
