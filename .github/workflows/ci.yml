@@ -49,10 +49,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 20
+          cache: yarn
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
+      - uses: gradle/actions/setup-gradle@v6
       - name: Pack the library
         run: |
           yarn install --frozen-lockfile
@@ -74,7 +76,7 @@ jobs:
           npx expo prebuild --platform android --no-install
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> ~/.gradle/gradle.properties
-          cd android && ./gradlew :app:assembleDebug --no-daemon -PreactNativeArchitectures=x86_64
+          cd android && ./gradlew :app:assembleDebug --build-cache -PreactNativeArchitectures=x86_64
 
   ios:
     name: iOS build
@@ -96,8 +98,19 @@ jobs:
           rm -rf node_modules/react-native-zeroconf
           mkdir -p node_modules/react-native-zeroconf
           tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ios-example
+          max-size: 1G
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: cocoapods-${{ hashFiles('example/package-lock.json') }}
+          restore-keys: cocoapods-
       - name: Prebuild (installs pods)
         working-directory: example
+        env:
+          USE_CCACHE: 1
         run: npx expo prebuild --platform ios
       - name: Build
         working-directory: example/ios
