@@ -30,6 +30,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,6 +68,10 @@ public class NsdServiceImpl implements Zeroconf {
         @Nullable ServiceInfoCallbacks infoCallbacks;
         // Service type scans query the network directly, NsdManager can't list types
         @Nullable ServiceTypesQuery typesQuery;
+        // Types listed, and those answered by the network: the others are this app's own services,
+        // which the system mDNS stack doesn't answer back
+        final Set<String> listedTypes = new HashSet<>();
+        final Set<String> networkTypes = new HashSet<>();
 
         NsdScan(String scanId) {
             this.scanId = scanId;
@@ -115,11 +121,23 @@ public class NsdServiceImpl implements Zeroconf {
             scan.typesQuery = new ServiceTypesQuery(options.networkInterface, new ServiceTypesQuery.Listener() {
                 @Override
                 public void onTypeFound(String serviceType) {
+                    synchronized (scan) {
+                        scan.networkTypes.add(serviceType);
+                        if (!scan.listedTypes.add(serviceType)) {
+                            return;
+                        }
+                    }
                     sendScanEvent(ZeroconfModule.EVENT_FOUND, nameToMap(serviceType), scanId);
                 }
 
                 @Override
                 public void onTypeLost(String serviceType) {
+                    synchronized (scan) {
+                        scan.networkTypes.remove(serviceType);
+                        if (localServiceTypes().contains(serviceType) || !scan.listedTypes.remove(serviceType)) {
+                            return;
+                        }
+                    }
                     sendScanEvent(ZeroconfModule.EVENT_REMOVE, nameToMap(serviceType), scanId);
                 }
 
@@ -131,6 +149,7 @@ public class NsdServiceImpl implements Zeroconf {
             mScans.put(scanId, scan);
             scan.typesQuery.start();
             sendScanEvent(ZeroconfModule.EVENT_START, new WritableNativeMap(), scanId);
+            syncLocalServiceTypes();
             return;
         }
 
@@ -438,6 +457,53 @@ public class NsdServiceImpl implements Zeroconf {
         mPublishedServices.remove(serviceName);
         serviceListener.unregisterPromise = promise;
         nsdManager.unregisterService(serviceListener);
+        syncLocalServiceTypes();
+    }
+
+    // "_ipp._tcp,_printer" or "_http._tcp." -> "_ipp._tcp", "_http._tcp"
+    private static String baseServiceType(String serviceType) {
+        int comma = serviceType.indexOf(',');
+        String type = comma >= 0 ? serviceType.substring(0, comma) : serviceType;
+        return type.endsWith(".") ? type.substring(0, type.length() - 1) : type;
+    }
+
+    private Set<String> localServiceTypes() {
+        Set<String> types = new HashSet<>();
+        for (ServiceRegistrationListener listener : mPublishedServices.values()) {
+            types.add(baseServiceType(listener.serviceType));
+        }
+        return types;
+    }
+
+    // Lists the types this app publishes in service type scans, and removes those it no longer publishes
+    private void syncLocalServiceTypes() {
+        Set<String> local = localServiceTypes();
+        for (NsdScan scan : mScans.values()) {
+            if (scan.typesQuery == null) {
+                continue;
+            }
+            List<String> found = new ArrayList<>();
+            List<String> removed = new ArrayList<>();
+            synchronized (scan) {
+                for (String type : local) {
+                    if (scan.listedTypes.add(type)) {
+                        found.add(type);
+                    }
+                }
+                for (String type : new ArrayList<>(scan.listedTypes)) {
+                    if (!local.contains(type) && !scan.networkTypes.contains(type)) {
+                        scan.listedTypes.remove(type);
+                        removed.add(type);
+                    }
+                }
+            }
+            for (String type : found) {
+                sendScanEvent(ZeroconfModule.EVENT_FOUND, nameToMap(type), scan.scanId);
+            }
+            for (String type : removed) {
+                sendScanEvent(ZeroconfModule.EVENT_REMOVE, nameToMap(type), scan.scanId);
+            }
+        }
     }
 
     @Override
@@ -589,6 +655,7 @@ public class NsdServiceImpl implements Zeroconf {
 
             final String serviceName = NsdServiceInfo.getServiceName();
             mPublishedServices.put(serviceName, this);
+            syncLocalServiceTypes();
 
             if (announceRegistered) {
                 zeroconfModule.sendEvent(getReactApplicationContext(), ZeroconfModule.EVENT_PUBLISHED, registeredToMap(NsdServiceInfo));
