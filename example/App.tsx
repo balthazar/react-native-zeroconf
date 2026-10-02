@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import { ImplType, Service, ServiceType, ZeroconfError, useServiceTypes, useZeroconf } from 'react-native-zeroconf'
+import Zeroconf, { ImplType, Service, ServiceType, ZeroconfError, useServiceTypes, useZeroconf } from 'react-native-zeroconf'
 import { IOS_TYPES, deviceIcon, typeInfo, typeKey } from './serviceTypes'
 
 // DNSSD gives host names on every Android version, used to group services by device
@@ -24,9 +24,49 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <Browser />
+      <LocalNetworkAccess>
+        <Browser />
+      </LocalNetworkAccess>
     </SafeAreaProvider>
   )
+}
+
+// Asks for the Local Network permission (iOS, Android 17) before scanning
+function LocalNetworkAccess({ children }: { children: ReactNode }) {
+  const [access, setAccess] = useState<'checking' | 'granted' | 'denied' | 'unknown'>('checking')
+
+  const check = useCallback(() => {
+    setAccess('checking')
+    const zeroconf = new Zeroconf()
+    zeroconf
+      .checkLocalNetworkAccess()
+      .then(setAccess)
+      .catch(() => setAccess('unknown'))
+      .finally(() => zeroconf.removeDeviceListeners())
+  }, [])
+  useEffect(check, [check])
+
+  if (access === 'checking') {
+    return (
+      <SafeAreaView style={[styles.screen, styles.empty]}>
+        <ActivityIndicator />
+      </SafeAreaView>
+    )
+  }
+  if (access === 'denied') {
+    return (
+      <SafeAreaView style={[styles.screen, styles.empty]}>
+        <MaterialCommunityIcons name="lan-disconnect" size={40} color="#6b7280" />
+        <Text style={[styles.emptyText, styles.centered]}>
+          Local network access is needed to find devices. Allow it in the settings.
+        </Text>
+        <Pressable onPress={check} style={styles.button}>
+          <Text style={styles.buttonText}>Try again</Text>
+        </Pressable>
+      </SafeAreaView>
+    )
+  }
+  return children
 }
 
 function Browser() {
@@ -220,6 +260,9 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 10, flexGrow: 1 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 80 },
   emptyText: { fontSize: 15, color: '#6b7280' },
+  centered: { textAlign: 'center', paddingHorizontal: 32 },
+  button: { marginTop: 6, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, backgroundColor: '#0b7a68' },
+  buttonText: { fontSize: 15, fontWeight: '600', color: '#ffffff' },
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e5e7eb' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   icon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#eff4ff', alignItems: 'center', justifyContent: 'center' },

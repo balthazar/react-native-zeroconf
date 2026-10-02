@@ -29,7 +29,10 @@
       }
     },
     "android": {
-      "package": "com.zeroconf.example"
+      "package": "com.zeroconf.example",
+      "permissions": [
+        "android.permission.ACCESS_LOCAL_NETWORK"
+      ]
     },
     "plugins": [
       "expo-font"
