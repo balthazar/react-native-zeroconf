@@ -33,8 +33,8 @@ jobs:
     name: Windows implementation (harness)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install a second mDNS stack for the harness
@@ -55,11 +55,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: microsoft/setup-msbuild@v2
+      - uses: microsoft/setup-msbuild@v3
       # react-native-windows targets the Windows 11 SDK 10.0.22621, not installed on every runner image
       - name: Install the Windows SDK 10.0.22621
         shell: pwsh
@@ -89,7 +89,7 @@ jobs:
           npx @react-native-community/cli init-windows --template cpp-app --overwrite --logging
           npm install "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
           cp "$GITHUB_WORKSPACE/test/windows/App.tsx" App.tsx
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install a second mDNS stack for the self-test
