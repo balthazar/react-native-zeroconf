@@ -59,21 +59,35 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: yarn
       - uses: microsoft/setup-msbuild@v3
-      # react-native-windows targets the Windows 11 SDK 10.0.22621, not installed on every runner image
+      # react-native-windows targets the Windows 11 SDK 10.0.22621, not installed on every runner image.
+      # Installing the needed features from Microsoft's SDK ISO is faster than the Visual Studio installer.
       - name: Install the Windows SDK 10.0.22621
         shell: pwsh
         run: |
           $sdks = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+          if (Test-Path "$sdks\10.0.22621.0") { Write-Host "Already installed"; exit 0 }
+          $iso = Join-Path $env:RUNNER_TEMP "winsdk-22621.iso"
+          curl.exe -sSL -o $iso "https://go.microsoft.com/fwlink/?linkid=2312900"
+          $drive = (Mount-DiskImage -ImagePath $iso -PassThru | Get-Volume).DriveLetter
+          $features = 'OptionId.SigningTools OptionId.UWPManaged OptionId.UWPCPP OptionId.UWPLocalized OptionId.DesktopCPPx86 OptionId.DesktopCPPx64 OptionId.DesktopCPParm64'
+          $log = Join-Path $env:RUNNER_TEMP "winsdk.log"
+          $process = Start-Process -FilePath "${drive}:\WinSDKSetup.exe" -ArgumentList "/features $features /q /norestart /l `"$log`"" -Wait -PassThru
+          Write-Host "WinSDKSetup exit code: $($process.ExitCode)"
           Get-ChildItem $sdks | Select-Object -ExpandProperty Name
-          if (-not (Test-Path "$sdks\10.0.22621.0")) {
-            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-            $vs = & "$installer\vswhere.exe" -latest -property installationPath
-            $arguments = @('modify', '--installPath', "`"$vs`"", '--add', 'Microsoft.VisualStudio.Component.Windows11SDK.22621', '--quiet', '--norestart', '--nocache')
-            $process = Start-Process -FilePath "$installer\vs_installer.exe" -ArgumentList $arguments -Wait -PassThru
-            Write-Host "vs_installer exit code: $($process.ExitCode)"
-            Get-ChildItem $sdks | Select-Object -ExpandProperty Name
-          }
+          if (-not (Test-Path "$sdks\10.0.22621.0")) { Get-Content $log -Tail 40; exit 1 }
+      # NuGet packages of react-native-windows don't change for a given version
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: windows-nuget-rnw-0.84
+      # The test app is created fresh, its npm downloads come from this cache, updated on each run
+      - uses: actions/cache@v6
+        with:
+          path: ~/AppData/Local/npm-cache
+          key: windows-npm-rnw-0.84-${{ github.run_id }}
+          restore-keys: windows-npm-rnw-0.84-
       - name: Pack the library
         run: |
           yarn install --frozen-lockfile
