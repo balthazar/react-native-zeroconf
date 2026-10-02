@@ -21,6 +21,8 @@ public class ZeroconfOptions {
     @Nullable public String networkInterface;
     /** resolveService: seconds before giving up */
     public double timeoutSeconds = 5;
+    /** Scan: seconds to resolve each service, retried once before a TIMEOUT error */
+    public double resolveTimeoutSeconds = 5;
 
     public static ZeroconfOptions from(@Nullable ReadableMap map) {
         ZeroconfOptions options = new ZeroconfOptions();
@@ -41,6 +43,9 @@ public class ZeroconfOptions {
         options.networkInterface = networkInterface == null || networkInterface.isEmpty() ? null : networkInterface;
         if (map.hasKey("timeout") && map.getType("timeout") == ReadableType.Number && map.getDouble("timeout") > 0) {
             options.timeoutSeconds = map.getDouble("timeout");
+        }
+        if (map.hasKey("resolveTimeout") && map.getType("resolveTimeout") == ReadableType.Number && map.getDouble("resolveTimeout") > 0) {
+            options.resolveTimeoutSeconds = map.getDouble("resolveTimeout");
         }
         return options;
     }

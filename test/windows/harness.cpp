@@ -269,6 +269,24 @@ int main() {
       WaitFor(updatedPeer, 20);
       Check(updatedPeer(), "resolved again when the peer's TXT record changes (" + std::to_string(Named("resolved", "P").size()) + " resolved events)");
       zeroconf.Stop("P");
+
+      // resolveTimeout: zc-ghost is announced but never answers, it times out, is retried once, then reported
+      DWORD ghostStart = GetTickCount();
+      zeroconf.Scan("G", L"zcghost", L"tcp", L"local.", L"", L"", 1);
+      auto ghostTimedOut = [] {
+        for (auto &event : Named("error", "G")) {
+          if (event.error.stringCode == L"TIMEOUT") return true;
+        }
+        return false;
+      };
+      WaitFor(ghostTimedOut, 15);
+      DWORD ghostElapsed = GetTickCount() - ghostStart;
+      std::vector<std::wstring> ghostErrors;
+      for (auto &event : Named("error", "G")) ghostErrors.push_back(event.error.stringCode + L" " + event.error.message);
+      Check(ghostTimedOut(), "a service that never resolves is reported with TIMEOUT (" + Join(ghostErrors) + ")");
+      Check(ghostElapsed >= 2000, "the timeout is retried once before the error (" + std::to_string(ghostElapsed) + " ms)");
+      Check(Named("resolved", "G").empty(), "the service that never answers isn't resolved");
+      zeroconf.Stop("G");
     }
 
     // Unpublish: the scan sees the service leave

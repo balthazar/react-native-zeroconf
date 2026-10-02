@@ -66,6 +66,7 @@ public class DnssdImpl implements Zeroconf {
         final String scanId;
         final boolean typesOnly;
         int ifIndex = DNSSD.ALL_INTERFACES;
+        long resolveTimeoutMs = 5000;
         DNSSDService browse;
         // A service is reported once per network interface, count them so found/remove are emitted once
         final Map<String, Integer> foundInterfaces = new HashMap<>();
@@ -87,6 +88,9 @@ public class DnssdImpl implements Zeroconf {
         int port;
         Map<String, String> txt = new LinkedHashMap<>();
         final Set<String> addresses = new LinkedHashSet<>();
+        // Scans: emitted once an address is known, retried once after a timeout
+        boolean emitted;
+        boolean retried;
 
         Resolve(String name) {
             this.name = name;
@@ -144,6 +148,7 @@ public class DnssdImpl implements Zeroconf {
             return;
         }
         scan.ifIndex = ifIndex;
+        scan.resolveTimeoutMs = (long) (options.resolveTimeoutSeconds * 1000);
         // "_ipp._tcp,_printer" browses the _printer subtype
         String regType = String.format("_%s._%s", type, protocol);
         if (options.subtype != null) {
@@ -254,10 +259,25 @@ public class DnssdImpl implements Zeroconf {
 
     // Resolve: host, port and TXT record, then the host's IPv4 and IPv6 addresses
 
-    private void startResolve(@Nullable final Scan scan, int ifIndex, final String serviceName, String regType, String domain, @Nullable Resolve existing) {
+    private void startResolve(@Nullable final Scan scan, final int ifIndex, final String serviceName, final String regType, final String domain, @Nullable Resolve existing) {
         final Resolve resolve = existing != null ? existing : new Resolve(serviceName);
         if (scan != null) {
             scan.resolves.put(serviceName, resolve);
+            // DNSSD gives up silently after its own timeout, report it before
+            mainHandler.postDelayed(() -> executor.execute(() -> {
+                if (!isCurrent(scan, resolve) || resolve.emitted) {
+                    return;
+                }
+                resolve.stop();
+                // Slow devices can time out, retry once before reporting the error
+                if (!resolve.retried) {
+                    resolve.retried = true;
+                    startResolve(scan, ifIndex, serviceName, regType, domain, resolve);
+                    return;
+                }
+                scan.resolves.remove(serviceName);
+                zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_TIMEOUT, "Resolving service " + serviceName + " failed: timed out", serviceName, scan.scanId);
+            }), scan.resolveTimeoutMs);
         }
         try {
             resolve.operations.add(dnssd.resolve(0, ifIndex, serviceName, regType, domain, new ResolveListener() {
@@ -306,6 +326,7 @@ public class DnssdImpl implements Zeroconf {
                         return;
                     }
                     // Emitted for each address, the first one is usable right away
+                    resolve.emitted = true;
                     sendScanEvent(ZeroconfModule.EVENT_RESOLVE, resolveToMap(resolve), scan.scanId);
                 });
             }

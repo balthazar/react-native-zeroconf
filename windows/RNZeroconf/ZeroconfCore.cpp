@@ -38,6 +38,8 @@ struct Resolve : Operation {
   DNS_SERVICE_RESOLVE_REQUEST request{};
   DNS_SERVICE_CANCEL cancel{};
   bool done = false;
+  // Scans: retried once after a timeout
+  bool retried = false;
   ServiceCallback promiseResolve;
   ErrorCallback promiseReject;
 };
@@ -50,6 +52,7 @@ struct Browse : Operation {
   std::wstring queryName;
   bool typesOnly = false;
   ULONG interfaceIndex = 0;
+  DWORD resolveTimeoutMs = 5000;
   DNS_SERVICE_BROWSE_REQUEST request{};
   DNS_SERVICE_CANCEL cancel{};
   // Lower-case PTR target -> name reported to JavaScript
@@ -362,7 +365,8 @@ void Zeroconf::Scan(
     const std::wstring &protocol,
     const std::wstring &domain,
     const std::wstring &subtype,
-    const std::wstring &networkInterface) {
+    const std::wstring &networkInterface,
+    double resolveTimeoutSeconds) {
   After after;
   {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -370,6 +374,7 @@ void Zeroconf::Scan(
 
     auto browse = std::make_shared<Browse>(this);
     browse->scanId = scanId;
+    browse->resolveTimeoutMs = static_cast<DWORD>((resolveTimeoutSeconds > 0 ? resolveTimeoutSeconds : 5) * 1000);
     browse->regType = L"_" + type + L"._" + protocol;
     browse->domain = DomainName(domain);
     browse->typesOnly = type == L"services._dns-sd" && protocol == L"udp";
@@ -490,7 +495,7 @@ void Zeroconf::OnBrowse(const std::shared_ptr<Browse> &browse, DWORD status, PDN
             resolve->queryName = WithoutTrailingDot(record->pName);
             resolve->interfaceIndex = browse->interfaceIndex;
             browse->resolves[instanceKey] = resolve;
-            StartResolve(resolve, after);
+            StartScanResolve(browse, resolve, after);
           }
           continue;
         }
@@ -552,7 +557,7 @@ void Zeroconf::OnBrowse(const std::shared_ptr<Browse> &browse, DWORD status, PDN
           resolve->queryName = target;
           resolve->interfaceIndex = browse->interfaceIndex;
           browse->resolves[key] = resolve;
-          StartResolve(resolve, after);
+          StartScanResolve(browse, resolve, after);
         }
       }
     }
@@ -588,6 +593,54 @@ void Zeroconf::StartResolve(const std::shared_ptr<Resolve> &resolve, After &afte
   after.push_back([this, scanId, error] {
     if (events_.error) events_.error(scanId, error);
   });
+}
+
+// Resolves of a scan time out after the scan's resolveTimeout, are retried once, then reported with a TIMEOUT error
+void Zeroconf::StartScanResolve(const std::shared_ptr<Browse> &browse, const std::shared_ptr<Resolve> &resolve, After &after) {
+  StartResolve(resolve, after);
+  if (resolve->done) {
+    return;
+  }
+  std::weak_ptr<Resolve> weak = resolve;
+  auto alive = alive_;
+  DWORD timeout = browse->resolveTimeoutMs;
+  std::thread([this, weak, alive, timeout] {
+    Sleep(timeout);
+    if (!*alive) return;
+    auto expired = weak.lock();
+    if (!expired) return;
+    After timedOut;
+    {
+      std::lock_guard<std::recursive_mutex> lock(mutex_);
+      auto browse = expired->browse.lock();
+      auto current = browse ? browses_.find(browse->scanId) : browses_.end();
+      if (expired->done || current == browses_.end() || current->second != browse) return;
+      auto entry = browse->resolves.find(expired->key);
+      if (entry == browse->resolves.end() || entry->second != expired) return;
+      CancelResolve(expired, timedOut);
+      browse->resolves.erase(entry);
+      if (!expired->retried) {
+        // Slow devices can time out, retry once before reporting the error
+        auto retry = std::make_shared<Resolve>(this);
+        retry->browse = browse;
+        retry->scanId = expired->scanId;
+        retry->name = expired->name;
+        retry->key = expired->key;
+        retry->queryName = expired->queryName;
+        retry->interfaceIndex = expired->interfaceIndex;
+        retry->retried = true;
+        browse->resolves[retry->key] = retry;
+        StartScanResolve(browse, retry, timedOut);
+      } else {
+        Error error = LibraryError(L"TIMEOUT", L"Resolving service " + expired->name + L" failed: timed out", expired->name);
+        std::string scanId = expired->scanId;
+        timedOut.push_back([this, scanId, error] {
+          if (events_.error) events_.error(scanId, error);
+        });
+      }
+    }
+    Run(timedOut);
+  }).detach();
 }
 
 void Zeroconf::CancelResolve(const std::shared_ptr<Resolve> &resolve, After &after) {

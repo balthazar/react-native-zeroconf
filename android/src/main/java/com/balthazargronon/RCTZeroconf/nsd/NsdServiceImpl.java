@@ -63,6 +63,7 @@ public class NsdServiceImpl implements Zeroconf {
 
     private static class NsdScan {
         final String scanId;
+        double resolveTimeoutSeconds = 5;
         NsdManager.DiscoveryListener discoveryListener;
         // Android 14+: services are followed with registerServiceInfoCallback, null before
         @Nullable ServiceInfoCallbacks infoCallbacks;
@@ -83,11 +84,14 @@ public class NsdServiceImpl implements Zeroconf {
         final NsdServiceInfo serviceInfo;
         // resolveService(): settled instead of emitting events
         @Nullable final Promise promise;
+        // Seconds before the TIMEOUT error, counted from the start of the resolve
+        final double timeoutSeconds;
 
-        PendingResolve(@Nullable String scanId, NsdServiceInfo serviceInfo, @Nullable Promise promise) {
+        PendingResolve(@Nullable String scanId, NsdServiceInfo serviceInfo, @Nullable Promise promise, double timeoutSeconds) {
             this.scanId = scanId;
             this.serviceInfo = serviceInfo;
             this.promise = promise;
+            this.timeoutSeconds = timeoutSeconds;
         }
     }
 
@@ -104,6 +108,7 @@ public class NsdServiceImpl implements Zeroconf {
         this.stop(scanId);
 
         final NsdScan scan = new NsdScan(scanId);
+        scan.resolveTimeoutSeconds = options.resolveTimeoutSeconds;
         final boolean typesOnly = ZeroconfModule.isServiceTypesScan(type, protocol);
 
         Network network = null;
@@ -154,7 +159,8 @@ public class NsdServiceImpl implements Zeroconf {
         }
 
         if (Build.VERSION.SDK_INT >= 34) {
-            scan.infoCallbacks = new ServiceInfoCallbacks(nsdManager, mCallbackExecutor, new ServiceInfoCallbacks.Listener() {
+            long timeoutMs = (long) (options.resolveTimeoutSeconds * 1000);
+            scan.infoCallbacks = new ServiceInfoCallbacks(nsdManager, mCallbackExecutor, mHandler, timeoutMs, new ServiceInfoCallbacks.Listener() {
                 @Override
                 public void onServiceUpdated(NsdServiceInfo serviceInfo) {
                     if (getHostAddresses(serviceInfo).isEmpty()) {
@@ -166,6 +172,11 @@ public class NsdServiceImpl implements Zeroconf {
                 @Override
                 public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
                     zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_NSD, errorCode, "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode), serviceInfo.getServiceName(), scanId);
+                }
+
+                @Override
+                public void onTimeout(NsdServiceInfo serviceInfo) {
+                    sendResolveTimeout(serviceInfo.getServiceName(), scanId);
                 }
             });
         }
@@ -204,7 +215,7 @@ public class NsdServiceImpl implements Zeroconf {
                 if (scan.infoCallbacks != null) {
                     scan.infoCallbacks.register(serviceInfo);
                 } else {
-                    enqueueResolve(scanId, serviceInfo);
+                    enqueueResolve(scan, serviceInfo);
                 }
             }
 
@@ -278,7 +289,8 @@ public class NsdServiceImpl implements Zeroconf {
         synchronized (mResolveQueue) {
             Iterator<PendingResolve> iterator = mResolveQueue.iterator();
             while (iterator.hasNext()) {
-                if (iterator.next().scanId.equals(scanId)) {
+                // resolveService() entries have no scan id
+                if (scanId.equals(iterator.next().scanId)) {
                     iterator.remove();
                 }
             }
@@ -384,7 +396,7 @@ public class NsdServiceImpl implements Zeroconf {
         if (Build.VERSION.SDK_INT < 34) {
             // One resolve at a time before Android 14, shares the queue of the scans
             synchronized (mResolveQueue) {
-                mResolveQueue.add(new PendingResolve(null, serviceInfo, promise));
+                mResolveQueue.add(new PendingResolve(null, serviceInfo, promise, options.timeoutSeconds));
             }
             resolveNext();
             return;
@@ -524,11 +536,17 @@ public class NsdServiceImpl implements Zeroconf {
         return reactApplicationContext;
     }
 
-    private void enqueueResolve(String scanId, NsdServiceInfo serviceInfo) {
+    private void enqueueResolve(NsdScan scan, NsdServiceInfo serviceInfo) {
+        // A resolve can't be cancelled before Android 14, so there is no retry: waiting twice as long
+        // matches the total time of the other implementations, which retry once
         synchronized (mResolveQueue) {
-            mResolveQueue.add(new PendingResolve(scanId, serviceInfo, null));
+            mResolveQueue.add(new PendingResolve(scan.scanId, serviceInfo, null, scan.resolveTimeoutSeconds * 2));
         }
         resolveNext();
+    }
+
+    private void sendResolveTimeout(String serviceName, String scanId) {
+        zeroconfModule.sendError(ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_TIMEOUT, "Resolving service " + serviceName + " failed: timed out", serviceName, scanId);
     }
 
     private void resolveNext() {
@@ -540,8 +558,11 @@ public class NsdServiceImpl implements Zeroconf {
             next = mResolveQueue.poll();
             mIsResolving = true;
         }
+        final ZeroResolveListener listener = new ZeroResolveListener(next);
         try {
-            getNsdManager().resolveService(next.serviceInfo, new ZeroResolveListener(next.scanId, next.promise));
+            getNsdManager().resolveService(next.serviceInfo, listener);
+            // The system keeps the resolve until it answers or fails, the queue waits for it
+            mHandler.postDelayed(listener::timedOut, (long) (next.timeoutSeconds * 1000));
         } catch (Throwable e) {
             Log.e(TAG, "resolveService failed", e);
             String serviceName = next.serviceInfo.getServiceName();
@@ -558,23 +579,55 @@ public class NsdServiceImpl implements Zeroconf {
     }
 
     private class ZeroResolveListener implements NsdManager.ResolveListener {
+        private final PendingResolve pending;
         @Nullable private final String scanId;
         @Nullable private final Promise promise;
+        // Settled: answered, failed or timed out. A late answer after the timeout only frees the queue
+        private boolean settled = false;
 
-        ZeroResolveListener(@Nullable String scanId, @Nullable Promise promise) {
-            this.scanId = scanId;
-            this.promise = promise;
+        ZeroResolveListener(PendingResolve pending) {
+            this.pending = pending;
+            this.scanId = pending.scanId;
+            this.promise = pending.promise;
+        }
+
+        private synchronized boolean settle() {
+            if (settled) {
+                return false;
+            }
+            settled = true;
+            return true;
+        }
+
+        void timedOut() {
+            if (!settle()) {
+                return;
+            }
+            String serviceName = pending.serviceInfo.getServiceName();
+            if (promise != null) {
+                ZeroconfModule.reject(promise, ZeroconfModule.ERROR_DOMAIN_LIBRARY, ZeroconfModule.ERROR_CODE_TIMEOUT, "Resolving service " + serviceName + " failed: timed out", serviceName);
+            } else if (mScans.containsKey(scanId)) {
+                sendResolveTimeout(serviceName, scanId);
+            }
         }
 
         @Override
         public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
             if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
                 // Another resolve (possibly from another app or listener) is in flight: retry shortly
+                if (!settle()) {
+                    onResolveDone();
+                    return;
+                }
                 synchronized (mResolveQueue) {
-                    mResolveQueue.addFirst(new PendingResolve(scanId, serviceInfo, promise));
+                    mResolveQueue.addFirst(pending);
                     mIsResolving = false;
                 }
                 mHandler.postDelayed(NsdServiceImpl.this::resolveNext, RESOLVE_RETRY_DELAY_MS);
+                return;
+            }
+            if (!settle()) {
+                onResolveDone();
                 return;
             }
             String message = "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode);
@@ -588,6 +641,10 @@ public class NsdServiceImpl implements Zeroconf {
 
         @Override
         public void onServiceResolved(NsdServiceInfo serviceInfo) {
+            if (!settle()) {
+                onResolveDone();
+                return;
+            }
             if (promise != null) {
                 promise.resolve(serviceInfoToMap(serviceInfo));
             } else if (mScans.containsKey(scanId)) {

@@ -329,7 +329,7 @@ export default class Zeroconf extends EventEmitter {
         protocol,
         domain,
         implType,
-        nativeOptions({ subtype, networkInterface }),
+        nativeOptions({ resolveTimeout, subtype, networkInterface }),
       )
     } else {
       RNZeroconf.scan(

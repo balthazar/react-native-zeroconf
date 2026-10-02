@@ -89,7 +89,8 @@ class Zeroconf {
       const std::wstring &protocol,
       const std::wstring &domain,
       const std::wstring &subtype,
-      const std::wstring &networkInterface);
+      const std::wstring &networkInterface,
+      double resolveTimeoutSeconds = 5);
   void Stop(const std::string &scanId);
   void StopAll();
 
@@ -128,6 +129,7 @@ class Zeroconf {
 
   void StopLocked(const std::string &scanId, After &after);
   void StartResolve(const std::shared_ptr<Resolve> &resolve, After &after);
+  void StartScanResolve(const std::shared_ptr<Browse> &browse, const std::shared_ptr<Resolve> &resolve, After &after);
   void CancelResolve(const std::shared_ptr<Resolve> &resolve, After &after);
   void PublishAs(
       const std::wstring &regType,

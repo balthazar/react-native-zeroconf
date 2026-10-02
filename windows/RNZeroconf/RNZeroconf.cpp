@@ -140,7 +140,8 @@ void RNZeroconf::Emit(std::wstring_view eventName, React::JSValueObject body) no
 }
 
 void RNZeroconf::scan(std::string scanId, std::string type, std::string protocol, std::string domain, React::JSValue options) noexcept {
-  m_zeroconf->Scan(scanId, Wide(type), Wide(protocol), Wide(domain), StringOption(options, "subtype"), StringOption(options, "networkInterface"));
+  m_zeroconf->Scan(scanId, Wide(type), Wide(protocol), Wide(domain), StringOption(options, "subtype"), StringOption(options, "networkInterface"),
+                    NumberOption(options, "resolveTimeout"));
 }
 
 void RNZeroconf::stop(React::JSValue scanId) noexcept {
