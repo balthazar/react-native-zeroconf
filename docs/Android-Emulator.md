@@ -1,8 +1,21 @@
 # Android Emulator
 
-The Android emulator does not support IGMP or multicast by default ([documented limitation](https://developer.android.com/studio/run/emulator-networking)). mDNS relies on multicast UDP to `224.0.0.251:5353`, so **discovery does not work on a stock emulator**.
+On a stock emulator, mDNS works **inside the emulator only**. Its virtual network doesn't reach other devices' multicast (Android's documentation: "The emulator does not support IGMP", see [emulator networking](https://developer.android.com/studio/run/emulator-networking-address)), so services on your computer or local network are not found.
 
-> **Recommended:** test on a physical device connected to the same network as the services.
+| On a stock emulator | Works? |
+| --- | --- |
+| Publish a service and discover it from the same emulator (`NSD` and `DNSSD`) | Yes |
+| List service types with `DNSSD` (the emulator's own services) | Yes |
+| Discover services on your computer or local network | No |
+
+This is enough to test your app's code: publish a test service from the app (or another app on the emulator) and scan for it.
+
+```javascript
+await zeroconf.publishService({ type: 'http', protocol: 'tcp', name: 'Emulator test', port: 8080 })
+zeroconf.scan({ type: 'http' })
+```
+
+> To discover real devices, test on a physical device on the same network as the services, or use the advanced setup below.
 
 ## Advanced: TAP bridged networking (Linux, Ethernet)
 

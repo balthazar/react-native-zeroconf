@@ -6,7 +6,7 @@ Start with the checklist, then find your symptom below.
 
 1. Device and service are on the **same network and subnet** (no guest Wi-Fi, no client isolation, VPN off).
 2. **iOS:** the type is in `NSBonjourServices` and Local Network access is granted (`checkLocalNetworkAccess()`).
-3. **Android:** you test on a **real device**, not the emulator.
+3. **Android:** on the emulator, only services published inside it are found. Test real devices from a **real device**.
 4. You registered an **`error` listener** (native errors are dropped without one).
 5. **Android:** try `implType: 'DNSSD'`.
 6. The app was **rebuilt** after installing or upgrading the library (`pod install` on iOS).
@@ -48,7 +48,7 @@ zeroconf.scan({ type: 'ipp', resolveTimeout: 15 })
 
 ### Nothing is found on the Android emulator
 
-The emulator does not support multicast by default, and mDNS needs multicast (`224.0.0.251:5353`). Use a real device, or the advanced setup in [Android Emulator](Android-Emulator).
+The emulator's network doesn't reach other devices' multicast, so it only finds services published inside the emulator. Publish a test service from the app to check your code, use a real device for real devices, or see the advanced setup in [Android Emulator](Android-Emulator).
 
 ### Android 17: `NsdManager` error `7`, or publishing fails with "Missing local network permission"
 

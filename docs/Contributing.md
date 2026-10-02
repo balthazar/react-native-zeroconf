@@ -63,7 +63,7 @@ CI runs these on every pull request, and builds the example app for Android and 
 
 For changes to native code, also test on devices:
 
-- mDNS does not work on the Android emulator by default: test Android on a real device ([Android Emulator](Android-Emulator)).
+- The Android emulator only sees services published inside it: publish test services from the app, or use a real device to discover real ones ([Android Emulator](Android-Emulator)).
 - On iOS, test on a device or simulator with Local Network access, and add the service types you test to the example's `NSBonjourServices`.
 - Useful tools on a Mac: `dns-sd -B _http._tcp` to browse, `dns-sd -R "Test" _http._tcp local 8080 path=/` to publish a test service.
 - For Android changes, test both `implType: 'NSD'` and `'DNSSD'`, and if possible Android 14+ and an older version (the `NSD` code paths differ).

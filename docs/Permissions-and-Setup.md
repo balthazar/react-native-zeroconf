@@ -94,7 +94,7 @@ if (access === 'granted') {
 
 On Android, `checkLocalNetworkAccess()` resolves `'granted'` when the permission is not enforced, otherwise it shows the system prompt when the permission is missing (pass `request: false` to only check) and resolves `'granted'` or `'denied'`.
 
-> The Android emulator does not pass multicast traffic by default, so discovery usually finds nothing there. Use a real device, or see [Android Emulator](Android-Emulator).
+> The Android emulator only sees services published inside it, not those on your network. Use a real device to discover real ones, or see [Android Emulator](Android-Emulator).
 
 ## macOS and tvOS
 
