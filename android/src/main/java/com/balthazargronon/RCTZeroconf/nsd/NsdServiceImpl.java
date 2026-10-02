@@ -532,6 +532,21 @@ public class NsdServiceImpl implements Zeroconf {
         return mNsdManager;
     }
 
+    // Before Android 14 each NsdManager client resolves one service at a time and a resolve can't be cancelled:
+    // a service that never answers would block every later resolve. After a timeout the queue moves on to a
+    // client of its own, an NsdManager from a new Context (system services are cached per Context)
+    @Nullable private volatile NsdManager mResolveManager;
+
+    private NsdManager getResolveManager() {
+        return mResolveManager != null ? mResolveManager : getNsdManager();
+    }
+
+    private void replaceResolveManager() {
+        Context context = getReactApplicationContext();
+        Context fresh = context.createConfigurationContext(context.getResources().getConfiguration());
+        mResolveManager = (NsdManager) fresh.getSystemService(Context.NSD_SERVICE);
+    }
+
     private ReactApplicationContext getReactApplicationContext() {
         return reactApplicationContext;
     }
@@ -560,8 +575,8 @@ public class NsdServiceImpl implements Zeroconf {
         }
         final ZeroResolveListener listener = new ZeroResolveListener(next);
         try {
-            getNsdManager().resolveService(next.serviceInfo, listener);
-            // The system keeps the resolve until it answers or fails, the queue waits for it
+            getResolveManager().resolveService(next.serviceInfo, listener);
+            // The queue waits for the answer, or moves on to another client after the timeout
             mHandler.postDelayed(listener::timedOut, (long) (next.timeoutSeconds * 1000));
         } catch (Throwable e) {
             Log.e(TAG, "resolveService failed", e);
@@ -582,7 +597,7 @@ public class NsdServiceImpl implements Zeroconf {
         private final PendingResolve pending;
         @Nullable private final String scanId;
         @Nullable private final Promise promise;
-        // Settled: answered, failed or timed out. A late answer after the timeout only frees the queue
+        // Settled: answered, failed or timed out. A late answer after the timeout is ignored
         private boolean settled = false;
 
         ZeroResolveListener(PendingResolve pending) {
@@ -609,6 +624,8 @@ public class NsdServiceImpl implements Zeroconf {
             } else if (mScans.containsKey(scanId)) {
                 sendResolveTimeout(serviceName, scanId);
             }
+            replaceResolveManager();
+            onResolveDone();
         }
 
         @Override
@@ -616,7 +633,6 @@ public class NsdServiceImpl implements Zeroconf {
             if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
                 // Another resolve (possibly from another app or listener) is in flight: retry shortly
                 if (!settle()) {
-                    onResolveDone();
                     return;
                 }
                 synchronized (mResolveQueue) {
@@ -627,7 +643,7 @@ public class NsdServiceImpl implements Zeroconf {
                 return;
             }
             if (!settle()) {
-                onResolveDone();
+                // Timed out: the queue already moved on to another client
                 return;
             }
             String message = "Resolving service " + serviceInfo.getServiceName() + " failed: " + ZeroconfModule.describeNsdError(errorCode);
@@ -642,7 +658,7 @@ public class NsdServiceImpl implements Zeroconf {
         @Override
         public void onServiceResolved(NsdServiceInfo serviceInfo) {
             if (!settle()) {
-                onResolveDone();
+                // Timed out: the queue already moved on to another client
                 return;
             }
             if (promise != null) {
