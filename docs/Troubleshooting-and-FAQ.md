@@ -38,7 +38,7 @@ Call `checkLocalNetworkAccess()`. If it returns `'denied'`, ask the user to enab
 
 This is the 0.15 equivalent of `-65555`: the service type is missing from `NSBonjourServices`. 0.16 reports it as `domain: 'DNSSD'`, `code: -65555` (see [Migration Guide](Migration-Guide#structured-errors)).
 
-### iOS: `found` but never `resolved`, or `TIMEOUT` errors
+### `found` but never `resolved`, or `TIMEOUT` errors
 
 The device answers slowly. Increase `resolveTimeout`:
 

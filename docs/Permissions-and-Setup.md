@@ -22,7 +22,7 @@ Since iOS 14, apps must declare the Bonjour service types they browse or publish
 | `NSBonjourServices` | Every type you pass to `scan()` or `publishService()`, written as `_<type>._<protocol>`. A type missing here fails with a `DNSSD` error `-65555` (`kDNSServiceErr_NoAuth`). With several scans, list every scanned type. |
 | `NSLocalNetworkUsageDescription` | Text shown in the Local Network permission prompt. |
 
-> **Expo:** put the same keys under `expo.ios.infoPlist` in `app.json` (see [Installation](Installation#expo)).
+> **Expo:** put the same keys under `expo.ios.infoPlist` in `app.json` (see [Installation with Expo](Installation-Expo)).
 
 ### The Local Network prompt
 

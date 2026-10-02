@@ -33,10 +33,10 @@ All scan options are optional: `scan()` alone browses `_http._tcp.` on `local.`.
 
 - Calling `scan()` again on the same instance replaces that instance's scan and clears its `getServices()`. To browse several types at once, use one instance per scan (see [Multiple scans](#multiple-scans)).
 - `stop()` ends the instance's scan. On Android it stops the implementation the last scan used.
-- On iOS, slow devices can take a while to resolve. Raise `resolveTimeout` (seconds, default `5`); a timed out resolve is retried once before an `error` with code `'TIMEOUT'`.
+- Slow devices can take a while to resolve. Raise `resolveTimeout` (seconds, default `5`); a timed out resolve is retried once before an `error` with code `'TIMEOUT'`.
 
 ```javascript
-zeroconf.scan({ type: 'ipp', resolveTimeout: 15 })          // iOS: slow printers
+zeroconf.scan({ type: 'ipp', resolveTimeout: 15 })          // slow printers
 zeroconf.scan({ type: 'pdl-datastream', implType: 'DNSSD' }) // Android: embedded mDNSResponder
 ```
 

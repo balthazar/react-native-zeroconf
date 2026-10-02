@@ -39,7 +39,7 @@ Starts browsing. Clears the list returned by `getServices()` and emits `update`.
 | `protocol` | `string` | `'tcp'` | all | `'tcp'` or `'udp'` |
 | `domain` | `string` | `'local.'` | all | Domain to browse |
 | `implType` | `'NSD' \| 'DNSSD'` | `'NSD'` | Android | Discovery backend, see [Android Implementations](Android-Implementations) |
-| `resolveTimeout` | `number` | `5` | iOS | Seconds to try resolving each service. A timeout is retried once, then reported as an `error` with code `'TIMEOUT'` |
+| `resolveTimeout` | `number` | `5` | all | Seconds to try resolving each service. A timeout is retried once, then reported as an `error` with code `'TIMEOUT'` |
 | `subtype` | `string` | none | all | Only find services registered with this subtype, e.g. `'printer'`. See [Subtypes](Scanning#subtypes) |
 | `networkInterface` | `string` | all interfaces | all | Interface to scan on, e.g. `'en0'`, `'wlan0'`. Android `NSD` needs Android 13+. See [Choosing a network interface](Scanning#choosing-a-network-interface) |
 

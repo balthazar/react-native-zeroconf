@@ -1,10 +1,18 @@
 # Migration Guide
 
+- [0.17.0 to 0.17.1](#0170-to-0171)
 - [0.16 to 0.17](#016-to-017)
 - [0.15 to 0.16](#015-to-016)
 - [0.14 and earlier to 0.15](#014-and-earlier-to-015)
 
 Upgrading across several versions? Read the sections from your version up. Rebuild the app after any upgrade (`pod install` on iOS), the native code changes between versions.
+
+## 0.17.0 to 0.17.1
+
+| Change | Action needed? |
+| --- | --- |
+| Android and Windows: `resolveTimeout` applies, as on iOS. A service that doesn't resolve in time is retried once, then reported as an `error` with code `'TIMEOUT'` (scans were silent before) | Only if you treat every `error` as fatal: a `TIMEOUT` names one service in `serviceName`, the scan goes on |
+| Android 13 and earlier: `resolveService()` rejects with `'TIMEOUT'` after `timeout`, it could wait indefinitely before | None |
 
 ## 0.16 to 0.17
 
@@ -16,7 +24,7 @@ Upgrading across several versions? Read the sections from your version up. Rebui
 | iOS: `resolved` fires again when a service's addresses or TXT record change, as on Android 14+ with `NSD` | Update your list by `service.name` rather than appending |
 | Android `DNSSD`: resolve and publish errors carry their `DNSSD` code (they were `RNZeroconf` `'EXCEPTION'`), published services report their port | Only if you matched `'EXCEPTION'` |
 | Android `DNSSD` no longer uses RxJava | None |
-| New: [Windows](Installation#windows-react-native-windows), [`scanServiceTypes()` / `useServiceTypes()`](Scanning#listing-service-types), [subtypes](Scanning#subtypes), [`networkInterface`](Scanning#choosing-a-network-interface), [`updateService()`](Publishing#updating-the-txt-record), [`resolveService()`](Scanning#resolving-a-single-service), the [Android 17 permission](Permissions-and-Setup#android-17-local-network-permission) | Optional |
+| New: [Windows](Installation-Windows), [`scanServiceTypes()` / `useServiceTypes()`](Scanning#listing-service-types), [subtypes](Scanning#subtypes), [`networkInterface`](Scanning#choosing-a-network-interface), [`updateService()`](Publishing#updating-the-txt-record), [`resolveService()`](Scanning#resolving-a-single-service), the [Android 17 permission](Permissions-and-Setup#android-17-local-network-permission) | Optional |
 
 ## 0.15 to 0.16
 

@@ -13,7 +13,7 @@ yarn add react-native-zeroconf
 cd ios && pod install
 ```
 
-On iOS, declare the service types you use in `NSBonjourServices`, see [Permissions and Setup](https://zeroconf.balthazar.dev/Permissions-and-Setup). Expo works with development builds, see [Installation](https://zeroconf.balthazar.dev/Installation).
+On iOS, declare the service types you use in `NSBonjourServices`, see [Permissions and Setup](https://zeroconf.balthazar.dev/Permissions-and-Setup). Expo works with development builds, see [Installation with Expo](https://zeroconf.balthazar.dev/Installation-Expo).
 
 ## Usage
 

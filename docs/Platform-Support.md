@@ -23,7 +23,7 @@
 | IPv4 and IPv6 addresses | ✅ | <span title="All addresses on Android 14+, one before">🟡</span> | ✅ | <span title="One IPv4 and one IPv6 address">🟡</span> |
 | mDNS host name in `host` | ✅ | <span title="Android 16+">🟡</span> | ✅ | ✅ |
 | Updates re-emitted as `resolved` | ✅ | <span title="Android 14+">🟡</span> | ❌ | <span title="TXT record, host and port">🟡</span> |
-| `resolveTimeout` | ✅ | ❌ | ❌ | ❌ |
+| `resolveTimeout` | ✅ | <span title="Android 13 and earlier can't cancel a resolve to retry it, the error comes after twice the timeout">✅</span> | ✅ | ✅ |
 | `checkLocalNetworkAccess()` | ✅ | <span title="Checks the ACCESS_LOCAL_NETWORK permission of Android 17">✅</span> | <span title="Checks the ACCESS_LOCAL_NETWORK permission of Android 17">✅</span> | <span title="Resolves 'granted', there is nothing to grant">✅</span> |
 | Subtypes (`subtype`, `subtypes`) | ✅ | ✅ | ✅ | <span title="Scanning only, publishing subtypes rejects 'UNSUPPORTED'">🟡</span> |
 | `networkInterface` | ✅ | <span title="Android 13+">🟡</span> | ✅ | <span title="Adapter name ('Wi-Fi') or interface index">✅</span> |

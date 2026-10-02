@@ -36,7 +36,10 @@ export interface ScanOptions {
   domain?: string
   /** Android only, defaults to `NSD` */
   implType?: ImplType
-  /** iOS only, seconds to try resolving a service before retrying once and giving up. Defaults to `5` */
+  /**
+   * Seconds to try resolving each service before retrying once, then emitting an `error` with code `'TIMEOUT'`.
+   * Defaults to `5`. Android `NSD` before Android 14 can't retry a resolve, the error comes after twice this time
+   */
   resolveTimeout?: number
   /** Only find services registered with this subtype, e.g. `'printer'` */
   subtype?: string

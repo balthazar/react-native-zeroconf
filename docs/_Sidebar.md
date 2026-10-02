@@ -2,6 +2,10 @@
 
 **Getting started**
 - [Installation](Installation)
+  - [iOS](Installation-iOS)
+  - [Android](Installation-Android)
+  - [Windows](Installation-Windows)
+  - [Expo](Installation-Expo)
 - [Permissions and Setup](Permissions-and-Setup)
 
 **Guides**

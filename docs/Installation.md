@@ -1,75 +1,34 @@
 # Installation
 
-The library contains native code and is autolinked by React Native (0.60 and later). There is nothing to link by hand.
-
-## React Native CLI (bare)
-
 ```bash
 yarn add react-native-zeroconf
 # or
 npm install react-native-zeroconf
 ```
 
-### iOS
+The library contains native code and is autolinked by React Native (0.60 and later), there is nothing to link by hand. Rebuild the app after installing it: a JavaScript reload is not enough after adding a native module.
 
-```bash
-cd ios && pod install
-```
+## Your platform
 
-Then rebuild the app (`yarn ios` or from Xcode). A JavaScript reload is not enough after adding a native module.
+| Platform | Page |
+| --- | --- |
+| iOS, macOS, tvOS | [iOS](Installation-iOS) |
+| Android | [Android](Installation-Android) |
+| Windows (react-native-windows) | [Windows](Installation-Windows) |
+| Expo (development builds) | [Expo](Installation-Expo) |
 
-### macOS (react-native-macos)
+## Requirements
 
-```bash
-cd macos && pod install
-```
+| Platform | Minimum |
+| --- | --- |
+| React Native | 0.60 (peer dependency `>=0.60`) |
+| iOS | 13.4 or React Native's minimum |
+| macOS | 10.15 |
+| tvOS | 13.4 |
+| Android | API 21 (Android 5.0) |
+| Windows | Windows 10, react-native-windows 0.84 tested |
 
-### Android
-
-Nothing to do: Gradle picks the module up through autolinking, and the required permissions are merged from the library manifest (see [Permissions and Setup](Permissions-and-Setup#android)). Rebuild the app with `yarn android`.
-
-### Windows (react-native-windows)
-
-The library includes a Windows module (C++, using the DNS-SD functions of Windows). Add Windows to your app with react-native-windows as usual, then install the library: autolinking picks up its `windows` project.
-
-```bash
-npm install react-native-windows
-npx @react-native-community/cli init-windows --template cpp-app --overwrite
-npm install react-native-zeroconf
-npx @react-native-community/cli run-windows
-```
-
-> Tested in CI with react-native-windows 0.84 (New Architecture). Building needs the Windows SDK react-native-windows asks for (10.0.22621), see the [react-native-windows requirements](https://microsoft.github.io/react-native-windows/docs/rnw-dependencies).
-
-## Expo
-
-The library works in Expo **development builds**. It does **not** work in **Expo Go**, which only contains the native modules bundled by Expo.
-
-> Tested with Expo SDK 54 and the New Architecture.
-
-```bash
-npx expo install react-native-zeroconf
-npx expo run:ios       # or: npx expo run:android, or an EAS Build
-```
-
-Declare the iOS keys in `app.json` so they are written to `Info.plist` on prebuild:
-
-```json
-{
-  "expo": {
-    "ios": {
-      "infoPlist": {
-        "NSBonjourServices": ["_http._tcp"],
-        "NSLocalNetworkUsageDescription": "This app uses the local network to discover devices."
-      }
-    }
-  }
-}
-```
-
-No config plugin is needed. Android permissions come from the library manifest.
-
-> If you see `react-native-zeroconf: native module not found`, you are running in Expo Go or the app was not rebuilt after installing. See [Troubleshooting and FAQ](Troubleshooting-and-FAQ#native-module-not-found-expo-go).
+See [Platform Support](Platform-Support) for feature differences.
 
 ## TypeScript
 
@@ -78,19 +37,6 @@ Types are bundled (`index.d.ts`). Remove `@types/react-native-zeroconf` if you i
 ```typescript
 import Zeroconf, { ImplType, Service, ZeroconfError } from 'react-native-zeroconf'
 ```
-
-## Requirements
-
-| Platform | Minimum |
-| --- | --- |
-| React Native | 0.60 (peer dependency `>=0.60`) |
-| iOS | 13.4, or React Native's minimum if higher |
-| macOS | 10.15 |
-| tvOS | 13.4 |
-| Android | API 21 (Android 5.0) |
-| Windows | Windows 10 with react-native-windows (tested with 0.84) |
-
-See [Platform Support](Platform-Support) for feature differences.
 
 ## Next step
 
