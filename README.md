@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/banner.png" alt="react-native-zeroconf: Bonjour / mDNS discovery and publishing for React Native, on iOS, Android, macOS, tvOS and Expo" width="100%">
+  <a href="https://zeroconf.balthazar.dev"><img src=".github/banner.png" alt="react-native-zeroconf: Bonjour / mDNS discovery and publishing for React Native, on iOS, Android, Windows, macOS, tvOS and Expo" width="100%"></a>
 </p>
 
 Find the services other devices advertise on the local network (printers, speakers, cameras, your own servers) and advertise your own, on iOS, Android, macOS, tvOS and Windows.
