@@ -1333,6 +1333,44 @@ mDNSexport mStatus mDNSPlatformPosixRefreshInterfaceList(mDNS *const m)
 #pragma mark ***** Locking
 #endif
 
+#ifdef EMBEDDED
+
+// The embedded build enters mDNS core from several threads: the DNS-SDEmbedded thread
+// runs mDNS_Execute() and delivers the callbacks, while the DNSService* calls, and in
+// particular DNSServiceRefDeallocate(), arrive on whatever thread the client uses.
+// mDNS core relies on mDNSPlatformLock() for mutual exclusion between those, so here it
+// is a real lock. It is recursive because the core holds it while it calls back into the
+// client, and the client may call back into the core from there (see mDNS_DropLockBeforeCallback).
+
+#include <pthread.h>
+
+static pthread_mutex_t gCoreLock;
+static pthread_once_t  gCoreLockOnce = PTHREAD_ONCE_INIT;
+
+static void InitCoreLock(void)
+	{
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&gCoreLock, &attr);
+	pthread_mutexattr_destroy(&attr);
+	}
+
+mDNSexport void    mDNSPlatformLock   (const mDNS *const m)
+	{
+	(void) m;	// Unused
+	pthread_once(&gCoreLockOnce, InitCoreLock);
+	pthread_mutex_lock(&gCoreLock);
+	}
+
+mDNSexport void    mDNSPlatformUnlock (const mDNS *const m)
+	{
+	(void) m;	// Unused
+	pthread_mutex_unlock(&gCoreLock);
+	}
+
+#else
+
 // On the Posix platform, locking is a no-op because we only ever enter
 // mDNS core on the main thread.
 
@@ -1349,6 +1387,8 @@ mDNSexport void    mDNSPlatformUnlock (const mDNS *const m)
 	{
 	(void) m;	// Unused
 	}
+
+#endif // EMBEDDED
 
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark ***** Strings

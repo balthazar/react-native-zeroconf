@@ -280,6 +280,18 @@ void stopLoop()
 {
 	stopNow = 1;
 }
+
+// For JNISupport.c: hold the core lock around work on an operation's data structures
+// that must not interleave with the event loop thread (callbacks run on that thread).
+void lockCore()
+{
+	mDNSPlatformLock(&mDNSStorage);
+}
+
+void unlockCore()
+{
+	mDNSPlatformUnlock(&mDNSStorage);
+}
 #endif
 
 //		uds_daemon support		////////////////////////////////////////////////////////////

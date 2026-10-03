@@ -114,6 +114,8 @@ struct	OpContext
 int init();
 int loop();
 void stopLoop();
+void lockCore();
+void unlockCore();
 
 JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_DNSSDEmbedded_nativeInit( JNIEnv *pEnv, jclass cls)
 {
@@ -248,6 +250,13 @@ JNIEXPORT void JNICALL Java_com_github_druk_dnssd_AppleService_HaltOperation( JN
 		OpContext	*pContext = (OpContext*) (long) (*pEnv)->GetLongField(pEnv, pThis, contextField);
 		if ( pContext != NULL)
 		{
+#ifdef EMBEDDED
+			// The embedded responder delivers callbacks from its own thread and may be in
+			// the middle of one for this very operation (an answer with several records
+			// invokes the callback once per record). Hold the core lock so that the
+			// deallocation and the free() below cannot interleave with it.
+			lockCore();
+#endif
 			// MUST clear fNativeContext first, BEFORE calling DNSServiceRefDeallocate()
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, 0);
 			if ( pContext->ServiceRef != NULL)
@@ -256,6 +265,9 @@ JNIEXPORT void JNICALL Java_com_github_druk_dnssd_AppleService_HaltOperation( JN
 			(*pEnv)->DeleteWeakGlobalRef( pEnv, pContext->JavaObj);
 			(*pEnv)->DeleteWeakGlobalRef( pEnv, pContext->ClientObj);
 			free( pContext);
+#ifdef EMBEDDED
+			unlockCore();
+#endif
 		}
 	}
 }
