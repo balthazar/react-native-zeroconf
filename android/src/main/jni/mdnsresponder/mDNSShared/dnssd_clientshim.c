@@ -701,10 +701,10 @@ DNSServiceErrorType DNSServiceQueryRecord
 	x->callback  = callback;
 	x->context   = context;
 
-	x->q.ThisQInterval       = -1;		// So that DNSServiceResolveDispose() knows whether to cancel this question
+	x->q.ThisQInterval       = -1;		// So that DNSServiceQueryRecordDispose() knows whether to cancel this question
 	x->q.InterfaceID         = mDNSPlatformInterfaceIDfromInterfaceIndex(&mDNSStorage, interfaceIndex);
 	x->q.Target              = zeroAddr;
-	MakeDomainNameFromDNSNameString(&x->q.qname, fullname);
+	if (!MakeDomainNameFromDNSNameString(&x->q.qname, fullname)) { mDNSPlatformMemFree(x); err = mStatus_BadParamErr; errormsg = "MakeDomainNameFromDNSNameString"; goto fail; }
 	x->q.qtype               = rrtype;
 	x->q.qclass              = rrclass;
 	x->q.LongLived           = (flags & kDNSServiceFlagsLongLivedQuery) != 0;
@@ -721,7 +721,7 @@ DNSServiceErrorType DNSServiceQueryRecord
 	x->q.QuestionContext     = x;
 
 	err = mDNS_StartQuery(&mDNSStorage, &x->q);
-	if (err) { DNSServiceResolveDispose((mDNS_DirectOP*)x); errormsg = "mDNS_StartQuery"; goto fail; }
+	if (err) { DNSServiceQueryRecordDispose((mDNS_DirectOP*)x); errormsg = "mDNS_StartQuery"; goto fail; }
 
 	// Succeeded: Wrap up and return
 	*sdRef = (DNSServiceRef)x;
