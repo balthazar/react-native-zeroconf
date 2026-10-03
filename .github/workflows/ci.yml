@@ -82,7 +82,7 @@ jobs:
           cd android && ./gradlew :app:assembleDebug --build-cache -PreactNativeArchitectures=x86_64
 
   ios:
-    name: iOS build
+    name: iOS app (simulator self-test)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -94,13 +94,22 @@ jobs:
           yarn install --frozen-lockfile
           yarn build
           npm pack --pack-destination "$RUNNER_TEMP"
-      - name: Install the example with the packed library
+      # The example with the packed library and test/app/App.tsx, which runs the JavaScript API against
+      # test/app/peer.py and reports through a _zcresult._tcp service that test/app/check-app.py waits for
+      - name: Install the example with the packed library and the self-test
         working-directory: example
         run: |
           npm ci
           rm -rf node_modules/react-native-zeroconf
           mkdir -p node_modules/react-native-zeroconf
           tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
+          cp ../test/app/App.tsx App.tsx
+          node -e "
+            const fs = require('fs')
+            const app = JSON.parse(fs.readFileSync('app.json'))
+            app.expo.ios.infoPlist.NSBonjourServices.push('_zcpeer._tcp', '_zcghost._tcp', '_zcapp._tcp', '_zcresult._tcp')
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2))
+          "
       - uses: actions/cache@v6
         with:
           path: ~/Library/Caches/CocoaPods
@@ -109,11 +118,28 @@ jobs:
       - name: Prebuild (installs pods)
         working-directory: example
         run: npx expo prebuild --platform ios
-      - name: Build
+      - name: Build for a simulator
         working-directory: example/ios
         run: |
           set -o pipefail
+          SIMULATOR=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k, v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
           xcodebuild -workspace ZeroconfBrowser.xcworkspace -scheme ZeroconfBrowser \
-            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { tail -50 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
-          tail -5 "$RUNNER_TEMP/xcodebuild.log"
+            -configuration Release -sdk iphonesimulator -destination "id=$SIMULATOR" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/xcodebuild.log"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the self-test
+        run: pip install zeroconf
+      - name: Run the self-test app and check its result
+        working-directory: example/ios
+        run: |
+          python "$GITHUB_WORKSPACE/test/app/peer.py" &
+          xcrun simctl boot "$SIMULATOR"
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          APP=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -name "*.app" | head -1)
+          xcrun simctl install "$SIMULATOR" "$APP"
+          xcrun simctl launch "$SIMULATOR" "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"
+          python "$GITHUB_WORKSPACE/test/app/check-app.py"

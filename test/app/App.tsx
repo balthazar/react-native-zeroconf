@@ -1,8 +1,8 @@
-// Self-test app for CI on Windows: runs the library through JavaScript against the python-zeroconf peer
-// (test/windows/peer.py), then publishes _zcresult._tcp with the result in its TXT record, which
-// test/windows/check-app.py waits for.
+// Self-test app for CI (Windows, the iOS simulator): runs the library through JavaScript against the
+// python-zeroconf peer (test/app/peer.py), then publishes _zcresult._tcp with the result in its TXT record,
+// which test/app/check-app.py waits for.
 import React, { useEffect, useState } from 'react'
-import { ScrollView, Text } from 'react-native'
+import { Platform, ScrollView, Text, TurboModuleRegistry } from 'react-native'
 import Zeroconf, { Service, ZeroconfError } from 'react-native-zeroconf'
 
 const withTimeout = <T,>(promise: Promise<T>, seconds: number, what: string) =>
@@ -25,7 +25,28 @@ export default function App() {
     }
     zeroconf.on('error', (e: ZeroconfError) => out.push(`error event [${e.domain} ${e.code}] ${e.message}`))
 
+    // Collects a scan's resolved names and errors for a while
+    const scanFor = (options: object, seconds: number) =>
+      new Promise<{ names: string[]; errors: ZeroconfError[] }>(resolve => {
+        const scanner = new Zeroconf()
+        const names: string[] = []
+        const errors: ZeroconfError[] = []
+        scanner.on('resolved', service => names.push(service.name))
+        scanner.on('error', error => errors.push(error))
+        scanner.scan(options)
+        setTimeout(() => {
+          scanner.stop()
+          scanner.removeDeviceListeners()
+          resolve({ names, errors })
+        }, seconds * 1000)
+      })
+
     const run = async () => {
+      // Apple platforms run the C++ module, the others still the previous native module
+      if (Platform.OS === 'ios' || Platform.OS === 'macos') {
+        log(TurboModuleRegistry.get('Zeroconf') != null, 'C++ module', 'registered')
+      }
+
       // Scan: found and resolved, through events
       try {
         const peer = await withTimeout(
@@ -49,6 +70,15 @@ export default function App() {
       } catch (e) {
         log(false, 'resolveService', `${(e as ZeroconfError).code} ${(e as Error).message}`)
       }
+
+      // Subtypes: zc-peer-sub is only registered under the _zcsub subtype
+      const subtype = await scanFor({ type: 'zcpeer', subtype: 'zcsub' }, 8)
+      log(subtype.names.length > 0 && subtype.names.every(name => name === 'zc-peer-sub'), 'subtype scan', subtype.names.join(','))
+
+      // resolveTimeout: zc-ghost is announced but never answers, it is reported with TIMEOUT after one retry
+      const ghost = await scanFor({ type: 'zcghost', resolveTimeout: 1 }, 8)
+      const timeout = ghost.errors.find(error => error.code === 'TIMEOUT' && error.serviceName === 'zc-ghost')
+      log(timeout !== undefined && ghost.names.length === 0, 'resolveTimeout', ghost.errors.map(error => `${error.code} ${error.serviceName}`).join(','))
 
       // Publish, update, unpublish, and a structured rejection
       try {
