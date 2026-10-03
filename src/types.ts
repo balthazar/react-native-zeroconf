@@ -1,9 +1,9 @@
-export declare const ImplType: {
-  readonly NSD: 'NSD'
-  readonly DNSSD: 'DNSSD'
-}
-
 /** Android only: which discovery implementation to use */
+export const ImplType = {
+  NSD: 'NSD',
+  DNSSD: 'DNSSD',
+} as const
+
 export type ImplType = (typeof ImplType)[keyof typeof ImplType]
 
 export interface Service {
@@ -158,91 +158,6 @@ export interface ServiceTypesScanOptions {
   networkInterface?: string
 }
 
-/** Extends the `events` package EventEmitter */
-export default class Zeroconf {
-  constructor()
-
-  on<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
-  once<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
-  addListener<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
-  removeListener<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
-  off<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): this
-  removeAllListeners(event?: keyof ZeroconfEvents): this
-  /** Adds a listener and returns a function that removes it */
-  subscribe<E extends keyof ZeroconfEvents>(event: E, listener: ZeroconfEvents[E]): () => void
-  listenerCount(event: keyof ZeroconfEvents): number
-
-  /** Add the native event listeners (called automatically in the constructor) */
-  addDeviceListeners(): void
-
-  /** Remove the native event listeners, call it when you are done with the instance */
-  removeDeviceListeners(): void
-
-  /** All the services found so far, keyed by name */
-  getServices(): Record<string, Service>
-
-  /** Service types found by `scanServiceTypes` */
-  getServiceTypes(): ServiceType[]
-
-  /**
-   * Scan for the service types advertised on the network, emits `typeFound` and `typeRemove`.
-   * On iOS it requires the `com.apple.developer.networking.multicast` entitlement.
-   */
-  scanServiceTypes(options?: ServiceTypesScanOptions): void
-
-  /** Scan for services, defaults to `_http._tcp.` on the `local.` domain */
-  scan(options?: ScanOptions): void
-  /** @deprecated Use `scan({ type, protocol, domain, implType })` */
-  scan(type?: string, protocol?: string, domain?: string, implType?: ImplType): void
-
-  /**
-   * Checks the Local Network permission. iOS can show the permission prompt when it hasn't been answered yet.
-   * Android 17 (API 37): apps targeting API 37 need `ACCESS_LOCAL_NETWORK`, requested when missing unless
-   * `request` is `false`. Resolves `'granted'` when there is nothing to grant.
-   */
-  checkLocalNetworkAccess(
-    options?: LocalNetworkAccessOptions,
-  ): Promise<'granted' | 'denied' | 'unknown'>
-
-  /**
-   * Stop the current scan
-   * @param implType Android only, defaults to the implementation used by the last scan
-   */
-  stop(implType?: ImplType): void
-
-  /**
-   * Publish a service. Resolves with the published service once it is advertised, its name can differ
-   * from the requested one when that name is already taken. Rejects with a `ZeroconfError`.
-   */
-  publishService(options: PublishOptions): Promise<PublishedService>
-  /** @deprecated Use `publishService({ type, protocol, domain, name, port, txt, implType })` */
-  publishService(
-    type: string,
-    protocol: string,
-    domain: string | undefined,
-    name: string,
-    port: number,
-    txt?: TxtRecord,
-    implType?: ImplType,
-  ): Promise<PublishedService>
-
-  /**
-   * Unpublish a service. Resolves once it is no longer advertised, rejects with a `ZeroconfError`
-   * (e.g. code `'NOT_PUBLISHED'`).
-   * @param implType Android only, defaults to the implementation the service was published with
-   */
-  unpublishService(name: string, implType?: ImplType): Promise<PublishedService | null>
-
-  /**
-   * Replace the TXT record of a published service, resolves with the updated service.
-   * Android `NSD` has no update: the service is published again under the same name.
-   */
-  updateService(name: string, options: UpdateOptions): Promise<PublishedService>
-
-  /** Resolve one service by name without scanning. Rejects with code `'TIMEOUT'` when it doesn't answer in time */
-  resolveService(options: ResolveOptions): Promise<Service>
-}
-
 export interface UseZeroconfOptions extends ScanOptions {
   /** Scan only while true, defaults to `true` */
   enabled?: boolean
@@ -259,12 +174,6 @@ export interface UseZeroconfResult {
   restart(): void
 }
 
-/**
- * Scans while mounted and returns the resolved services. Scans again when the options change,
- * stops and cleans up on unmount. Each hook runs its own scan, several can run at once.
- */
-export function useZeroconf(options?: UseZeroconfOptions): UseZeroconfResult
-
 export interface UseServiceTypesOptions extends ServiceTypesScanOptions {
   /** Scan only while true, defaults to `true` */
   enabled?: boolean
@@ -280,6 +189,3 @@ export interface UseServiceTypesResult {
   /** Clears the service types and scans again */
   restart(): void
 }
-
-/** Lists the service types advertised on the network while mounted */
-export function useServiceTypes(options?: UseServiceTypesOptions): UseServiceTypesResult

@@ -8,7 +8,7 @@ const config = getDefaultConfig(__dirname)
 config.watchFolders = [root]
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === 'react-native-zeroconf') {
-    return { type: 'sourceFile', filePath: path.join(root, 'src/index.js') }
+    return { type: 'sourceFile', filePath: path.join(root, 'src/index.ts') }
   }
   // The library's own node_modules has another React version, use the example's
   if (/^react(-native)?($|\/)/.test(moduleName)) {

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+lib/
 *.log
 
 *.pbxuser
@@ -19,3 +20,4 @@ DerivedData
 
 local.properties
 website/dist/
+lib/
