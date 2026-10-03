@@ -232,7 +232,7 @@ int main() {
     Check(Named("resolved", "T").empty(), "service types are not resolved");
     zeroconf.Stop("T");
 
-    // A service published by another mDNS stack (test/windows/peer.py)
+    // A service published by another mDNS stack (test/app/peer.py)
     if (withPeer) {
       zeroconf.Scan("P", L"zcpeer", L"tcp", L"local.", L"", L"");
       auto peerResolved = [] { return !Named("resolved", "P").empty(); };

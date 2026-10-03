@@ -59,7 +59,7 @@ test/ios/run.sh    # macOS: the iOS implementation with AddressSanitizer, agains
 test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/ZeroconfCore.cpp) with Visual Studio's C++ tools
 ```
 
-CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. On Windows it also runs a second mDNS stack (`test/windows/peer.py`, python-zeroconf) for the harness to discover, and builds and launches a react-native-windows app running `test/windows/App.tsx` against it.
+CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. On Windows it also runs a second mDNS stack (`test/app/peer.py`, python-zeroconf) for the harness to discover, and builds and launches a react-native-windows app running `test/windows/App.tsx` against it.
 
 For changes to native code, also test on devices:
 

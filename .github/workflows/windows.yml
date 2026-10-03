@@ -8,6 +8,7 @@ on:
     paths:
       - 'windows/**'
       - 'test/windows/**'
+      - 'test/app/**'
       - 'src/**'
       - 'package.json'
       - 'yarn.lock'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'windows/**'
       - 'test/windows/**'
+      - 'test/app/**'
       - 'src/**'
       - 'package.json'
       - 'yarn.lock'
@@ -43,7 +45,7 @@ jobs:
           RNZEROCONF_DEBUG: '1'
           RNZEROCONF_PEER: '1'
         run: |
-          start "" /b python test\windows\peer.py
+          start "" /b python test\app\peer.py
           test\windows\run.cmd
 
   windows:
@@ -100,17 +102,17 @@ jobs:
           npm install react-native-windows@^0.84.0
           npx @react-native-community/cli init-windows --template cpp-app --overwrite --logging
           npm install "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
-          cp "$GITHUB_WORKSPACE/test/windows/App.tsx" App.tsx
+          cp "$GITHUB_WORKSPACE/test/app/App.tsx" App.tsx
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install a second mDNS stack for the self-test
         run: pip install zeroconf
-      # Builds, installs and launches the app, which runs test/windows/App.tsx against the peer
+      # Builds, installs and launches the app, which runs test/app/App.tsx against the peer
       # and reports through a _zcresult._tcp service that check-app.py waits for
       - name: Build, run the self-test app and check its result
         working-directory: ${{ runner.temp }}/ZeroconfWindows
         run: |
-          python "$GITHUB_WORKSPACE/test/windows/peer.py" &
+          python "$GITHUB_WORKSPACE/test/app/peer.py" &
           npx @react-native-community/cli run-windows --release --no-packager --arch x64 --logging
-          python "$GITHUB_WORKSPACE/test/windows/check-app.py"
+          python "$GITHUB_WORKSPACE/test/app/check-app.py"
