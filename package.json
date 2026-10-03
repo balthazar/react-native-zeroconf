@@ -57,6 +57,7 @@
     "!android/src/main/jni/mdnsresponder/mDNSShared/mDNSResponder.8",
     "!android/build",
     "!android/.gradle",
+    "!android/src/test",
     "windows",
     "!windows/**/*.user",
     "!windows/**/obj",
