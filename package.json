@@ -75,7 +75,8 @@
     "ios/generated",
     "cpp",
     "react-native-zeroconf.podspec",
-    "NOTICE"
+    "NOTICE",
+    "react-native.config.js"
   ],
   "keywords": [
     "react-component",
