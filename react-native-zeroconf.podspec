@@ -16,7 +16,8 @@ Pod::Spec.new do |s|
   s.tvos.deployment_target = '13.4'
 
   s.source       = { :git => "https://github.com/balthazar/react-native-zeroconf.git", :tag => "#{s.version}" }
-  s.source_files  = "ios/**/*.{h,m}"
+  # The C++ module (cpp/), its Apple registration and the code generated from src/NativeZeroconf.ts (ios/generated)
+  s.source_files  = "ios/**/*.{h,m,mm}", "cpp/*.{h,cpp}", "cpp/dnssd/*.{h,cpp}", "cpp/apple/*.{h,cpp}"
   s.frameworks = 'Network'
 
   if respond_to?(:install_modules_dependencies, true)

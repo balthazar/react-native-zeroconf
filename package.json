@@ -28,6 +28,7 @@
     "src",
     "lib",
     "android",
+    "android/generated",
     "!android/src/main/jni/mdnsresponder/mDNSWindows",
     "!android/src/main/jni/mdnsresponder/Clients",
     "!android/src/main/jni/mdnsresponder/android",
@@ -71,6 +72,8 @@
     "!windows/**/bin",
     "!windows/**/Generated Files",
     "ios",
+    "ios/generated",
+    "cpp",
     "react-native-zeroconf.podspec",
     "NOTICE"
   ],
@@ -143,7 +146,21 @@
         {
           "project": "tsconfig.build.json"
         }
-      ]
+      ],
+      "codegen"
     ]
+  },
+  "codegenConfig": {
+    "name": "RNZeroconfSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "outputDir": {
+      "ios": "ios/generated",
+      "android": "android/generated"
+    },
+    "android": {
+      "javaPackageName": "com.balthazargronon.RCTZeroconf"
+    },
+    "includesGeneratedCode": true
   }
 }

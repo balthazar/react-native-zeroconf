@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform, NativeModules, DeviceEventEmitter, PermissionsAndroid } from 'react-native'
-import type { EmitterSubscription } from 'react-native'
+import { Platform, PermissionsAndroid } from 'react-native'
 import { EventEmitter } from 'events'
 
+import { getBridge, type Bridge, type BridgePayload, type LocalNetworkAccess } from './bridge'
 import {
   ImplType,
   type LocalNetworkAccessOptions,
@@ -25,24 +25,8 @@ import {
 
 export * from './types'
 
-type LocalNetworkAccess = 'granted' | 'denied' | 'unknown'
-
-// The native module of iOS, Android and Windows. Android takes an implType after the service type arguments
-interface NativeZeroconf {
-  scan(...args: unknown[]): void
-  stop(...args: unknown[]): void
-  registerService(...args: unknown[]): Promise<PublishedService>
-  updateService(...args: unknown[]): Promise<PublishedService>
-  resolveService(...args: unknown[]): Promise<Service | null>
-  unregisterService(...args: unknown[]): Promise<PublishedService | null>
-  checkLocalNetworkAccess?(...args: unknown[]): Promise<LocalNetworkAccess>
-}
-
 // Payloads of the native events, scan events carry the id of the scan they belong to
-interface NativePayload {
-  scanId?: string
-  name?: string
-}
+type NativePayload = BridgePayload
 
 interface NativeErrorPayload extends NativePayload {
   message: string
@@ -50,8 +34,6 @@ interface NativeErrorPayload extends NativePayload {
   domain: ZeroconfError['domain']
   serviceName?: string
 }
-
-const RNZeroconf: NativeZeroconf | undefined = NativeModules.RNZeroconf
 
 const SCAN_DEFAULTS = {
   type: 'http',
@@ -159,13 +141,16 @@ const toTxtPairs = (txt: TxtRecord | undefined): Array<[string, string]> => {
   return entries.map(([key, value]) => [String(key), String(value)])
 }
 
-const nativeModule = (): NativeZeroconf => {
-  if (!RNZeroconf) {
+let bridge: Bridge | null = null
+
+const nativeModule = (): Bridge => {
+  bridge = bridge || getBridge()
+  if (!bridge) {
     throw new Error(
       'react-native-zeroconf: native module not found. Make sure the library is linked and the app rebuilt. Expo Go is not supported, use a development build instead.',
     )
   }
-  return RNZeroconf
+  return bridge
 }
 
 // Typed events on top of the `events` EventEmitter
@@ -194,7 +179,7 @@ class Zeroconf extends EventEmitter {
   private _scanImplType: ImplType | null = null
   private _scanId = `zeroconf-${++instanceCount}`
   private _hasScanned = false
-  private _dListeners: Record<string, EmitterSubscription> = {}
+  private _dListeners: Record<string, { remove(): void }> = {}
 
   constructor() {
     super()
@@ -211,113 +196,102 @@ class Zeroconf extends EventEmitter {
       return
     }
 
-    this._dListeners.start = DeviceEventEmitter.addListener('RNZeroconfStart', payload => {
+    const native = nativeModule()
+    this._dListeners.start = native.listen('start', payload => {
       if (this._isOwnEvent(payload)) {
         this.emit('start')
       }
     })
 
-    this._dListeners.stop = DeviceEventEmitter.addListener('RNZeroconfStop', payload => {
+    this._dListeners.stop = native.listen('stop', payload => {
       if (this._isOwnEvent(payload)) {
         this.emit('stop')
       }
     })
 
-    this._dListeners.error = DeviceEventEmitter.addListener('RNZeroconfError', err => {
+    this._dListeners.error = native.listen('error', err => {
       if (this._isOwnEvent(err) && this.listenerCount('error') > 0) {
         this.emit('error', toError(err))
       }
     })
 
-    this._dListeners.found = DeviceEventEmitter.addListener(
-      'RNZeroconfFound',
-      (service?: NativePayload) => {
-        if (!service || !service.name || !this._isOwnEvent(service)) {
-          return
+    this._dListeners.found = native.listen('found', (service: NativePayload) => {
+      if (!service || !service.name || !this._isOwnEvent(service)) {
+        return
+      }
+      const { name } = service
+
+      if (this._scanningTypes) {
+        const serviceType = parseServiceType(name)
+        if (serviceType && !this._serviceTypes[name]) {
+          this._serviceTypes[name] = serviceType
+          this.emit('typeFound', serviceType)
+          this.emit('update')
         }
-        const { name } = service
+        return
+      }
 
-        if (this._scanningTypes) {
-          const serviceType = parseServiceType(name)
-          if (serviceType && !this._serviceTypes[name]) {
-            this._serviceTypes[name] = serviceType
-            this.emit('typeFound', serviceType)
-            this.emit('update')
-          }
-          return
+      // Found services only have a name until they are resolved
+      this._services[name] = { name } as Service
+      this.emit('found', name)
+      this.emit('update')
+    })
+
+    this._dListeners.remove = native.listen('remove', (service: NativePayload) => {
+      if (!service || !service.name || !this._isOwnEvent(service)) {
+        return
+      }
+      const { name } = service
+
+      if (this._scanningTypes) {
+        const serviceType = this._serviceTypes[name]
+        if (serviceType) {
+          delete this._serviceTypes[name]
+          this.emit('typeRemove', serviceType)
+          this.emit('update')
         }
+        return
+      }
 
-        // Found services only have a name until they are resolved
-        this._services[name] = { name } as Service
-        this.emit('found', name)
-        this.emit('update')
-      },
-    )
+      delete this._services[name]
 
-    this._dListeners.remove = DeviceEventEmitter.addListener(
-      'RNZeroconfRemove',
-      (service?: NativePayload) => {
-        if (!service || !service.name || !this._isOwnEvent(service)) {
-          return
-        }
-        const { name } = service
+      this.emit('remove', name)
+      this.emit('update')
+    })
 
-        if (this._scanningTypes) {
-          const serviceType = this._serviceTypes[name]
-          if (serviceType) {
-            delete this._serviceTypes[name]
-            this.emit('typeRemove', serviceType)
-            this.emit('update')
-          }
-          return
-        }
+    this._dListeners.resolved = native.listen('resolved', payload => {
+      const data = payload as NativePayload & Omit<Service, 'ipv4' | 'ipv6'>
+      if (!data || !data.name || !this._isOwnEvent(data)) {
+        return
+      }
 
-        delete this._services[name]
+      const resolved = { ...data }
+      delete resolved.scanId
+      const service = withAddressFamilies(resolved)
+      this._services[service.name] = service
+      this.emit('resolved', service)
+      this.emit('update')
+    })
 
-        this.emit('remove', name)
-        this.emit('update')
-      },
-    )
+    this._dListeners.published = native.listen('published', payload => {
+      const service = payload as unknown as PublishedService
+      if (!service || !service.name) {
+        return
+      }
 
-    this._dListeners.resolved = DeviceEventEmitter.addListener(
-      'RNZeroconfResolved',
-      (data?: NativePayload & Omit<Service, 'ipv4' | 'ipv6'>) => {
-        if (!data || !data.name || !this._isOwnEvent(data)) {
-          return
-        }
+      this._publishedServices[service.name] = service
+      this.emit('published', service)
+    })
 
-        const resolved = { ...data }
-        delete resolved.scanId
-        const service = withAddressFamilies(resolved)
-        this._services[service.name] = service
-        this.emit('resolved', service)
-        this.emit('update')
-      },
-    )
+    this._dListeners.unpublished = native.listen('unpublished', payload => {
+      const service = payload as unknown as PublishedService
+      if (!service || !service.name) {
+        return
+      }
 
-    this._dListeners.published = DeviceEventEmitter.addListener(
-      'RNZeroconfServiceRegistered',
-      (service?: PublishedService) => {
-        if (!service || !service.name) {
-          return
-        }
-
-        this._publishedServices[service.name] = service
-        this.emit('published', service)
-      },
-    )
-
-    this._dListeners.unpublished = DeviceEventEmitter.addListener(
-      'RNZeroconfServiceUnregistered',
-      (service?: PublishedService) => {
-        if (!service || !service.name) {
-          return
-        }
-
-        delete this._publishedServices[service.name]
-        this.emit('unpublished', service)
-      },
-    )
+      delete this._publishedServices[service.name]
+      this.emit('unpublished', service)
+    })
   }
 
   /**
@@ -407,23 +381,15 @@ class Zeroconf extends EventEmitter {
         native.stop(this._scanId, this._scanImplType)
       }
       this._scanImplType = implType
-      native.scan(
-        this._scanId,
-        type,
-        protocol,
-        domain,
-        implType,
-        nativeOptions({ resolveTimeout, subtype, networkInterface }),
-      )
-    } else {
-      native.scan(
-        this._scanId,
-        type,
-        protocol,
-        domain,
-        nativeOptions({ resolveTimeout, subtype, networkInterface }),
-      )
     }
+    native.scan(
+      this._scanId,
+      type,
+      protocol,
+      domain,
+      implType,
+      nativeOptions({ resolveTimeout, subtype, networkInterface }),
+    )
   }
 
   /**
@@ -431,11 +397,7 @@ class Zeroconf extends EventEmitter {
    * @param implType Android only, defaults to the implementation used by the last scan
    */
   stop(implType: ImplType = this._scanImplType || ImplType.NSD): void {
-    if (Platform.OS === 'android') {
-      nativeModule().stop(this._scanId, implType)
-    } else {
-      nativeModule().stop(this._scanId)
-    }
+    nativeModule().stop(this._scanId, implType)
   }
 
   /**
@@ -455,7 +417,7 @@ class Zeroconf extends EventEmitter {
       if (!native.checkLocalNetworkAccess) {
         return 'unknown'
       }
-      const status = await asPromise(native.checkLocalNetworkAccess())
+      const status = await asPromise(native.checkLocalNetworkAccess(null, timeout))
       if (status !== 'denied' || !request) {
         return status
       }
@@ -512,12 +474,9 @@ class Zeroconf extends EventEmitter {
     const options_ = nativeOptions({ subtypes, networkInterface })
     if (Platform.OS === 'android') {
       this._publishedImplTypes[name] = implType
-      return asPromise(
-        native.registerService(type, protocol, domain, name, port, txtRecord, implType, options_),
-      )
     }
     return asPromise(
-      native.registerService(type, protocol, domain, name, port, txtRecord, options_),
+      native.registerService(type, protocol, domain, name, port, txtRecord, implType, options_),
     )
   }
 
@@ -530,10 +489,7 @@ class Zeroconf extends EventEmitter {
     { txt = {}, implType = this._publishedImplTypes[name] || ImplType.NSD }: UpdateOptions = {},
   ): Promise<PublishedService> {
     const txtRecord = toTxtPairs(txt)
-    if (Platform.OS === 'android') {
-      return asPromise(nativeModule().updateService(name, txtRecord, implType))
-    }
-    return asPromise(nativeModule().updateService(name, txtRecord))
+    return asPromise(nativeModule().updateService(name, txtRecord, implType))
   }
 
   /**
@@ -547,10 +503,7 @@ class Zeroconf extends EventEmitter {
     )
     const native = nativeModule()
     const nativeOptions_ = nativeOptions({ timeout, networkInterface })
-    const promise =
-      Platform.OS === 'android'
-        ? native.resolveService(name, type, protocol, domain, implType, nativeOptions_)
-        : native.resolveService(name, type, protocol, domain, nativeOptions_)
+    const promise = native.resolveService(name, type, protocol, domain, implType, nativeOptions_)
     return asPromise(
       asPromise(promise).then(service => (service && withAddressFamilies(service)) as Service),
     )
@@ -567,9 +520,8 @@ class Zeroconf extends EventEmitter {
   ): Promise<PublishedService | null> {
     if (Platform.OS === 'android') {
       delete this._publishedImplTypes[name]
-      return asPromise(nativeModule().unregisterService(name, implType))
     }
-    return asPromise(nativeModule().unregisterService(name))
+    return asPromise(nativeModule().unregisterService(name, implType))
   }
 }
 

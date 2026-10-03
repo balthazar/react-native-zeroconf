@@ -24,8 +24,15 @@ const RNZeroconf = new Proxy(
   },
 )
 
+// TurboModules by name, none by default: the library then uses NativeModules.RNZeroconf
+const turboModules = {}
+
 module.exports = {
   Platform: { OS: 'ios' },
+  TurboModuleRegistry: {
+    get: name => turboModules[name] || null,
+  },
+  turboModules,
   PermissionsAndroid: {
     RESULTS: { GRANTED: 'granted', DENIED: 'denied', NEVER_ASK_AGAIN: 'never_ask_again' },
     request(permission) {
