@@ -1347,26 +1347,89 @@ mDNSexport mStatus mDNSPlatformPosixRefreshInterfaceList(mDNS *const m)
 static pthread_mutex_t gCoreLock;
 static pthread_once_t  gCoreLockOnce = PTHREAD_ONCE_INIT;
 
-static void InitCoreLock(void)
+// The event loop sleeps in select() until the core's next scheduled event. A DNSService* call
+// from another thread changes that schedule (a new question has to be answered now), so when
+// such a call releases the lock, the loop is woken through a pipe it listens to. Otherwise the
+// call would wait for the next timer or the next packet from the network.
+// The pipe is created together with the lock and lives as long as the process, so that the
+// write in mDNSPlatformUnlock() can never hit a descriptor another thread has closed and reused.
+static pthread_t gLoopThread;
+static int       gLoopThreadSet = 0;
+static int       gWakePipe[2]   = { -1, -1 };
+
+static void WakeCallback(int fd, short filter, void *context)
+	{
+	char buffer[64];
+	(void) filter;	// Unused
+	(void) context;	// Unused
+	while (read(fd, buffer, sizeof(buffer)) > 0) { }
+	}
+
+static void InitCoreLockAndWakePipe(void)
 	{
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	pthread_mutex_init(&gCoreLock, &attr);
 	pthread_mutexattr_destroy(&attr);
+	if (pipe(gWakePipe) == 0)
+		{
+		fcntl(gWakePipe[0], F_SETFL, fcntl(gWakePipe[0], F_GETFL, 0) | O_NONBLOCK);
+		fcntl(gWakePipe[1], F_SETFL, fcntl(gWakePipe[1], F_GETFL, 0) | O_NONBLOCK);
+		}
+	else
+		{
+		gWakePipe[0] = gWakePipe[1] = -1;
+		LogMsg("mDNSPosix: pipe() failed (%d), other threads will not wake the event loop", errno);
+		}
+	}
+
+mDNSexport void mDNSPosixEmbeddedLoopStarting(void)
+	{
+	mDNSPlatformLock(mDNSNULL);
+	gLoopThread = pthread_self();
+	gLoopThreadSet = 1;
+	if (gWakePipe[0] >= 0)
+		{
+		mStatus err = mDNSPosixAddFDToEventLoop(gWakePipe[0], WakeCallback, mDNSNULL);
+		if (err) LogMsg("mDNSPosix: cannot listen to the wake-up pipe (%d), other threads will not wake the event loop", err);
+		}
+	mDNSPlatformUnlock(mDNSNULL);
+	}
+
+mDNSexport void mDNSPosixEmbeddedLoopStopping(void)
+	{
+	mDNSPlatformLock(mDNSNULL);
+	if (gWakePipe[0] >= 0)
+		{
+		mDNSPosixRemoveFDFromEventLoop(gWakePipe[0]);
+		WakeCallback(gWakePipe[0], 0, mDNSNULL);	// Drain, for the next loop
+		}
+	gLoopThreadSet = 0;
+	mDNSPlatformUnlock(mDNSNULL);
+	}
+
+mDNSexport void mDNSPosixEmbeddedWakeLoop(void)
+	{
+	if (gWakePipe[1] >= 0)
+		{
+		if (write(gWakePipe[1], "", 1) < 0) { }	// A full pipe means the loop is about to wake anyway
+		}
 	}
 
 mDNSexport void    mDNSPlatformLock   (const mDNS *const m)
 	{
 	(void) m;	// Unused
-	pthread_once(&gCoreLockOnce, InitCoreLock);
+	pthread_once(&gCoreLockOnce, InitCoreLockAndWakePipe);
 	pthread_mutex_lock(&gCoreLock);
 	}
 
 mDNSexport void    mDNSPlatformUnlock (const mDNS *const m)
 	{
 	(void) m;	// Unused
+	int fromLoopThread = gLoopThreadSet && pthread_equal(pthread_self(), gLoopThread);
 	pthread_mutex_unlock(&gCoreLock);
+	if (!fromLoopThread) mDNSPosixEmbeddedWakeLoop();
 	}
 
 #else
