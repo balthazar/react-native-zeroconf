@@ -41,6 +41,13 @@ jobs:
       - uses: actions/checkout@v7
       - run: test/ios/run.sh
 
+  android-native:
+    name: Android implementation (Linux harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: test/android/run.sh
+
   android:
     name: Android build
     runs-on: ubuntu-latest
@@ -60,10 +67,20 @@ jobs:
           yarn install --frozen-lockfile
           yarn build
           npm pack --pack-destination "$RUNNER_TEMP"
-      - name: Install the example with the packed library
+      - name: Install the example
+        working-directory: example
+        run: npm ci
+      - name: Unit tests of the Android module
+        # Against this checkout (npm links "file:.."); the packed library below has no tests
         working-directory: example
         run: |
-          npm ci
+          npx expo prebuild --platform android --no-install
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> ~/.gradle/gradle.properties
+          cd android && ./gradlew :react-native-zeroconf:testDebugUnitTest --build-cache
+      - name: Use the packed library
+        working-directory: example
+        run: |
           rm -rf node_modules/react-native-zeroconf
           mkdir -p node_modules/react-native-zeroconf
           tar -xzf "$RUNNER_TEMP"/react-native-zeroconf-*.tgz -C node_modules/react-native-zeroconf --strip-components=1
@@ -74,8 +91,6 @@ jobs:
         working-directory: example
         run: |
           npx expo prebuild --platform android --no-install
-          mkdir -p ~/.gradle
-          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> ~/.gradle/gradle.properties
           cd android && ./gradlew :app:assembleDebug --build-cache -PreactNativeArchitectures=x86_64
 
   ios:

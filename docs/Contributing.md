@@ -56,7 +56,15 @@ cd example/android
 yarn test          # Jest: the JavaScript API against a mocked native module
 yarn typecheck     # index.d.ts against the samples in test/types
 test/ios/run.sh    # macOS: the iOS implementation with AddressSanitizer, against the local mDNSResponder
+test/android/run.sh   # Linux: the embedded mDNSResponder of the Android module with AddressSanitizer, driven from several threads
 test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/ZeroconfCore.cpp) with Visual Studio's C++ tools
+```
+
+The Android module's Java unit tests (`android/src/test`) run through the example app's Gradle project (the module has no standalone build, React Native comes from the host app); CI runs them in the Android build job before swapping in the packed library:
+
+```bash
+cd example && npm ci && npx expo prebuild --platform android --no-install
+cd android && ./gradlew :react-native-zeroconf:testDebugUnitTest
 ```
 
 CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. On Windows it also runs a second mDNS stack (`test/windows/peer.py`, python-zeroconf) for the harness to discover, and builds and launches a react-native-windows app running `test/windows/App.tsx` against it.
