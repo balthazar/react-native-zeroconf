@@ -4,12 +4,11 @@ name: Windows
 # that affects Windows changes. Run them by hand from the Actions tab before a release.
 on:
   push:
-    branches: [master]
+    branches: [master, '1.0']
     paths:
       - 'windows/**'
       - 'test/windows/**'
       - 'src/**'
-      - 'index.d.ts'
       - 'package.json'
       - 'yarn.lock'
       - '.github/workflows/windows.yml'
@@ -18,7 +17,6 @@ on:
       - 'windows/**'
       - 'test/windows/**'
       - 'src/**'
-      - 'index.d.ts'
       - 'package.json'
       - 'yarn.lock'
       - '.github/workflows/windows.yml'

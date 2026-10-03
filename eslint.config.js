@@ -1,16 +1,10 @@
 const eslintConfigPrettier = require('eslint-config-prettier')
+const tseslint = require('typescript-eslint')
 
-module.exports = [
+module.exports = tseslint.config(
   {
-    files: ['src/**/*.js'],
-    languageOptions: {
-      ecmaVersion: 2020,
-      sourceType: 'module',
-    },
-    rules: {
-      'no-unused-vars': 'warn',
-      'no-undef': 'error',
-    },
+    files: ['src/**/*.ts'],
+    extends: [tseslint.configs.recommended],
   },
   eslintConfigPrettier,
-]
+)

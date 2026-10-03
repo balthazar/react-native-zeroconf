@@ -2,11 +2,23 @@
   "compilerOptions": {
     "strict": true,
     "noEmit": true,
-    "lib": ["es2020", "dom"],
+    "lib": [
+      "es2020",
+      "dom"
+    ],
     "types": [],
-    "moduleResolution": "node",
-    "baseUrl": ".",
-    "paths": { "react-native-zeroconf": ["../../index.d.ts"] }
+    "moduleResolution": "bundler",
+    "paths": {
+      "react-native-zeroconf": [
+        "../../src/index.ts"
+      ]
+    },
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "target": "ESNext"
   },
-  "include": ["*.ts"]
+  "include": [
+    "*.ts"
+  ]
 }
