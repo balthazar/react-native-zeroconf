@@ -8,7 +8,8 @@ Bug reports and pull requests are welcome on [GitHub](https://github.com/balthaz
 | --- | --- |
 | `src/index.ts` | JavaScript API, in TypeScript (built to `lib/` with react-native-builder-bob) |
 | `src/types.ts` | Public types, the declarations are generated from the source |
-| `ios/RNZeroconf/` | iOS, macOS and tvOS module (Objective-C, dns_sd) |
+| `cpp/` | The native module in C++ (`ZeroconfModule`), the backend interface, and the `dns_sd` backend in `cpp/dnssd` |
+| `ios/`, `cpp/apple/` | Registration on iOS, macOS and tvOS, the dispatch queue executor and the Local Network check |
 | `windows/RNZeroconf/` | Windows module (C++): `ZeroconfCore` on `windns.h`, `RNZeroconf` bridges it to React Native |
 | `react-native-zeroconf.podspec` | CocoaPods spec |
 | `android/src/main/java/com/balthazargronon/RCTZeroconf/` | Android module (`nsd/` and `dnssd/` implementations) |
@@ -55,7 +56,7 @@ cd example/android
 ```bash
 yarn test          # Jest: the JavaScript API against a mocked native module
 yarn typecheck     # the source, then the samples in test/types against it
-test/ios/run.sh    # macOS: the iOS implementation with AddressSanitizer, against the local mDNSResponder
+test/apple/run.sh  # macOS: the dns_sd backend and the Local Network check with AddressSanitizer, against the local mDNSResponder
 test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/ZeroconfCore.cpp) with Visual Studio's C++ tools
 ```
 

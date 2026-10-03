@@ -35,14 +35,11 @@ jobs:
           fi
 
   ios-native:
-    name: iOS implementation (macOS harnesses)
+    name: iOS implementation (macOS harness)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Objective-C module
-        run: test/ios/run.sh
-      - name: C++ dns_sd backend
-        run: test/apple/run.sh
+      - run: test/apple/run.sh
 
   android:
     name: Android build
