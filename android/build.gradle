@@ -42,4 +42,8 @@ repositories {
 
 dependencies {
     implementation "com.facebook.react:react-native:${safeExtGet('reactNativeVersion', '+')}"
+    // Unit tests only (android/src/test, run through the example app's Gradle project, see docs/Contributing.md).
+    // Mockito 5 mocks android.os.Handler's final methods through its inline mock maker; Mockito 4 cannot.
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:5.14.2'
 }

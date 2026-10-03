@@ -107,14 +107,26 @@ struct	OpContext
 
 //For AUTO_CALLBACKS, we must attach the callback thread to the Java VM prior to upcall.
 #if AUTO_CALLBACKS
-	JNIEnv *pLoopEnv = NULL;
+	JNIEnv *pLoopEnv = NULL;	// The event loop thread's env, the fallback when the current thread's is unavailable
+	static JavaVM *gJavaVM = NULL;
 #endif
 
 #ifdef EMBEDDED
 int init();
 int loop();
 void stopLoop();
+void lockCore();
+void unlockCore();
+// The embedded shim reads core state (the interface list, the host name) before mDNS core
+// takes its own lock, so every call into it is made under the core lock. It is recursive.
+#define LOCK_CORE()		lockCore()
+#define UNLOCK_CORE()	unlockCore()
+#else
+#define LOCK_CORE()		do { } while (0)
+#define UNLOCK_CORE()	do { } while (0)
+#endif
 
+#ifdef EMBEDDED
 JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_DNSSDEmbedded_nativeInit( JNIEnv *pEnv, jclass cls)
 {
 	pLoopEnv = pEnv;
@@ -140,12 +152,8 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleDNSSD_InitLibrary( JNIEnv
 		return kDNSServiceErr_Incompatible;
 
 #if AUTO_CALLBACKS
-	// {
-	// 	jsize	numVMs;
-	
-	// 	if ( 0 != JNI_GetCreatedJavaVMs( &gJavaVM, 1, &numVMs))
-	// 		return kDNSServiceErr_BadState;
-	// }
+	if ( gJavaVM == NULL && 0 != (*pEnv)->GetJavaVM( pEnv, &gJavaVM))
+		return kDNSServiceErr_BadState;
 #endif
 
 	// Set AppleDNSSD.hasAutoCallbacks
@@ -180,13 +188,18 @@ static void			SafeReleaseUTFChars( JNIEnv *pEnv, jstring str, const char *buff)
 #if AUTO_CALLBACKS
 static void	SetupCallbackState( JNIEnv **ppEnv)
 {
-	(*ppEnv) = pLoopEnv;
-	//(*gJavaVM)->AttachCurrentThread( gJavaVM, (void**) ppEnv, NULL);
+	// Callbacks usually come from the event loop thread, but mDNS core also calls back from inside
+	// an API call, on the client's thread: a local-only registration is acknowledged inside
+	// DNSServiceRegister(). A JNIEnv belongs to one thread, so use the current thread's.
+	JNIEnv	*pEnv = NULL;
+	if ( gJavaVM != NULL && JNI_OK == (*gJavaVM)->GetEnv( gJavaVM, (void**) &pEnv, JNI_VERSION_1_6) && pEnv != NULL)
+		(*ppEnv) = pEnv;
+	else
+		(*ppEnv) = pLoopEnv;
 }
 
 static void	TeardownCallbackState( void )
 {
-	//(*gJavaVM)->DetachCurrentThread( gJavaVM);
 }
 
 #else	// AUTO_CALLBACKS
@@ -248,6 +261,13 @@ JNIEXPORT void JNICALL Java_com_github_druk_dnssd_AppleService_HaltOperation( JN
 		OpContext	*pContext = (OpContext*) (long) (*pEnv)->GetLongField(pEnv, pThis, contextField);
 		if ( pContext != NULL)
 		{
+			// The embedded responder delivers callbacks from its own thread and may be in
+			// the middle of one for this very operation (an answer with several records
+			// invokes the callback once per record). DNSServiceRefDeallocate() takes the
+			// core lock itself; holding it here too keeps the weak refs and the free() in
+			// the same critical section. Consequently a Java callback running on the loop
+			// thread must never block on a thread that may be in here (the main thread).
+			LOCK_CORE();
 			// MUST clear fNativeContext first, BEFORE calling DNSServiceRefDeallocate()
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, 0);
 			if ( pContext->ServiceRef != NULL)
@@ -256,6 +276,7 @@ JNIEXPORT void JNICALL Java_com_github_druk_dnssd_AppleService_HaltOperation( JN
 			(*pEnv)->DeleteWeakGlobalRef( pEnv, pContext->JavaObj);
 			(*pEnv)->DeleteWeakGlobalRef( pEnv, pContext->ClientObj);
 			free( pContext);
+			UNLOCK_CORE();
 		}
 	}
 }
@@ -355,29 +376,36 @@ static void DNSSD_API	ServiceBrowseReply( DNSServiceRef sdRef _UNUSED, DNSServic
 
 	SetupCallbackState( &pContext->Env);
 
-	jobject clientObj = (*pContext->Env)->NewLocalRef(pContext->Env, pContext->ClientObj);
+	// Copies: the Java callback may stop this operation, after which pContext is freed.
+	JNIEnv		*env = pContext->Env;
+	jobject		javaObj = pContext->JavaObj;
+	jobject		clientRef = pContext->ClientObj;
+	jmethodID	callback = pContext->Callback;
+	jmethodID	callback2 = pContext->Callback2;
 
-	if ( clientObj != NULL && pContext->Callback != NULL)
+	jobject clientObj = (*env)->NewLocalRef(env, clientRef);
+
+	if ( clientObj != NULL && callback != NULL)
 	{
 		if ( errorCode == kDNSServiceErr_NoError)
 		{
-			jbyteArray jServiceName = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(serviceName));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jServiceName, 0, (jsize)strlen(serviceName), (const jbyte *) serviceName);
-			jbyteArray jRegType = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(regtype));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jRegType, 0, (jsize)strlen(regtype), (const jbyte *) regtype);
-			jbyteArray jReplyDomain = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(replyDomain));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jReplyDomain, 0, (jsize)strlen(replyDomain), (const jbyte *) replyDomain);
-			(*pContext->Env)->CallVoidMethod( pContext->Env, clientObj,
-								( flags & kDNSServiceFlagsAdd) != 0 ? pContext->Callback : pContext->Callback2,
-								pContext->JavaObj, flags, interfaceIndex, jServiceName, jRegType, jReplyDomain);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jServiceName);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jRegType);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jReplyDomain);
+			jbyteArray jServiceName = (*env)->NewByteArray(env, (jsize)strlen(serviceName));
+			(*env)->SetByteArrayRegion (env, jServiceName, 0, (jsize)strlen(serviceName), (const jbyte *) serviceName);
+			jbyteArray jRegType = (*env)->NewByteArray(env, (jsize)strlen(regtype));
+			(*env)->SetByteArrayRegion (env, jRegType, 0, (jsize)strlen(regtype), (const jbyte *) regtype);
+			jbyteArray jReplyDomain = (*env)->NewByteArray(env, (jsize)strlen(replyDomain));
+			(*env)->SetByteArrayRegion (env, jReplyDomain, 0, (jsize)strlen(replyDomain), (const jbyte *) replyDomain);
+			(*env)->CallVoidMethod( env, clientObj,
+								( flags & kDNSServiceFlagsAdd) != 0 ? callback : callback2,
+								javaObj, flags, interfaceIndex, jServiceName, jRegType, jReplyDomain);
+			(*env)->DeleteLocalRef( env, jServiceName);
+			(*env)->DeleteLocalRef( env, jRegType);
+			(*env)->DeleteLocalRef( env, jReplyDomain);
 		}
 		else
-			ReportError( pContext->Env, clientObj, pContext->JavaObj, errorCode);
+			ReportError( env, clientObj, javaObj, errorCode);
 
-		(*pContext->Env)->DeleteLocalRef(pContext->Env, clientObj);
+		(*env)->DeleteLocalRef(env, clientObj);
 	}
 
 	TeardownCallbackState();
@@ -406,7 +434,9 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleBrowser_CreateBrowser( JN
 								(*pEnv)->GetObjectClass( pEnv, pContext->ClientObj),
 								"serviceLost", "(Lcom/github/druk/dnssd/DNSSDService;II[B[B[B)V");
 
+		LOCK_CORE();
 		err = DNSServiceBrowse( &pContext->ServiceRef, flags, ifIndex, regStr, domainStr, ServiceBrowseReply, pContext);
+		UNLOCK_CORE();
 		if ( err == kDNSServiceErr_NoError)
 		{
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, (long) pContext);
@@ -435,11 +465,17 @@ static void DNSSD_API	ServiceResolveReply( DNSServiceRef sdRef _UNUSED, DNSServi
 
 	SetupCallbackState( &pContext->Env);
 
-	txtCls = (*pContext->Env)->FindClass( pContext->Env, "com/github/druk/dnssd/TXTRecord");
-	txtCtor = (*pContext->Env)->GetMethodID( pContext->Env, txtCls, "<init>", "([B)V");
+	// Copies: the Java callback may stop this operation, after which pContext is freed.
+	JNIEnv		*env = pContext->Env;
+	jobject		javaObj = pContext->JavaObj;
+	jobject		clientRef = pContext->ClientObj;
+	jmethodID	callback = pContext->Callback;
 
-	if ( pContext->ClientObj != NULL && pContext->Callback != NULL && txtCtor != NULL &&
-		 NULL != ( txtBytes = (*pContext->Env)->NewByteArray( pContext->Env, txtLen)))
+	txtCls = (*env)->FindClass( env, "com/github/druk/dnssd/TXTRecord");
+	txtCtor = (*env)->GetMethodID( env, txtCls, "<init>", "([B)V");
+
+	if ( clientRef != NULL && callback != NULL && txtCtor != NULL &&
+		 NULL != ( txtBytes = (*env)->NewByteArray( env, txtLen)))
 	{
 		if ( errorCode == kDNSServiceErr_NoError)
 		{
@@ -448,26 +484,26 @@ static void DNSSD_API	ServiceResolveReply( DNSServiceRef sdRef _UNUSED, DNSServi
 			port = ( ((unsigned char*) &port)[0] << 8) | ((unsigned char*) &port)[1];
 	
 			// Initialize txtBytes with contents of txtRecord
-			pBytes = (*pContext->Env)->GetByteArrayElements( pContext->Env, txtBytes, NULL);
+			pBytes = (*env)->GetByteArrayElements( env, txtBytes, NULL);
 			memcpy( pBytes, txtRecord, txtLen);
-			(*pContext->Env)->ReleaseByteArrayElements( pContext->Env, txtBytes, pBytes, JNI_COMMIT);
+			(*env)->ReleaseByteArrayElements( env, txtBytes, pBytes, JNI_COMMIT);
 	
 			// Construct txtObj with txtBytes
-			txtObj = (*pContext->Env)->NewObject( pContext->Env, txtCls, txtCtor, txtBytes);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, txtBytes);
+			txtObj = (*env)->NewObject( env, txtCls, txtCtor, txtBytes);
+			(*env)->DeleteLocalRef( env, txtBytes);
 
-			jbyteArray jFullName = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(fullname));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jFullName, 0, (jsize)strlen(fullname), (const jbyte *) fullname);
-			jbyteArray jHostTarget = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(hosttarget));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jHostTarget, 0, (jsize)strlen(hosttarget), (const jbyte *) hosttarget);
-			(*pContext->Env)->CallVoidMethod( pContext->Env, pContext->ClientObj, pContext->Callback,
-								pContext->JavaObj, flags, interfaceIndex, jFullName, jHostTarget, port, txtObj);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jFullName);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jHostTarget);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, txtObj);
+			jbyteArray jFullName = (*env)->NewByteArray(env, (jsize)strlen(fullname));
+			(*env)->SetByteArrayRegion (env, jFullName, 0, (jsize)strlen(fullname), (const jbyte *) fullname);
+			jbyteArray jHostTarget = (*env)->NewByteArray(env, (jsize)strlen(hosttarget));
+			(*env)->SetByteArrayRegion (env, jHostTarget, 0, (jsize)strlen(hosttarget), (const jbyte *) hosttarget);
+			(*env)->CallVoidMethod( env, clientRef, callback,
+								javaObj, flags, interfaceIndex, jFullName, jHostTarget, port, txtObj);
+			(*env)->DeleteLocalRef( env, jFullName);
+			(*env)->DeleteLocalRef( env, jHostTarget);
+			(*env)->DeleteLocalRef( env, txtObj);
 		}
 		else
-			ReportError( pContext->Env, pContext->ClientObj, pContext->JavaObj, errorCode);
+			ReportError( env, clientRef, javaObj, errorCode);
 	}
 
 	TeardownCallbackState();
@@ -493,8 +529,10 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleResolver_CreateResolver( 
 		const char	*regStr = SafeGetUTFChars( pEnv, regType);
 		const char	*domainStr = SafeGetUTFChars( pEnv, domain);
 
+		LOCK_CORE();
 		err = DNSServiceResolve( &pContext->ServiceRef, flags, ifIndex,
 								servStr, regStr, domainStr, ServiceResolveReply, pContext);
+		UNLOCK_CORE();
 		if ( err == kDNSServiceErr_NoError)
 		{
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, (long) pContext);
@@ -519,25 +557,31 @@ static void DNSSD_API	ServiceRegisterReply( DNSServiceRef sdRef _UNUSED, DNSServ
 
 	SetupCallbackState( &pContext->Env);
 
-	if ( pContext->ClientObj != NULL && pContext->Callback != NULL)
+	// Copies: the Java callback may stop this operation, after which pContext is freed.
+	JNIEnv		*env = pContext->Env;
+	jobject		javaObj = pContext->JavaObj;
+	jobject		clientRef = pContext->ClientObj;
+	jmethodID	callback = pContext->Callback;
+
+	if ( clientRef != NULL && callback != NULL)
 	{
 		if ( errorCode == kDNSServiceErr_NoError)
 		{
-			jbyteArray jServiceName = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(serviceName));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jServiceName, 0, (jsize)strlen(serviceName), (const jbyte *) serviceName);
-			jbyteArray jRegType = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(regType));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jRegType, 0, (jsize)strlen(regType), (const jbyte *) regType);
-			jbyteArray jDomain = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(domain));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jDomain, 0, (jsize)strlen(domain), (const jbyte *) domain);
+			jbyteArray jServiceName = (*env)->NewByteArray(env, (jsize)strlen(serviceName));
+			(*env)->SetByteArrayRegion (env, jServiceName, 0, (jsize)strlen(serviceName), (const jbyte *) serviceName);
+			jbyteArray jRegType = (*env)->NewByteArray(env, (jsize)strlen(regType));
+			(*env)->SetByteArrayRegion (env, jRegType, 0, (jsize)strlen(regType), (const jbyte *) regType);
+			jbyteArray jDomain = (*env)->NewByteArray(env, (jsize)strlen(domain));
+			(*env)->SetByteArrayRegion (env, jDomain, 0, (jsize)strlen(domain), (const jbyte *) domain);
 
-			(*pContext->Env)->CallVoidMethod( pContext->Env, pContext->ClientObj, pContext->Callback,
-								pContext->JavaObj, flags,jServiceName, jRegType, jDomain);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jServiceName);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jRegType);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jDomain);
+			(*env)->CallVoidMethod( env, clientRef, callback,
+								javaObj, flags,jServiceName, jRegType, jDomain);
+			(*env)->DeleteLocalRef( env, jServiceName);
+			(*env)->DeleteLocalRef( env, jRegType);
+			(*env)->DeleteLocalRef( env, jDomain);
 		}
 		else
-			ReportError( pContext->Env, pContext->ClientObj, pContext->JavaObj, errorCode);
+			ReportError( env, clientRef, javaObj, errorCode);
 	}
 	TeardownCallbackState();
 }
@@ -579,9 +623,11 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleRegistration_BeginRegiste
 		pBytes = txtRecord ? (*pEnv)->GetByteArrayElements( pEnv, txtRecord, NULL) : NULL;
 		numBytes = txtRecord ? (*pEnv)->GetArrayLength( pEnv, txtRecord) : 0;
 
+		LOCK_CORE();
 		err = DNSServiceRegister( &pContext->ServiceRef, flags, ifIndex, servStr, regStr,  
 								domainStr, hostStr, portBits,
 								numBytes, pBytes, ServiceRegisterReply, pContext);
+		UNLOCK_CORE();
 		if ( err == kDNSServiceErr_NoError)
 		{
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, (long) pContext);
@@ -622,7 +668,9 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleRegistration_AddRecord( J
 	pBytes = (*pEnv)->GetByteArrayElements( pEnv, rData, NULL);
 	numBytes = (*pEnv)->GetArrayLength( pEnv, rData);
 
+	LOCK_CORE();
 	err = DNSServiceAddRecord( pContext->ServiceRef, &recRef, flags, rrType, numBytes, pBytes, ttl);
+	UNLOCK_CORE();
 	if ( err == kDNSServiceErr_NoError)
 	{
 		(*pEnv)->SetLongField(pEnv, destObj, recField, (long) recRef);
@@ -662,7 +710,9 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleDNSRecord_Update( JNIEnv 
 	pBytes = (*pEnv)->GetByteArrayElements( pEnv, rData, NULL);
 	numBytes = (*pEnv)->GetArrayLength( pEnv, rData);
 
+	LOCK_CORE();
 	err = DNSServiceUpdateRecord( pContext->ServiceRef, recRef, flags, numBytes, pBytes, ttl);
+	UNLOCK_CORE();
 
 	if ( pBytes != NULL)
 		(*pEnv)->ReleaseByteArrayElements( pEnv, rData, pBytes, 0);
@@ -692,7 +742,9 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleDNSRecord_Remove( JNIEnv 
 	if ( pContext == NULL || pContext->ServiceRef == NULL)
 		return kDNSServiceErr_BadParam;
 
+	LOCK_CORE();
 	err = DNSServiceRemoveRecord( pContext->ServiceRef, recRef, 0);
+	UNLOCK_CORE();
 
 	return err;
 }
@@ -712,7 +764,9 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleRecordRegistrar_CreateCon
 
 	if ( pContext != NULL)
 	{
+		LOCK_CORE();
 		err = DNSServiceCreateConnection( &pContext->ServiceRef);
+		UNLOCK_CORE();
 		if ( err == kDNSServiceErr_NoError)
 		{
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, (long) pContext);
@@ -740,18 +794,24 @@ static void DNSSD_API	RegisterRecordReply( DNSServiceRef sdRef _UNUSED,
 
 	SetupCallbackState( &pContext->Env);
 
-	if ( pContext->ClientObj != NULL && pContext->Callback != NULL)
+	// Copies: the Java callback may stop this operation, after which pContext is freed.
+	JNIEnv		*env = pContext->Env;
+	jobject		javaObj = pContext->JavaObj;
+	jobject		clientRef = pContext->ClientObj;
+	jmethodID	callback = pContext->Callback;
+
+	if ( clientRef != NULL && callback != NULL)
 	{	
 		if ( errorCode == kDNSServiceErr_NoError)
 		{	
-			(*pContext->Env)->CallVoidMethod( pContext->Env, pContext->ClientObj, pContext->Callback, 
+			(*env)->CallVoidMethod( env, clientRef, callback, 
 												regEnvelope->RecordObj, flags);
 		}
 		else
-			ReportError( pContext->Env, pContext->ClientObj, pContext->JavaObj, errorCode);
+			ReportError( env, clientRef, javaObj, errorCode);
 	}
 
-	(*pContext->Env)->DeleteWeakGlobalRef( pContext->Env, regEnvelope->RecordObj);
+	(*env)->DeleteWeakGlobalRef( env, regEnvelope->RecordObj);
 	free( regEnvelope);
 
 	TeardownCallbackState();
@@ -787,9 +847,11 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleRecordRegistrar_RegisterR
 	pBytes = (*pEnv)->GetByteArrayElements( pEnv, rData, NULL);
 	numBytes = (*pEnv)->GetArrayLength( pEnv, rData);
 
+	LOCK_CORE();
 	err = DNSServiceRegisterRecord( pContext->ServiceRef, &recRef, flags, ifIndex, 
 									nameStr, rrType, rrClass, numBytes, pBytes, ttl,
 									RegisterRecordReply, regEnvelope);
+	UNLOCK_CORE();
 
 	if ( err == kDNSServiceErr_NoError)
 	{
@@ -822,25 +884,31 @@ static void DNSSD_API	ServiceQueryReply( DNSServiceRef sdRef _UNUSED, DNSService
 
 	SetupCallbackState( &pContext->Env);
 
-	if ( pContext->ClientObj != NULL && pContext->Callback != NULL && 
-		 NULL != ( rDataObj = (*pContext->Env)->NewByteArray( pContext->Env, rdlen)))
+	// Copies: the Java callback may stop this operation, after which pContext is freed.
+	JNIEnv		*env = pContext->Env;
+	jobject		javaObj = pContext->JavaObj;
+	jobject		clientRef = pContext->ClientObj;
+	jmethodID	callback = pContext->Callback;
+
+	if ( clientRef != NULL && callback != NULL && 
+		 NULL != ( rDataObj = (*env)->NewByteArray( env, rdlen)))
 	{	
 		if ( errorCode == kDNSServiceErr_NoError)
 		{
 			// Initialize rDataObj with contents of rdata
-			pBytes = (*pContext->Env)->GetByteArrayElements( pContext->Env, rDataObj, NULL);
+			pBytes = (*env)->GetByteArrayElements( env, rDataObj, NULL);
 			memcpy( pBytes, rdata, rdlen);
-			(*pContext->Env)->ReleaseByteArrayElements( pContext->Env, rDataObj, pBytes, JNI_COMMIT);
+			(*env)->ReleaseByteArrayElements( env, rDataObj, pBytes, JNI_COMMIT);
 
-			jbyteArray jServiceName = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(serviceName));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jServiceName, 0, (jsize)strlen(serviceName), (const jbyte *) serviceName);
-			(*pContext->Env)->CallVoidMethod( pContext->Env, pContext->ClientObj, pContext->Callback,
-								pContext->JavaObj, flags, interfaceIndex, jServiceName, rrtype, rrclass, rDataObj, ttl);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jServiceName);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, rDataObj);
+			jbyteArray jServiceName = (*env)->NewByteArray(env, (jsize)strlen(serviceName));
+			(*env)->SetByteArrayRegion (env, jServiceName, 0, (jsize)strlen(serviceName), (const jbyte *) serviceName);
+			(*env)->CallVoidMethod( env, clientRef, callback,
+								javaObj, flags, interfaceIndex, jServiceName, rrtype, rrclass, rDataObj, ttl);
+			(*env)->DeleteLocalRef( env, jServiceName);
+			(*env)->DeleteLocalRef( env, rDataObj);
 		}
 		else
-			ReportError( pContext->Env, pContext->ClientObj, pContext->JavaObj, errorCode);
+			ReportError( env, clientRef, javaObj, errorCode);
 	}
 	TeardownCallbackState();
 }
@@ -863,8 +931,10 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleQuery_CreateQuery( JNIEnv
 	{
 		const char	*servStr = SafeGetUTFChars( pEnv, serviceName);
 
+		LOCK_CORE();
 		err = DNSServiceQueryRecord( &pContext->ServiceRef, flags, ifIndex, servStr,
 									rrtype, rrclass, ServiceQueryReply, pContext);
+		UNLOCK_CORE();
 		if ( err == kDNSServiceErr_NoError)
 		{
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, (long) pContext);
@@ -886,19 +956,26 @@ static void DNSSD_API	DomainEnumReply( DNSServiceRef sdRef _UNUSED, DNSServiceFl
 
 	SetupCallbackState( &pContext->Env);
 
-	if ( pContext->ClientObj != NULL && pContext->Callback != NULL)
+	// Copies: the Java callback may stop this operation, after which pContext is freed.
+	JNIEnv		*env = pContext->Env;
+	jobject		javaObj = pContext->JavaObj;
+	jobject		clientRef = pContext->ClientObj;
+	jmethodID	callback = pContext->Callback;
+	jmethodID	callback2 = pContext->Callback2;
+
+	if ( clientRef != NULL && callback != NULL)
 	{
 		if ( errorCode == kDNSServiceErr_NoError)
 		{
-			jbyteArray jReplyDomain = (*pContext->Env)->NewByteArray(pContext->Env, (jsize)strlen(replyDomain));
-			(*pContext->Env)->SetByteArrayRegion (pContext->Env, jReplyDomain, 0, (jsize)strlen(replyDomain), (const jbyte *) replyDomain);
-			(*pContext->Env)->CallVoidMethod( pContext->Env, pContext->ClientObj,
-								( flags & kDNSServiceFlagsAdd) != 0 ? pContext->Callback : pContext->Callback2,
-								pContext->JavaObj, flags, interfaceIndex, jReplyDomain);
-			(*pContext->Env)->DeleteLocalRef( pContext->Env, jReplyDomain);
+			jbyteArray jReplyDomain = (*env)->NewByteArray(env, (jsize)strlen(replyDomain));
+			(*env)->SetByteArrayRegion (env, jReplyDomain, 0, (jsize)strlen(replyDomain), (const jbyte *) replyDomain);
+			(*env)->CallVoidMethod( env, clientRef,
+								( flags & kDNSServiceFlagsAdd) != 0 ? callback : callback2,
+								javaObj, flags, interfaceIndex, jReplyDomain);
+			(*env)->DeleteLocalRef( env, jReplyDomain);
 		}
 		else
-			ReportError( pContext->Env, pContext->ClientObj, pContext->JavaObj, errorCode);
+			ReportError( env, clientRef, javaObj, errorCode);
 	}
 	TeardownCallbackState();
 }
@@ -923,8 +1000,10 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleDomainEnum_BeginEnum( JNI
 								(*pEnv)->GetObjectClass( pEnv, pContext->ClientObj),
 								"domainLost", "(Lcom/github/druk/dnssd/DNSSDService;II[B)V");
 
+		LOCK_CORE();
 		err = DNSServiceEnumerateDomains( &pContext->ServiceRef, flags, ifIndex,
 											DomainEnumReply, pContext);
+		UNLOCK_CORE();
 		if ( err == kDNSServiceErr_NoError)
 		{
 			(*pEnv)->SetLongField(pEnv, pThis, contextField, (long) pContext);
@@ -973,7 +1052,9 @@ JNIEXPORT jint JNICALL Java_com_github_druk_dnssd_AppleDNSSD_ReconfirmRecord( JN
 	pBytes = (*pEnv)->GetByteArrayElements( pEnv, rdata, NULL);
 	numBytes = (*pEnv)->GetArrayLength( pEnv, rdata);
 
+	LOCK_CORE();
 	err = DNSServiceReconfirmRecord( flags, ifIndex, nameStr, rrtype, rrclass, numBytes, pBytes);
+	UNLOCK_CORE();
 
 	if ( pBytes != NULL)
 		(*pEnv)->ReleaseByteArrayElements( pEnv, rdata, pBytes, 0);

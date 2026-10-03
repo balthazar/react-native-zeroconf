@@ -81,6 +81,13 @@ extern mStatus mDNSPosixListenForSignalInEventLoop( int signum);
 extern mStatus mDNSPosixIgnoreSignalInEventLoop( int signum);
 extern mStatus mDNSPosixRunEventLoopOnce( mDNS *m, const struct timeval *pTimeout, sigset_t *pSignalsReceived, mDNSBool *pDataDispatched);
 
+#ifdef EMBEDDED
+// The embedded build is driven from several threads, see the locking section of mDNSPosix.c.
+extern void mDNSPosixEmbeddedLoopStarting(void);	// Call on the event loop thread, before running the loop
+extern void mDNSPosixEmbeddedLoopStopping(void);	// Call on the event loop thread, after the loop returned
+extern void mDNSPosixEmbeddedWakeLoop(void);		// Make the loop re-read the schedule and stop flags
+#endif
+
 #ifdef  __cplusplus
     }
 #endif
