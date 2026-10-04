@@ -12,6 +12,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Whether the push or pull request changes native code: the macOS and tvOS apps only run then,
+  # the iOS app covers the JavaScript
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    outputs:
+      native: ${{ steps.diff.outputs.native }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "native=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE" "$GITHUB_SHA" | grep -qE '^(cpp/|ios/|react-native-zeroconf\.podspec|package\.json|src/NativeZeroconf\.ts|test/app/|\.github/workflows/ci\.yml)'; then
+            echo "native=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "native=false" >> "$GITHUB_OUTPUT"
+          fi
+
   js:
     name: Lint, tests and types
     runs-on: ubuntu-latest
@@ -132,7 +155,7 @@ jobs:
           echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
           xcodebuild -workspace ZeroconfBrowser.xcworkspace -scheme ZeroconfBrowser \
             -configuration Release -sdk iphonesimulator -destination "id=$SIMULATOR" -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+            CLANG_ENABLE_EXPLICIT_MODULES=NO CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
       - uses: actions/setup-python@v7
         with:
@@ -154,6 +177,8 @@ jobs:
   # react-native-tvos templates, against the same peer
   macos:
     name: macOS app (self-test)
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -179,9 +204,9 @@ jobs:
         working-directory: ${{ runner.temp }}/ZeroconfMac/macos
         run: |
           pod install
-          # The runner's architecture only
+          # The runner's architecture only. Explicit modules make React Native's C++ several times slower to build
           xcodebuild -workspace ZeroconfMac.xcworkspace -scheme ZeroconfMac-macOS -configuration Release \
-            -derivedDataPath build CODE_SIGN_IDENTITY=- ONLY_ACTIVE_ARCH=YES build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+            -derivedDataPath build CODE_SIGN_IDENTITY=- ONLY_ACTIVE_ARCH=YES CLANG_ENABLE_EXPLICIT_MODULES=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
       - uses: actions/setup-python@v7
         with:
@@ -219,6 +244,8 @@ jobs:
 
   tvos:
     name: tvOS app (simulator self-test)
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -248,8 +275,8 @@ jobs:
           SIMULATOR=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k, v in d.items() if 'tvOS' in k for x in v if x['name'].startswith('Apple TV')))")
           echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
           xcodebuild -workspace ZeroconfTV.xcworkspace -scheme ZeroconfTV -configuration Release \
-            -sdk appletvsimulator -destination "id=$SIMULATOR" -derivedDataPath build \
-            ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+            -sdk appletvsimulator -destination "id=$SIMULATOR,arch=arm64" -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=YES CLANG_ENABLE_EXPLICIT_MODULES=NO CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
       - uses: actions/setup-python@v7
         with:
