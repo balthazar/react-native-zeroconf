@@ -12,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -77,6 +78,9 @@ struct ZeroconfPlatform {
       std::function<void(const std::string &status)> resolve,
       std::function<void(const rnzeroconf::Error &error)> reject)>
       checkLocalNetworkAccess;
+  // Called when the module starts or stops having anything running: scans, published services,
+  // publishes and resolves in flight. Android holds its multicast lock in between
+  std::function<void(bool active)> setActive;
 };
 
 class ZeroconfModule : public NativeZeroconfCxxSpec<ZeroconfModule> {
@@ -119,12 +123,22 @@ class ZeroconfModule : public NativeZeroconfCxxSpec<ZeroconfModule> {
   rnzeroconf::Events MakeEvents();
   AsyncPromise<ZeroconfResult> Settle(
       jsi::Runtime &rt,
-      const std::function<void(rnzeroconf::ServiceCallback, rnzeroconf::ErrorCallback)> &call);
+      const std::function<void(rnzeroconf::ServiceCallback, rnzeroconf::ErrorCallback)> &call,
+      bool active = false);
+
+  // What is running, for ZeroconfPlatform::setActive
+  enum class Activity { ScanStarted, ScanStopped, AllScansStopped, Published, Unpublished, CallStarted, CallSettled };
+  void Track(Activity activity, const std::string &key = "");
 
   ZeroconfPlatform platform_;
   std::shared_ptr<Emitter> emitter_;
   std::mutex backendsMutex_;
   std::map<std::string, std::shared_ptr<rnzeroconf::Backend>> backends_;
+  std::mutex activityMutex_;
+  std::set<std::string> runningScans_;
+  std::set<std::string> publishedServices_;
+  int callsInFlight_ = 0;
+  bool active_ = false;
 };
 
 } // namespace facebook::react

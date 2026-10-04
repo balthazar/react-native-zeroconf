@@ -50,7 +50,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
 
     // Where an error code comes from
     public static final String ERROR_DOMAIN_NSD = "NsdManager";
-    public static final String ERROR_DOMAIN_DNSSD = "DNSSD";
     public static final String ERROR_DOMAIN_LIBRARY = "RNZeroconf";
     public static final String ERROR_CODE_EXCEPTION = "EXCEPTION";
     public static final String ERROR_CODE_TIMEOUT = "TIMEOUT";
@@ -292,22 +291,6 @@ public class ZeroconfModule extends ReactContextBaseJavaModule {
             case 5: return "operation not running"; // FAILURE_OPERATION_NOT_RUNNING (API 34)
             case 6: return "bad parameters"; // FAILURE_BAD_PARAMETERS (API 34)
             case 7: return "permission denied, the app needs the ACCESS_LOCAL_NETWORK permission"; // FAILURE_PERMISSION_DENIED (API 37)
-            default: return "error " + errorCode;
-        }
-    }
-
-    /**
-     * Readable description of a DNSServiceErrorType code, as on iOS
-     */
-    public static String describeDnssdError(int errorCode) {
-        switch (errorCode) {
-            case -65548: return "name already in use"; // kDNSServiceErr_NameConflict
-            case -65540: return "bad parameter"; // kDNSServiceErr_BadParam
-            case -65538: return "no such name"; // kDNSServiceErr_NoSuchName
-            case -65554: return "no such record"; // kDNSServiceErr_NoSuchRecord
-            case -65563: return "mDNSResponder is not running"; // kDNSServiceErr_ServiceNotRunning
-            case -65539: return "out of memory"; // kDNSServiceErr_NoMemory
-            case -65544: return "unsupported"; // kDNSServiceErr_Unsupported
             default: return "error " + errorCode;
         }
     }

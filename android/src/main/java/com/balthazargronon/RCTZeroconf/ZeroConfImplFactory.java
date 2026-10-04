@@ -1,7 +1,6 @@
 package com.balthazargronon.RCTZeroconf;
 
 import com.balthazargronon.RCTZeroconf.nsd.NsdServiceImpl;
-import com.balthazargronon.RCTZeroconf.dnssd.DnssdImpl;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
 
@@ -12,7 +11,6 @@ import java.util.Map;
 
 public class ZeroConfImplFactory {
     public static final String NSD_IMPL = "NSD";
-    public static final String DNSSD_IMPL = "DNSSD";
 
     private Map<String, Zeroconf> zeroconfMap = new HashMap<>();
 
@@ -35,11 +33,9 @@ public class ZeroConfImplFactory {
                 case NSD_IMPL:
                     zeroconfMap.put(NSD_IMPL, new NsdServiceImpl(zeroconfModule, context));
                     break;
-                case DNSSD_IMPL:
-                    zeroconfMap.put(DNSSD_IMPL, new DnssdImpl(zeroconfModule, context));
-                    break;
                 default:
-                    throw new IllegalArgumentException(String.format("%s implType is not supported. Only %s and %s are supported", implType, NSD_IMPL, DNSSD_IMPL));
+                    // DNSSD is the C++ module (cpp/android)
+                    throw new IllegalArgumentException(String.format("%s implType is not supported here, only %s", implType, NSD_IMPL));
             }
         }
 

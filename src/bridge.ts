@@ -202,10 +202,34 @@ const turboBridge = (module: NonNullable<typeof NativeZeroconf>): Bridge => ({
   },
 })
 
-export const getBridge = (): Bridge | null => {
-  if (NativeZeroconf) {
-    return turboBridge(NativeZeroconf)
+// Android until NSD moves to C++: DNSSD calls go to the C++ module, the others to the previous module,
+// and events come from both
+const routedBridge = (cxx: Bridge, previous: Bridge): Bridge => {
+  const pick = (implType: ImplType) => (implType === 'DNSSD' ? cxx : previous)
+  return {
+    scan: (scanId, type, protocol, domain, implType, options) =>
+      pick(implType).scan(scanId, type, protocol, domain, implType, options),
+    stop: (scanId, implType) => pick(implType).stop(scanId, implType),
+    registerService: (type, protocol, domain, name, port, txt, implType, options) =>
+      pick(implType).registerService(type, protocol, domain, name, port, txt, implType, options),
+    updateService: (name, txt, implType) => pick(implType).updateService(name, txt, implType),
+    unregisterService: (name, implType) => pick(implType).unregisterService(name, implType),
+    resolveService: (name, type, protocol, domain, implType, options) =>
+      pick(implType).resolveService(name, type, protocol, domain, implType, options),
+    checkLocalNetworkAccess: previous.checkLocalNetworkAccess,
+    listen: (event, handler) => {
+      const subscriptions = [cxx.listen(event, handler), previous.listen(event, handler)]
+      return { remove: () => subscriptions.forEach(subscription => subscription.remove()) }
+    },
   }
+}
+
+export const getBridge = (): Bridge | null => {
   const legacy: LegacyModule | undefined = NativeModules.RNZeroconf
+  if (NativeZeroconf) {
+    return Platform.OS === 'android' && legacy
+      ? routedBridge(turboBridge(NativeZeroconf), legacyBridge(legacy))
+      : turboBridge(NativeZeroconf)
+  }
   return legacy ? legacyBridge(legacy) : null
 }
