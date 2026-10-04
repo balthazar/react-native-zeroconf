@@ -1,6 +1,6 @@
 {
   "name": "react-native-zeroconf",
-  "version": "0.17.2",
+  "version": "1.0.0-rc.1",
   "description": "A Zeroconf discovery utility for react-native",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
