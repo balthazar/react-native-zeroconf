@@ -4,19 +4,22 @@ Bug reports and pull requests are welcome on [GitHub](https://github.com/balthaz
 
 ## Repository layout
 
+One C++ TurboModule runs on every platform. `src/NativeZeroconf.ts` is its codegen spec, `cpp/ZeroconfModule` implements it over a platform's backends (`cpp/Backend.h`), and each platform registers it with its backends.
+
 | Path | Contents |
 | --- | --- |
-| `src/index.ts` | JavaScript API, in TypeScript (built to `lib/` with react-native-builder-bob) |
+| `src/index.ts`, `src/bridge.ts` | JavaScript API, in TypeScript (built to `lib/` with react-native-builder-bob) |
 | `src/types.ts` | Public types, the declarations are generated from the source |
-| `cpp/` | The native module in C++ (`ZeroconfModule`), the backend interface, and the `dns_sd` backend in `cpp/dnssd` |
+| `src/NativeZeroconf.ts` | The native module's spec; codegen writes its C++ into `ios/generated` and `android/generated` on `yarn build` |
+| `cpp/` | The native module (`ZeroconfModule`) and the backend interface |
+| `cpp/dnssd/` | The `dns_sd` backend: Apple's mDNSResponder, and the one embedded for Android `DNSSD` |
 | `ios/`, `cpp/apple/` | Registration on iOS, macOS and tvOS, the dispatch queue executor and the Local Network check |
-| `windows/RNZeroconf/` | Windows module (C++): `ZeroconfCore` on `windns.h`, `RNZeroconf` bridges it to React Native |
+| `android/`, `cpp/android/`, `cpp/embedded/` | Registration on Android (`android/CMakeLists.txt`), the `NSD` backend over JNI (`nsd/` in Java), the embedded responder's executor |
+| `android/src/main/jni/mdnsresponder/` | The embedded mDNSResponder |
+| `windows/RNZeroconf/` | Registration on Windows, and the `windns.h` backend (`ZeroconfCore`) |
 | `react-native-zeroconf.podspec` | CocoaPods spec |
-| `android/src/main/java/com/balthazargronon/RCTZeroconf/` | Android module (`nsd/` and `dnssd/` implementations) |
-| `android/src/main/java/com/github/druk/dnssd/` | Bundled DNS-SD Java API, from RxDNSSD |
-| `android/src/main/jni/` | Embedded mDNSResponder, built with `ndkBuild` |
 | `example/` | Expo example app, a network browser |
-| `test/` | Jest tests (`*.test.js`), TypeScript checks (`types/`) and the iOS harness (`ios/`) |
+| `test/` | Jest tests (`*.test.js`), TypeScript checks (`types/`), the native harnesses (`native/`, `apple/`, `embedded/`, `windows/`) and the CI self-test app (`app/`) |
 | `docs/`, `website/` | This documentation and the website built from it |
 
 ## JavaScript
@@ -44,7 +47,7 @@ npm run android   # or: npm run ios
 
 ## Android
 
-The Android module compiles the embedded mDNSResponder with the NDK, so the NDK must be installed (the module defaults to `ndkVersion` 27.1.12297006 unless the app overrides it through `rootProject.ext.ndkVersion`).
+The app builds the module's C++, the embedded mDNSResponder included, through `android/CMakeLists.txt` and React Native's autolinking, with the NDK the app already uses.
 
 ```bash
 cd example/android

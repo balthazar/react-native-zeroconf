@@ -108,7 +108,7 @@ A resolved service is emitted as `resolved` again when its addresses or TXT reco
 | --- | --- |
 | iOS | Yes |
 | Android `NSD` | Android 14+ |
-| Android `DNSSD` | No, once per address found |
+| Android `DNSSD` | Yes |
 | Windows | Yes, when the TXT record or the host and port change |
 
 > On Android with `NSD`, `host` is the mDNS host name only on Android 16+. Earlier versions usually give the IP address in `host`. Use `implType: 'DNSSD'` if you need the host name there. See [Android Implementations](Android-Implementations).

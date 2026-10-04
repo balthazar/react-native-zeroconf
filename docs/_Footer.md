@@ -1,1 +1,1 @@
-Documentation for react-native-zeroconf 0.17. Found a mistake? [Open an issue](https://github.com/balthazar/react-native-zeroconf/issues). | [Home](Home) | [API Reference](API-Reference) | [Troubleshooting](Troubleshooting-and-FAQ)
+Documentation for react-native-zeroconf 1.0. Found a mistake? [Open an issue](https://github.com/balthazar/react-native-zeroconf/issues). | [Home](Home) | [API Reference](API-Reference) | [Troubleshooting](Troubleshooting-and-FAQ)

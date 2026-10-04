@@ -5,9 +5,9 @@
 | iOS | 13.4 or React Native's minimum | Apple dns_sd C API |
 | macOS | 10.15 | Apple dns_sd C API, with react-native-macos |
 | tvOS | 13.4 | Apple dns_sd C API |
-| Android | API 21 (Android 5.0) | `NsdManager` or embedded mDNSResponder |
+| Android | React Native's minimum | `NsdManager` or embedded mDNSResponder |
 | Windows | Windows 10 | `windns.h`, with react-native-windows |
-| Expo | Development builds, SDK 54 tested | Same as the native platform |
+| Expo | Development builds, SDK 57 tested | Same as the native platform |
 | Expo Go | ❌ | |
 
 ## Features
@@ -22,7 +22,7 @@
 | TXT order kept when publishing | ✅ | <span title="Depends on the Android version and device">🟡</span> | ✅ | ✅ |
 | IPv4 and IPv6 addresses | ✅ | <span title="All addresses on Android 14+, one before">🟡</span> | ✅ | <span title="One IPv4 and one IPv6 address">🟡</span> |
 | mDNS host name in `host` | ✅ | <span title="Android 16+">🟡</span> | ✅ | ✅ |
-| Updates re-emitted as `resolved` | ✅ | <span title="Android 14+">🟡</span> | ❌ | <span title="TXT record, host and port">🟡</span> |
+| Updates re-emitted as `resolved` | ✅ | <span title="Android 14+">🟡</span> | ✅ | <span title="TXT record, host and port">🟡</span> |
 | `resolveTimeout` | ✅ | <span title="Android 13 and earlier can't cancel a resolve to retry it, the error comes after twice the timeout">✅</span> | ✅ | ✅ |
 | `checkLocalNetworkAccess()` | ✅ | <span title="Checks the ACCESS_LOCAL_NETWORK permission of Android 17">✅</span> | <span title="Checks the ACCESS_LOCAL_NETWORK permission of Android 17">✅</span> | <span title="Resolves 'granted', there is nothing to grant">✅</span> |
 | Subtypes (`subtype`, `subtypes`) | ✅ | ✅ | ✅ | <span title="Scanning only, publishing subtypes rejects 'UNSUPPORTED'">🟡</span> |
@@ -39,7 +39,7 @@ Errors use the `RNZeroconf` domain, plus `DNSSD` on iOS and Android `DNSSD`, `Ns
 
 | | Supported |
 | --- | --- |
-| New Architecture | ✅ tested with Expo SDK 54 |
+| New Architecture | ✅ required, one C++ module on every platform |
 | TypeScript | ✅ bundled types |
 | Android 16 KB page size | ✅ native libraries aligned |
 

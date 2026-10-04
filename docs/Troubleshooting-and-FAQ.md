@@ -110,7 +110,7 @@ Every instance keeps receiving native events (its own scan's events, or all scan
 ## FAQ
 
 **Does it work with the New Architecture?**
-Yes, it is tested with Expo SDK 54 and the New Architecture.
+It requires it: 1.0 is a C++ TurboModule, for React Native 0.82 and later. Apps still on the Legacy Architecture use 0.17.x, which keeps getting bug fixes.
 
 **Can I run two scans at once?**
 Yes. Each `Zeroconf` instance runs its own scan and receives only its own scan's events; each `useZeroconf` hook does the same. On Android, `NSD` and `DNSSD` scans can even run concurrently. On iOS, list every scanned type in `NSBonjourServices`. See [Multiple scans](Scanning#multiple-scans).

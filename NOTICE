@@ -28,12 +28,8 @@ limitations under the License.
 
 The following files are derived from RxDNSSD:
 
-android/src/main/jni/*
-  - Native mDNS/DNS-SD implementation (mDNSResponder)
-  - JNI bindings for Android
-
-android/src/main/java/com/github/druk/dnssd/*
-  - Java DNS-SD API classes
+android/src/main/jni/mdnsresponder/*
+  - Native mDNS/DNS-SD implementation (mDNSResponder), as distributed with RxDNSSD
 
 ================================================================================
 

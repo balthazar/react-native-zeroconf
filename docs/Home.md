@@ -10,7 +10,7 @@ zeroconf.on('resolved', service => console.log(service.name, service.addresses, 
 zeroconf.scan({ type: 'http' })
 ```
 
-> **Documentation for 0.17.** Upgrading from an earlier version? Read the [Migration Guide](Migration-Guide).
+> **Documentation for 1.0.** Upgrading from 0.17 or earlier? Read the [Migration Guide](Migration-Guide); apps on the Legacy Architecture stay on 0.17.x.
 
 ## Start here
 

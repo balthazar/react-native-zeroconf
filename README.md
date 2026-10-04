@@ -60,4 +60,4 @@ zeroconf.scan({ type: 'http' })
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Includes [RxDNSSD](https://github.com/discord/RxDNSSD) (Apache 2.0, see [NOTICE](NOTICE)) and Apple's mDNSResponder (mostly Apache 2.0, see its [LICENSE](android/src/main/jni/mdnsresponder/LICENSE)).
+MIT, see [LICENSE](LICENSE). Includes Apple's mDNSResponder for Android `DNSSD` (mostly Apache 2.0, see its [LICENSE](android/src/main/jni/mdnsresponder/LICENSE)), as distributed with [RxDNSSD](https://github.com/discord/RxDNSSD) (Apache 2.0, see [NOTICE](NOTICE)).

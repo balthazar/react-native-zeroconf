@@ -48,8 +48,6 @@ zeroconf.scan()
 zeroconf.scan({ type: 'ipp', implType: ImplType.DNSSD, resolveTimeout: 10 })
 ```
 
-> Deprecated: `scan(type, protocol, domain, implType)` still works.
-
 ### `stop(implType?)`
 
 Stops this instance's scan and emits `stop`. Scans of other instances keep running.
@@ -93,8 +91,6 @@ Advertises a service. Resolves with the service once it is advertised, rejects w
 | `networkInterface` | `string` | all interfaces | all | Interface to publish on. Android `NSD` needs Android 13+ |
 
 > **Use the resolved name.** The published name can differ from `name` when that name is already taken. Pass `service.name` to `unpublishService()`.
-
-> Deprecated: `publishService(type, protocol, domain, name, port, txt, implType)` still works and also returns the promise.
 
 ### `unpublishService(name, implType?)`
 
@@ -208,7 +204,7 @@ On Android, `NSD` and `DNSSD` scans can run concurrently. On iOS, every scanned 
 | `start` | none | The scan started |
 | `stop` | none | The scan stopped |
 | `found` | `name: string` | A service appeared (not resolved yet) |
-| `resolved` | `Service` | A service was resolved. It fires again when its addresses or TXT record change, on iOS, Windows and Android 14+ with `NSD` (see [Updates](Scanning#updates)) |
+| `resolved` | `Service` | A service was resolved. It fires again when its addresses or TXT record change, on iOS, Windows, Android `DNSSD` and Android 14+ with `NSD` (see [Updates](Scanning#updates)) |
 | `remove` | `name: string` | A service left the network |
 | `update` | none | The list returned by `getServices()` or `getServiceTypes()` changed |
 | `typeFound` | `ServiceType` | A service type appeared, during `scanServiceTypes()` |

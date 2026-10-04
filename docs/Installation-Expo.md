@@ -2,7 +2,7 @@
 
 The library works in Expo **development builds**. It does **not** work in **Expo Go**, which only contains the native modules bundled by Expo.
 
-> Tested with Expo SDK 54 and the New Architecture.
+> Needs an SDK with React Native 0.82 or later (SDK 55 and later). Tested with SDK 57 (React Native 0.86).
 
 ```bash
 npx expo install react-native-zeroconf

@@ -9,11 +9,11 @@ On Android you choose the backend per call with `implType`:
 | mDNS host name in `host` | <span title="Android 16+, usually the IP before">🟡</span> | ✅ |
 | All addresses | <span title="Android 14+, one before">🟡</span> | ✅ |
 | TXT order kept when publishing | <span title="Decided by the system">🟡</span> | ✅ |
-| Updates re-emitted as `resolved` | <span title="Android 14+">🟡</span> | ❌ |
+| Updates re-emitted as `resolved` | <span title="Android 14+">🟡</span> | ✅ |
 | Concurrent resolves | <span title="Android 14+, one at a time before">🟡</span> | ✅ |
 | Error domain | `'NsdManager'` | `'DNSSD'` |
 
-The embedded mDNSResponder comes from Discord's RxDNSSD fork.
+`DNSSD` runs the same C++ backend as iOS, macOS and tvOS, on Apple's mDNSResponder embedded in the library (taken from Discord's RxDNSSD fork).
 
 ```javascript
 import Zeroconf, { ImplType } from 'react-native-zeroconf'

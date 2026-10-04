@@ -6,7 +6,7 @@ yarn add react-native-zeroconf
 npm install react-native-zeroconf
 ```
 
-The library contains native code and is autolinked by React Native (0.60 and later), there is nothing to link by hand. Rebuild the app after installing it: a JavaScript reload is not enough after adding a native module.
+The library is a C++ native module, autolinked by React Native: there is nothing to link by hand. It needs the New Architecture, the only one since React Native 0.82. Rebuild the app after installing it: a JavaScript reload is not enough after adding a native module.
 
 ## Your platform
 
@@ -21,11 +21,11 @@ The library contains native code and is autolinked by React Native (0.60 and lat
 
 | Platform | Minimum |
 | --- | --- |
-| React Native | 0.60 (peer dependency `>=0.60`) |
+| React Native | 0.82, New Architecture (peer dependency `>=0.82`) |
 | iOS | 13.4 or React Native's minimum |
 | macOS | 10.15 |
 | tvOS | 13.4 |
-| Android | API 21 (Android 5.0) |
+| Android | React Native's minimum (API 24 in React Native 0.86) |
 | Windows | Windows 10, react-native-windows 0.84 tested |
 
 See [Platform Support](Platform-Support) for feature differences.
