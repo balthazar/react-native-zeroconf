@@ -61,17 +61,9 @@ test/embedded/run.sh  # Linux: the dns_sd backend against the mDNSResponder embe
 test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/ZeroconfCore.cpp) with Visual Studio's C++ tools
 ```
 
-CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. On Windows it also runs a second mDNS stack (`test/app/peer.py`, python-zeroconf) for the harness to discover, and builds and launches a react-native-windows app running `test/windows/App.tsx` against it.
+CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. It also runs a second mDNS stack (`test/app/peer.py`, python-zeroconf) and a self-test app (`test/app/App.tsx`) against it: on the iOS simulator, and in a react-native-windows app.
 
-The Android module's instrumented tests (`android/src/androidTest`) drive the embedded mDNSResponder (`implType: 'DNSSD'`) from several threads on a device or emulator, through the example app's Gradle project. They are not run in CI; run them for changes to the module's native code or to `com.github.druk.dnssd`:
-
-```bash
-cd example && npm ci && npx expo prebuild --platform android --no-install
-adb shell setprop debug.checkjni 1   # JNI misuse then aborts with a clear message
-cd android && ./gradlew :react-native-zeroconf:connectedDebugAndroidTest
-```
-
-A failure is often the test process crashing: look for the tombstone with `adb logcat -b crash`.
+The embedded mDNSResponder of Android `DNSSD` is driven from two threads: its event loop calls back on one, the backend runs on the other with the responder's core lock (`cpp/embedded/EmbeddedExecutor`). `test/embedded/run.sh` covers it on Linux; on a device, AddressSanitizer reports come in `adb logcat`, crashes with `adb logcat -b crash`.
 
 For changes to native code, also test on devices:
 
