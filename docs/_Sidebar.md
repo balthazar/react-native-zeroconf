@@ -27,7 +27,6 @@
 - [Troubleshooting and FAQ](Troubleshooting-and-FAQ)
 - [Migration Guide](Migration-Guide)
   - [To 1.0](Migrating-to-1.0)
-  - [To 0.17.1](Migrating-to-0.17.1)
   - [To 0.17](Migrating-to-0.17)
   - [To 0.16](Migrating-to-0.16)
   - [To 0.15](Migrating-to-0.15)
