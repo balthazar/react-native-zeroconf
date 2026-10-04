@@ -175,23 +175,14 @@ jobs:
           npm install --legacy-peer-deps "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
           cp "$GITHUB_WORKSPACE/test/app/App.tsx" App.tsx
           python3 "$GITHUB_WORKSPACE/test/app/apple-app.py" macos/ZeroconfMac-macOS
-      # React Native compiled from source is most of the build: ccache keeps it between runs
-      - name: Install ccache
-        run: brew install ccache
-      - uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/ccache
-          key: ccache-macos-${{ github.run_id }}
-          restore-keys: ccache-macos-
       - name: Build
         working-directory: ${{ runner.temp }}/ZeroconfMac/macos
         run: |
-          USE_CCACHE=1 pod install
+          pod install
           # The runner's architecture only
           xcodebuild -workspace ZeroconfMac.xcworkspace -scheme ZeroconfMac-macOS -configuration Release \
             -derivedDataPath build CODE_SIGN_IDENTITY=- ONLY_ACTIVE_ARCH=YES build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
-          ccache -s
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -250,25 +241,16 @@ jobs:
           npm install --legacy-peer-deps "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
           cp "$GITHUB_WORKSPACE/test/app/App.tsx" App.tsx
           python3 "$GITHUB_WORKSPACE/test/app/apple-app.py" ios/ZeroconfTV
-      # React Native compiled from source is most of the build: ccache keeps it between runs
-      - name: Install ccache
-        run: brew install ccache
-      - uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/ccache
-          key: ccache-tvos-${{ github.run_id }}
-          restore-keys: ccache-tvos-
       - name: Build for a simulator
         working-directory: ${{ runner.temp }}/ZeroconfTV/ios
         run: |
-          USE_CCACHE=1 pod install
+          pod install
           SIMULATOR=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k, v in d.items() if 'tvOS' in k for x in v if x['name'].startswith('Apple TV')))")
           echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
           xcodebuild -workspace ZeroconfTV.xcworkspace -scheme ZeroconfTV -configuration Release \
             -sdk appletvsimulator -destination "id=$SIMULATOR" -derivedDataPath build \
             ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
-          ccache -s
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
