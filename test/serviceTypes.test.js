@@ -11,7 +11,7 @@ beforeEach(() => RN.reset())
 describe('scanServiceTypes', () => {
   test('browses _services._dns-sd._udp', () => {
     new Zeroconf().scanServiceTypes()
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'services._dns-sd', 'udp', 'local.', { resolveTimeout: 5 }])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'services._dns-sd', 'udp', 'local.', 'NSD', { resolveTimeout: 5 }])
   })
 
   test('defaults to NSD on Android', () => {

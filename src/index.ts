@@ -414,9 +414,6 @@ class Zeroconf extends EventEmitter {
   }: LocalNetworkAccessOptions = {}): Promise<LocalNetworkAccess> {
     const native = nativeModule()
     if (Platform.OS === 'android') {
-      if (!native.checkLocalNetworkAccess) {
-        return 'unknown'
-      }
       const status = await asPromise(native.checkLocalNetworkAccess(null, timeout))
       if (status !== 'denied' || !request) {
         return status
@@ -427,7 +424,7 @@ class Zeroconf extends EventEmitter {
       return result === PermissionsAndroid.RESULTS.GRANTED ? 'granted' : 'denied'
     }
     const serviceType = type ? `_${type}._${protocol}` : null
-    return asPromise(native.checkLocalNetworkAccess!(serviceType, timeout))
+    return asPromise(native.checkLocalNetworkAccess(serviceType, timeout))
   }
 
   /**

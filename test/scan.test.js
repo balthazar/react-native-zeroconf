@@ -6,17 +6,17 @@ beforeEach(() => RN.reset())
 describe('scan on iOS', () => {
   test('defaults to _http._tcp on local. with a 5s resolve timeout', () => {
     new Zeroconf().scan()
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', { resolveTimeout: 5 }])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'http', 'tcp', 'local.', 'NSD', { resolveTimeout: 5 }])
   })
 
   test('takes an options object', () => {
     new Zeroconf().scan({ type: 'printer', resolveTimeout: 15 })
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', { resolveTimeout: 15 }])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', 'NSD', { resolveTimeout: 15 }])
   })
 
   test('still takes the deprecated positional form', () => {
     new Zeroconf().scan('ssh', 'udp')
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'udp', 'local.', { resolveTimeout: 5 }])
+    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'udp', 'local.', 'NSD', { resolveTimeout: 5 }])
   })
 
   test('stop passes the scan id', () => {
@@ -24,7 +24,7 @@ describe('scan on iOS', () => {
     zeroconf.scan()
     const scanId = RN.lastCall()[1]
     zeroconf.stop()
-    expect(RN.lastCall()).toEqual(['stop', scanId])
+    expect(RN.lastCall()).toEqual(['stop', scanId, 'NSD'])
   })
 })
 
@@ -73,6 +73,7 @@ describe('scan options', () => {
       'ipp',
       'tcp',
       'local.',
+      'NSD',
       { resolveTimeout: 5, subtype: 'printer', networkInterface: 'en0' },
     ])
   })
@@ -93,14 +94,14 @@ describe('scan options', () => {
 
 test('the constructor throws a clear error without the native module', () => {
   jest.isolateModules(() => {
-    const { NativeModules } = require('react-native')
-    const native = NativeModules.RNZeroconf
-    NativeModules.RNZeroconf = undefined
+    const { turboModules } = require('react-native')
+    const native = turboModules.Zeroconf
+    delete turboModules.Zeroconf
     try {
       const { default: Isolated } = require('../src')
       expect(() => new Isolated()).toThrow(/native module not found/)
     } finally {
-      NativeModules.RNZeroconf = native
+      turboModules.Zeroconf = native
     }
   })
 })

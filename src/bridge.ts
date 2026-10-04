@@ -1,7 +1,5 @@
-// One interface over the native side: the C++ module (src/NativeZeroconf.ts) where it is registered,
-// the previous native module (NativeModules.RNZeroconf with device events) elsewhere
-import { DeviceEventEmitter, NativeModules, Platform } from 'react-native'
-
+// The C++ module (src/NativeZeroconf.ts) in the shapes the class works with: TXT records as pairs,
+// error codes as numbers for the platform domains, and promises rejecting with { userInfo }
 import NativeZeroconf, {
   type NativeError,
   type NativeResult,
@@ -57,62 +55,9 @@ export interface Bridge {
     implType: ImplType,
     options: Record<string, unknown>,
   ): Promise<Omit<Service, 'ipv4' | 'ipv6'> | null>
-  // Android: no arguments, the permission check. Undefined on old Android modules without it
-  checkLocalNetworkAccess?(type: string | null, timeout: number): Promise<LocalNetworkAccess>
+  // iOS: a service type from NSBonjourServices to check with. Android: the permission check
+  checkLocalNetworkAccess(type: string | null, timeout: number): Promise<LocalNetworkAccess>
   listen(event: BridgeEvent, handler: (payload: BridgePayload) => void): { remove(): void }
-}
-
-// The previous native module
-interface LegacyModule {
-  scan(...args: unknown[]): void
-  stop(...args: unknown[]): void
-  registerService(...args: unknown[]): Promise<PublishedService>
-  updateService(...args: unknown[]): Promise<PublishedService>
-  resolveService(...args: unknown[]): Promise<Omit<Service, 'ipv4' | 'ipv6'> | null>
-  unregisterService(...args: unknown[]): Promise<PublishedService | null>
-  checkLocalNetworkAccess?(...args: unknown[]): Promise<LocalNetworkAccess>
-}
-
-const LEGACY_EVENTS: Record<BridgeEvent, string> = {
-  start: 'RNZeroconfStart',
-  stop: 'RNZeroconfStop',
-  found: 'RNZeroconfFound',
-  remove: 'RNZeroconfRemove',
-  resolved: 'RNZeroconfResolved',
-  error: 'RNZeroconfError',
-  published: 'RNZeroconfServiceRegistered',
-  unpublished: 'RNZeroconfServiceUnregistered',
-}
-
-// The previous module takes implType on Android only
-const legacyBridge = (module: LegacyModule): Bridge => {
-  const isAndroid = () => Platform.OS === 'android'
-  return {
-    scan: (scanId, type, protocol, domain, implType, options) =>
-      isAndroid()
-        ? module.scan(scanId, type, protocol, domain, implType, options)
-        : module.scan(scanId, type, protocol, domain, options),
-    stop: (scanId, implType) => (isAndroid() ? module.stop(scanId, implType) : module.stop(scanId)),
-    registerService: (type, protocol, domain, name, port, txt, implType, options) =>
-      isAndroid()
-        ? module.registerService(type, protocol, domain, name, port, txt, implType, options)
-        : module.registerService(type, protocol, domain, name, port, txt, options),
-    updateService: (name, txt, implType) =>
-      isAndroid() ? module.updateService(name, txt, implType) : module.updateService(name, txt),
-    unregisterService: (name, implType) =>
-      isAndroid() ? module.unregisterService(name, implType) : module.unregisterService(name),
-    resolveService: (name, type, protocol, domain, implType, options) =>
-      isAndroid()
-        ? module.resolveService(name, type, protocol, domain, implType, options)
-        : module.resolveService(name, type, protocol, domain, options),
-    checkLocalNetworkAccess: module.checkLocalNetworkAccess
-      ? (type, timeout) =>
-          isAndroid()
-            ? module.checkLocalNetworkAccess!()
-            : module.checkLocalNetworkAccess!(type, timeout)
-      : undefined,
-    listen: (event, handler) => DeviceEventEmitter.addListener(LEGACY_EVENTS[event], handler),
-  }
 }
 
 // The C++ module
@@ -137,7 +82,7 @@ const fromNativeService = (service: NativeService): Omit<Service, 'ipv4' | 'ipv6
 const toTxtEntries = (txt: Array<[string, string]>): TxtEntry[] =>
   txt.map(([key, value]) => ({ key, value }))
 
-// A rejection carries the same payload as error events, in userInfo, as from the previous module
+// A rejection carries the same payload as error events, in userInfo
 const settled = async (result: Promise<NativeResult>) => {
   const { service, error } = await result
   if (error) {
@@ -177,22 +122,25 @@ const turboBridge = (module: NonNullable<typeof NativeZeroconf>): Bridge => ({
     return (status ?? 'unknown') as LocalNetworkAccess
   },
   listen: (event, handler) => {
+    // An empty scan id means the event is not about a scan: it reaches every instance
+    const withScan = (scanId: string, payload: BridgePayload) =>
+      handler(scanId ? { ...payload, scanId } : payload)
     switch (event) {
       case 'start':
-        return module.onStart(handler)
+        return module.onStart(({ scanId }) => withScan(scanId, {}))
       case 'stop':
-        return module.onStop(handler)
+        return module.onStop(({ scanId }) => withScan(scanId, {}))
       case 'found':
-        return module.onFound(handler)
+        return module.onFound(({ scanId, name }) => withScan(scanId, { name }))
       case 'remove':
-        return module.onRemove(handler)
+        return module.onRemove(({ scanId, name }) => withScan(scanId, { name }))
       case 'resolved':
         return module.onResolved(({ scanId, service }) =>
-          handler({ ...fromNativeService(service), scanId }),
+          withScan(scanId, { ...fromNativeService(service) }),
         )
       case 'error':
         return module.onError(({ scanId, error }) =>
-          handler({ ...fromNativeError(error), ...(scanId ? { scanId } : {}) }),
+          withScan(scanId, { ...fromNativeError(error) }),
         )
       case 'published':
         return module.onPublished(service => handler({ ...fromNativeService(service) }))
@@ -202,10 +150,4 @@ const turboBridge = (module: NonNullable<typeof NativeZeroconf>): Bridge => ({
   },
 })
 
-export const getBridge = (): Bridge | null => {
-  if (NativeZeroconf) {
-    return turboBridge(NativeZeroconf)
-  }
-  const legacy: LegacyModule | undefined = NativeModules.RNZeroconf
-  return legacy ? legacyBridge(legacy) : null
-}
+export const getBridge = (): Bridge | null => (NativeZeroconf ? turboBridge(NativeZeroconf) : null)

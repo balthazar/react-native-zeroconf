@@ -55,13 +55,12 @@ describe('errors', () => {
     expect(e).toMatchObject({ code: 'TIMEOUT', domain: 'RNZeroconf', serviceName: 'x' })
   })
 
-  test('from older native code are plain strings', () => {
+  test('have numeric codes for the platform domains', () => {
     const zeroconf = new Zeroconf()
     const error = jest.fn()
     zeroconf.on('error', error)
-    RN.emit('RNZeroconfError', 'legacy string error')
-    expect(error.mock.calls[0][0].message).toBe('legacy string error')
-    expect(error.mock.calls[0][0].code).toBeUndefined()
+    RN.emit('RNZeroconfError', { message: 'not authorized', code: -65555, domain: 'DNSSD' })
+    expect(error.mock.calls[0][0]).toMatchObject({ code: -65555, domain: 'DNSSD' })
   })
 
   test('are not thrown when nobody listens', () => {

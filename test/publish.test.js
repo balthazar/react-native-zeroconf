@@ -15,13 +15,13 @@ describe('publishService', () => {
     RN.Platform.OS = 'android'
     const txt = { b: 1, a: true }
     new Zeroconf().publishService({ type: 'http', protocol: 'tcp', name: 'a', port: 80, txt, implType: ImplType.DNSSD })
-    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'a', 80, [['b', '1'], ['a', 'true']], 'DNSSD', {}])
+    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'a', 80, [{ key: 'b', value: '1' }, { key: 'a', value: 'true' }], 'DNSSD', {}])
     expect(txt).toEqual({ b: 1, a: true })
   })
 
   test('takes TXT records as pairs to keep number-like keys in order', () => {
     new Zeroconf().publishService({ type: 'http', protocol: 'tcp', name: 'c', port: 82, txt: [['2', 'x'], ['1', 'y']] })
-    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'c', 82, [['2', 'x'], ['1', 'y']], {}])
+    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'c', 82, [{ key: '2', value: 'x' }, { key: '1', value: 'y' }], 'NSD', {}])
   })
 
   test('still takes the deprecated positional form', () => {
@@ -67,7 +67,7 @@ describe('publishService', () => {
 describe('publish options', () => {
   test('pass subtypes and the network interface', () => {
     new Zeroconf().publishService({ type: 'ipp', protocol: 'tcp', name: 'p', port: 631, subtypes: ['printer'], networkInterface: 'en0' })
-    expect(RN.lastCall()).toEqual(['registerService', 'ipp', 'tcp', 'local.', 'p', 631, [], { subtypes: ['printer'], networkInterface: 'en0' }])
+    expect(RN.lastCall()).toEqual(['registerService', 'ipp', 'tcp', 'local.', 'p', 631, [], 'NSD', { subtypes: ['printer'], networkInterface: 'en0' }])
   })
 })
 
@@ -75,7 +75,7 @@ describe('updateService', () => {
   test('sends the new TXT record', async () => {
     RN.setNativeResult('updateService', { name: 'a', txt: { v: '2' } })
     await expect(new Zeroconf().updateService('a', { txt: { v: 2 } })).resolves.toMatchObject({ txt: { v: '2' } })
-    expect(RN.lastCall()).toEqual(['updateService', 'a', [['v', '2']]])
+    expect(RN.lastCall()).toEqual(['updateService', 'a', [{ key: 'v', value: '2' }], 'NSD'])
   })
 
   test('uses the implementation the service was published with on Android', () => {
@@ -83,7 +83,7 @@ describe('updateService', () => {
     const zeroconf = new Zeroconf()
     zeroconf.publishService({ type: 'http', protocol: 'tcp', name: 'a', port: 80, implType: ImplType.DNSSD })
     zeroconf.updateService('a', { txt: { v: '2' } })
-    expect(RN.lastCall()).toEqual(['updateService', 'a', [['v', '2']], 'DNSSD'])
+    expect(RN.lastCall()).toEqual(['updateService', 'a', [{ key: 'v', value: '2' }], 'DNSSD'])
   })
 
   test('rejects NOT_PUBLISHED for unknown services', async () => {
@@ -99,7 +99,7 @@ describe('resolveService', () => {
     RN.setNativeResult('resolveService', { name: 'p', port: 631, addresses: ['fe80::1', '10.0.0.3'], txt: {} })
     const service = await new Zeroconf().resolveService({ name: 'p', type: 'ipp' })
     expect(service).toMatchObject({ addresses: ['10.0.0.3', 'fe80::1'], ipv4: ['10.0.0.3'], ipv6: ['fe80::1'] })
-    expect(RN.lastCall()).toEqual(['resolveService', 'p', 'ipp', 'tcp', 'local.', { timeout: 5 }])
+    expect(RN.lastCall()).toEqual(['resolveService', 'p', 'ipp', 'tcp', 'local.', 'NSD', { timeout: 5 }])
   })
 
   test('passes the implementation and options on Android', () => {
@@ -142,7 +142,7 @@ describe('checkLocalNetworkAccess', () => {
   test('uses the first NSBonjourServices entry by default', async () => {
     RN.setNativeResult('checkLocalNetworkAccess', 'granted')
     await expect(new Zeroconf().checkLocalNetworkAccess()).resolves.toBe('granted')
-    expect(RN.lastCall()).toEqual(['checkLocalNetworkAccess', null, 5])
+    expect(RN.lastCall()).toEqual(['checkLocalNetworkAccess', '', 5])
   })
 
   test('builds the service type from type and protocol', async () => {

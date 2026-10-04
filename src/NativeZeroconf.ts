@@ -116,5 +116,5 @@ export interface Spec extends TurboModule {
   readonly onUnpublished: CodegenTypes.EventEmitter<NativeService>
 }
 
-// Not registered on the platforms still running the previous native module
+// Null when the module isn't in the app: Expo Go, or an app not rebuilt after installing the library
 export default TurboModuleRegistry.get<Spec>('Zeroconf')

@@ -42,10 +42,8 @@ export default function App() {
       })
 
     const run = async () => {
-      // Apple platforms run the C++ module, the others still the previous native module
-      if (Platform.OS === 'ios' || Platform.OS === 'macos') {
-        log(TurboModuleRegistry.get('Zeroconf') != null, 'C++ module', 'registered')
-      }
+      // Every platform runs the C++ module
+      log(TurboModuleRegistry.get('Zeroconf') != null, 'C++ module', `registered on ${Platform.OS}`)
 
       // Scan: found and resolved, through events
       try {
