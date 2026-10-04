@@ -16,7 +16,7 @@
     "lint": "eslint src",
     "format": "prettier --write src",
     "build": "bob build",
-    "prepare": "bob build",
+    "prepack": "bob build",
     "test": "jest",
     "typecheck": "tsc -p tsconfig.json && tsc -p test/types"
   },
