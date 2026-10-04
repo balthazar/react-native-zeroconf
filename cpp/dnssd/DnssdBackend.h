@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -53,12 +54,15 @@ class DnssdBackend : public Backend, public std::enable_shared_from_this<DnssdBa
 
   void Shutdown() override;
 
-  // dns_sd callbacks, on the executor's thread
-  void OnBrowse(DnssdScan *scan, DNSServiceFlags flags, DNSServiceErrorType error, const char *name, const char *regtype, const char *domain);
-  void OnResolve(DnssdResolve *resolve, DNSServiceErrorType error, const char *host, uint16_t port, uint16_t txtLength, const unsigned char *txt);
-  void OnAddress(DnssdResolve *resolve, DNSServiceFlags flags, DNSServiceErrorType error, const struct sockaddr *address);
-  void OnTxt(DnssdResolve *resolve, DNSServiceFlags flags, DNSServiceErrorType error, uint16_t length, const void *data);
-  void OnRegister(DnssdPublication *publication, DNSServiceFlags flags, DNSServiceErrorType error, const char *name);
+  // Runs a task on the executor's thread
+  void Post(Executor::Task task);
+
+  // dns_sd callbacks with their data copied, on the executor's thread
+  void OnBrowse(const std::shared_ptr<DnssdScan> &scan, DNSServiceFlags flags, DNSServiceErrorType error, const std::optional<std::string> &name, const std::string &regtype, const std::string &domain);
+  void OnResolve(const std::shared_ptr<DnssdResolve> &resolve, DNSServiceErrorType error, const std::string &host, uint16_t port, const std::string &txt);
+  void OnAddress(const std::shared_ptr<DnssdResolve> &resolve, DNSServiceFlags flags, DNSServiceErrorType error, const std::string &address);
+  void OnTxt(const std::shared_ptr<DnssdResolve> &resolve, DNSServiceFlags flags, DNSServiceErrorType error, const std::string &data);
+  void OnRegister(const std::shared_ptr<DnssdPublication> &publication, DNSServiceFlags flags, DNSServiceErrorType error, const std::optional<std::string> &name);
 
  private:
   DnssdBackend(std::shared_ptr<Executor> executor, Events events);
@@ -77,7 +81,6 @@ class DnssdBackend : public Backend, public std::enable_shared_from_this<DnssdBa
   void CancelResolve(const std::shared_ptr<DnssdResolve> &resolve);
   void EndSingleResolve(const std::shared_ptr<DnssdResolve> &resolve);
   bool IsActive(const std::shared_ptr<DnssdResolve> &resolve) const;
-  std::shared_ptr<DnssdResolve> Shared(DnssdResolve *resolve) const;
   // Deallocates a ref on the next turn, its callback may be running. keepAlive outlives the ref
   void DeallocateLater(DNSServiceRef &ref, std::shared_ptr<void> keepAlive);
   bool IsNameInUse(const std::string &name) const;

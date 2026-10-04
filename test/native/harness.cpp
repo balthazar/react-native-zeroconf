@@ -1,7 +1,13 @@
-// Harness for the dns_sd backend (cpp/dnssd), run on macOS against the system mDNSResponder,
-// publishing and browsing real services. Run with test/apple/run.sh (AddressSanitizer).
-#include "../../cpp/apple/DispatchExecutor.h"
+// Harness for the dns_sd backend (cpp/dnssd), publishing and browsing real services with AddressSanitizer:
+// on macOS against the system mDNSResponder (test/apple/run.sh), on Linux against the mDNSResponder
+// embedded for Android DNSSD (test/embedded/run.sh).
 #include "../../cpp/dnssd/DnssdBackend.h"
+
+#ifdef __APPLE__
+#include "../../cpp/apple/DispatchExecutor.h"
+#else
+#include "../../cpp/embedded/EmbeddedExecutor.h"
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -19,6 +25,18 @@
 using namespace rnzeroconf;
 
 namespace {
+
+#ifdef __APPLE__
+std::shared_ptr<Executor> MakeExecutor() {
+  return std::make_shared<DispatchExecutor>("rnzeroconf.harness");
+}
+const char *const kLoopback = "lo0";
+#else
+std::shared_ptr<Executor> MakeExecutor() {
+  return EmbeddedExecutor::Shared();
+}
+const char *const kLoopback = "lo";
+#endif
 
 struct Event {
   std::string name;
@@ -122,7 +140,9 @@ struct Result {
   }
 };
 
-// A service that is announced (PTR record) but never answers: no SRV or TXT record behind it
+#ifdef __APPLE__
+// A service that is announced (PTR record) but never answers: no SRV or TXT record behind it.
+// The embedded responder doesn't support registering single records
 struct Ghost {
   DNSServiceRef connection = nullptr;
   DNSRecordRef record = nullptr;
@@ -161,6 +181,7 @@ struct Ghost {
     }
   }
 };
+#endif
 
 } // namespace
 
@@ -185,7 +206,7 @@ int main() {
 
   std::weak_ptr<DnssdBackend> weakBackend;
   {
-    auto executor = std::make_shared<DispatchExecutor>("rnzeroconf.harness");
+    auto executor = MakeExecutor();
     auto backend = DnssdBackend::Create(executor, handlers);
     weakBackend = backend;
     ScanOptions scanOptions;
@@ -247,6 +268,7 @@ int main() {
     bad.Wait(5);
     Check(bad.error && bad.error->domain == "DNSSD", "bad publish rejects with a DNSSD error (" + (bad.error ? bad.error->code + " " + bad.error->message : "") + ")");
 
+#ifdef __APPLE__
     // A service that never answers: 1s timeout, retried once, then one TIMEOUT error after about 2s
     {
       Ghost ghost("zc-ghost", "_zcghost._tcp");
@@ -265,6 +287,7 @@ int main() {
       Check(Named("resolved", "G").empty(), "the never-answering service isn't resolved");
       backend->Stop("G");
     }
+#endif
 
     // Stress: 300 scan cycles with random short waits and stops
     std::mt19937 random(42);
@@ -397,14 +420,14 @@ int main() {
     Result goneSub;
     backend->Unpublish("zc-sub", goneSub.Resolve(), goneSub.Reject());
 
-    // Network interface: lo0 finds the local services, an unknown interface is an error
+    // Network interface: the loopback finds the local services, an unknown interface is an error
     Clear();
     ScanOptions loopback;
-    loopback.networkInterface = "lo0";
+    loopback.networkInterface = kLoopback;
     backend->Scan("I", "zcdns", "tcp", "local.", loopback);
     WaitFor([] { return !Named("resolved", "I").empty(); }, 5);
     auto loResolved = Named("resolved", "I");
-    Check(!loResolved.empty() && loResolved[0].subject == "zc-dnssd", "scan on lo0 resolves zc-dnssd (" + (loResolved.empty() ? "" : Join(loResolved[0].service.addresses)) + ")");
+    Check(!loResolved.empty() && loResolved[0].subject == "zc-dnssd", std::string("scan on ") + kLoopback + " resolves zc-dnssd (" + (loResolved.empty() ? "" : Join(loResolved[0].service.addresses)) + ")");
     backend->Stop("I");
     Clear();
     ScanOptions nowhere;

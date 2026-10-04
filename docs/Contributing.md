@@ -57,6 +57,7 @@ cd example/android
 yarn test          # Jest: the JavaScript API against a mocked native module
 yarn typecheck     # the source, then the samples in test/types against it
 test/apple/run.sh  # macOS: the dns_sd backend and the Local Network check with AddressSanitizer, against the local mDNSResponder
+test/embedded/run.sh  # Linux: the dns_sd backend against the mDNSResponder embedded for Android, with AddressSanitizer
 test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/ZeroconfCore.cpp) with Visual Studio's C++ tools
 ```
 

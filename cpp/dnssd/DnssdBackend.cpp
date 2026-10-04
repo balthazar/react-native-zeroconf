@@ -13,7 +13,8 @@ namespace rnzeroconf {
 
 // A browse, keyed by the id of the JS instance that started it, several can run at once
 struct DnssdScan {
-  DnssdBackend *backend = nullptr;
+  std::weak_ptr<DnssdBackend> owner;
+  std::weak_ptr<DnssdScan> self;
   std::string scanId;
   DNSServiceRef browseRef = nullptr;
   double resolveTimeoutSeconds = 5;
@@ -29,7 +30,7 @@ struct DnssdScan {
 // addresses. Once resolved, the address query and a TXT record query stay open and changes are emitted again.
 // Without a scan, it is a single resolveService() call settling its callbacks.
 struct DnssdResolve {
-  DnssdBackend *backend = nullptr;
+  std::weak_ptr<DnssdBackend> owner;
   std::weak_ptr<DnssdResolve> self;
   std::weak_ptr<DnssdScan> scan;
   ServiceCallback promiseResolve;
@@ -57,7 +58,7 @@ struct DnssdResolve {
 
 // A service registered with DNSServiceRegister
 struct DnssdPublication {
-  DnssdBackend *backend = nullptr;
+  std::weak_ptr<DnssdBackend> owner;
   std::weak_ptr<DnssdPublication> self;
   std::string name;
   std::string regtype;
@@ -76,34 +77,68 @@ bool operator==(const Service &a, const Service &b) {
       a.addresses == b.addresses && a.txt == b.txt;
 }
 
+// dns_sd callbacks copy what they receive and hand it to the executor: the embedded mDNSResponder of Android
+// calls back on its own thread (and sometimes from inside the call that starts the operation), Apple's on
+// the executor's queue. Either way the operation is looked up again before it is used.
+template <typename Operation, typename Handler>
+void Deliver(Operation *operation, Handler handler) {
+  auto owner = operation->owner.lock();
+  if (!owner) {
+    return;
+  }
+  owner->Post([weakOwner = operation->owner, weakOperation = operation->self, handler = std::move(handler)] {
+    auto backend = weakOwner.lock();
+    auto current = weakOperation.lock();
+    if (backend && current) {
+      handler(*backend, current);
+    }
+  });
+}
+
+std::string AddressString(const struct sockaddr *address);
+
 void DNSSD_API BrowseReply(DNSServiceRef, DNSServiceFlags flags, uint32_t, DNSServiceErrorType error, const char *name,
                            const char *regtype, const char *domain, void *context) {
-  auto *scan = static_cast<DnssdScan *>(context);
-  scan->backend->OnBrowse(scan, flags, error, name, regtype, domain);
+  std::optional<std::string> nameCopy = name ? std::optional<std::string>(name) : std::nullopt;
+  std::string regtypeCopy = regtype ? regtype : "";
+  std::string domainCopy = domain ? domain : "";
+  Deliver(static_cast<DnssdScan *>(context), [=](DnssdBackend &backend, const std::shared_ptr<DnssdScan> &scan) {
+    backend.OnBrowse(scan, flags, error, nameCopy, regtypeCopy, domainCopy);
+  });
 }
 
 void DNSSD_API ResolveReply(DNSServiceRef, DNSServiceFlags, uint32_t, DNSServiceErrorType error, const char *,
                             const char *host, uint16_t port, uint16_t txtLength, const unsigned char *txt, void *context) {
-  auto *resolve = static_cast<DnssdResolve *>(context);
-  resolve->backend->OnResolve(resolve, error, host, ntohs(port), txtLength, txt);
+  std::string hostCopy = host ? host : "";
+  std::string txtCopy = txt ? std::string(reinterpret_cast<const char *>(txt), txtLength) : "";
+  uint16_t hostPort = ntohs(port);
+  Deliver(static_cast<DnssdResolve *>(context), [=](DnssdBackend &backend, const std::shared_ptr<DnssdResolve> &resolve) {
+    backend.OnResolve(resolve, error, hostCopy, hostPort, txtCopy);
+  });
 }
 
 void DNSSD_API AddressReply(DNSServiceRef, DNSServiceFlags flags, uint32_t, DNSServiceErrorType error, const char *,
                             const struct sockaddr *address, uint32_t, void *context) {
-  auto *resolve = static_cast<DnssdResolve *>(context);
-  resolve->backend->OnAddress(resolve, flags, error, address);
+  std::string addressCopy = AddressString(address);
+  Deliver(static_cast<DnssdResolve *>(context), [=](DnssdBackend &backend, const std::shared_ptr<DnssdResolve> &resolve) {
+    backend.OnAddress(resolve, flags, error, addressCopy);
+  });
 }
 
 void DNSSD_API TxtReply(DNSServiceRef, DNSServiceFlags flags, uint32_t, DNSServiceErrorType error, const char *,
                         uint16_t, uint16_t, uint16_t length, const void *data, uint32_t, void *context) {
-  auto *resolve = static_cast<DnssdResolve *>(context);
-  resolve->backend->OnTxt(resolve, flags, error, length, data);
+  std::string dataCopy = data ? std::string(static_cast<const char *>(data), length) : "";
+  Deliver(static_cast<DnssdResolve *>(context), [=](DnssdBackend &backend, const std::shared_ptr<DnssdResolve> &resolve) {
+    backend.OnTxt(resolve, flags, error, dataCopy);
+  });
 }
 
 void DNSSD_API RegisterReply(DNSServiceRef, DNSServiceFlags flags, DNSServiceErrorType error, const char *name,
                              const char *, const char *, void *context) {
-  auto *publication = static_cast<DnssdPublication *>(context);
-  publication->backend->OnRegister(publication, flags, error, name);
+  std::optional<std::string> nameCopy = name ? std::optional<std::string>(name) : std::nullopt;
+  Deliver(static_cast<DnssdPublication *>(context), [=](DnssdBackend &backend, const std::shared_ptr<DnssdPublication> &publication) {
+    backend.OnRegister(publication, flags, error, nameCopy);
+  });
 }
 
 std::string AddressString(const struct sockaddr *address) {
@@ -189,7 +224,8 @@ std::string DescribeDnssdError(DNSServiceErrorType code) {
   switch (code) {
     case kDNSServiceErr_NoAuth:
       return "not authorized, add the service type to NSBonjourServices in Info.plist";
-    case kDNSServiceErr_PolicyDenied:
+    // kDNSServiceErr_PolicyDenied, missing from the embedded responder's older dns_sd.h
+    case -65570:
       return "Local Network access denied";
     case kDNSServiceErr_NameConflict:
       return "name already in use";
@@ -272,6 +308,10 @@ std::shared_ptr<DnssdBackend> DnssdBackend::Create(std::shared_ptr<Executor> exe
 DnssdBackend::DnssdBackend(std::shared_ptr<Executor> executor, Events events)
     : executor_(std::move(executor)), events_(std::move(events)) {}
 
+void DnssdBackend::Post(Executor::Task task) {
+  executor_->Post(std::move(task));
+}
+
 void DnssdBackend::Run(std::function<void(DnssdBackend &)> task) {
   std::weak_ptr<DnssdBackend> weak = weak_from_this();
   executor_->Post([weak, task = std::move(task)] {
@@ -308,7 +348,8 @@ void DnssdBackend::Scan(
     self.StopScan(scanId);
 
     auto scan = std::make_shared<DnssdScan>();
-    scan->backend = &self;
+    scan->owner = self.weak_from_this();
+    scan->self = scan;
     scan->scanId = scanId;
     scan->resolveTimeoutSeconds = options.resolveTimeoutSeconds > 0 ? options.resolveTimeoutSeconds : 5;
     if (!InterfaceIndex(options.networkInterface, scan->interfaceIndex)) {
@@ -377,15 +418,14 @@ void DnssdBackend::StopScan(const std::string &scanId) {
   }
 }
 
-void DnssdBackend::OnBrowse(DnssdScan *scanPointer, DNSServiceFlags flags, DNSServiceErrorType error, const char *name, const char *regtype, const char *domain) {
-  if (scanPointer->browseRef == nullptr) {
+void DnssdBackend::OnBrowse(const std::shared_ptr<DnssdScan> &scan, DNSServiceFlags flags, DNSServiceErrorType error, const std::optional<std::string> &name, const std::string &regtype, const std::string &domain) {
+  if (scan->browseRef == nullptr) {
     return;
   }
-  auto found = scans_.find(scanPointer->scanId);
-  if (found == scans_.end() || found->second.get() != scanPointer) {
+  auto found = scans_.find(scan->scanId);
+  if (found == scans_.end() || found->second != scan) {
     return;
   }
-  auto scan = found->second;
 
   if (error != kDNSServiceErr_NoError) {
     SendError(scan->scanId, BrowseError(error, scan->typesOnly));
@@ -394,14 +434,13 @@ void DnssdBackend::OnBrowse(DnssdScan *scanPointer, DNSServiceFlags flags, DNSSe
     StopScan(scan->scanId);
     return;
   }
-  if (name == nullptr) {
+  if (!name) {
     return;
   }
-  std::string serviceName = name;
+  std::string serviceName = *name;
   if (scan->typesOnly) {
     // name is "_http" and regtype "_tcp.local.", the service type is "_http._tcp"
-    std::string type = regtype ? regtype : "";
-    std::string protocol = type.substr(0, type.find('.'));
+    std::string protocol = regtype.substr(0, regtype.find('.'));
     // Subtypes are announced the same way ("_printer._sub"), only types are listed
     if (protocol != "_tcp" && protocol != "_udp") {
       return;
@@ -417,7 +456,7 @@ void DnssdBackend::OnBrowse(DnssdScan *scanPointer, DNSServiceFlags flags, DNSSe
         events_.found(scan->scanId, serviceName);
       }
       if (!scan->typesOnly) {
-        StartResolve(scan, serviceName, regtype ? regtype : "", domain ? domain : "");
+        StartResolve(scan, serviceName, regtype, domain);
       }
     }
     return;
@@ -444,7 +483,7 @@ void DnssdBackend::OnBrowse(DnssdScan *scanPointer, DNSServiceFlags flags, DNSSe
 
 void DnssdBackend::StartResolve(const std::shared_ptr<DnssdScan> &scan, const std::string &name, const std::string &regtype, const std::string &domain) {
   auto resolve = std::make_shared<DnssdResolve>();
-  resolve->backend = this;
+  resolve->owner = weak_from_this();
   resolve->self = resolve;
   resolve->scan = scan;
   resolve->name = name;
@@ -496,13 +535,8 @@ void DnssdBackend::ResolveTimedOut(const std::shared_ptr<DnssdResolve> &resolve)
   FailResolve(resolve, LibraryError("TIMEOUT", "Resolving service " + resolve->name + " failed: timed out", resolve->name));
 }
 
-std::shared_ptr<DnssdResolve> DnssdBackend::Shared(DnssdResolve *resolve) const {
-  return resolve->self.lock();
-}
-
-void DnssdBackend::OnResolve(DnssdResolve *resolvePointer, DNSServiceErrorType error, const char *host, uint16_t port, uint16_t txtLength, const unsigned char *txt) {
-  auto resolve = Shared(resolvePointer);
-  if (!resolve || resolve->finished || resolve->resolveRef == nullptr) {
+void DnssdBackend::OnResolve(const std::shared_ptr<DnssdResolve> &resolve, DNSServiceErrorType error, const std::string &host, uint16_t port, const std::string &txt) {
+  if (resolve->finished || resolve->resolveRef == nullptr) {
     return;
   }
   if (error != kDNSServiceErr_NoError) {
@@ -513,9 +547,9 @@ void DnssdBackend::OnResolve(DnssdResolve *resolvePointer, DNSServiceErrorType e
   // Only the first answer is needed
   DeallocateLater(resolve->resolveRef, resolve);
 
-  resolve->host = host ? host : "";
+  resolve->host = host;
   resolve->port = port;
-  resolve->txt = DecodeTxt(txt, txtLength);
+  resolve->txt = DecodeTxt(txt.data(), static_cast<uint16_t>(txt.size()));
 
   DNSServiceErrorType addressError = DNSServiceGetAddrInfo(&resolve->addressRef, 0, resolve->interfaceIndex,
                                                            kDNSServiceProtocol_IPv4 | kDNSServiceProtocol_IPv6,
@@ -528,9 +562,8 @@ void DnssdBackend::OnResolve(DnssdResolve *resolvePointer, DNSServiceErrorType e
   executor_->Attach(resolve->addressRef);
 }
 
-void DnssdBackend::OnAddress(DnssdResolve *resolvePointer, DNSServiceFlags flags, DNSServiceErrorType error, const struct sockaddr *address) {
-  auto resolve = Shared(resolvePointer);
-  if (!resolve || resolve->finished || resolve->addressRef == nullptr) {
+void DnssdBackend::OnAddress(const std::shared_ptr<DnssdResolve> &resolve, DNSServiceFlags flags, DNSServiceErrorType error, const std::string &string) {
+  if (resolve->finished || resolve->addressRef == nullptr) {
     return;
   }
   if (error != kDNSServiceErr_NoError) {
@@ -542,7 +575,6 @@ void DnssdBackend::OnAddress(DnssdResolve *resolvePointer, DNSServiceFlags flags
     return;
   }
 
-  std::string string = AddressString(address);
   auto existing = std::find(resolve->addresses.begin(), resolve->addresses.end(), string);
   if (!string.empty() && (flags & kDNSServiceFlagsAdd)) {
     if (existing == resolve->addresses.end()) {
@@ -571,12 +603,11 @@ void DnssdBackend::WatchTxt(const std::shared_ptr<DnssdResolve> &resolve) {
   executor_->Attach(resolve->txtRef);
 }
 
-void DnssdBackend::OnTxt(DnssdResolve *resolvePointer, DNSServiceFlags flags, DNSServiceErrorType error, uint16_t length, const void *data) {
-  auto resolve = Shared(resolvePointer);
-  if (!resolve || resolve->finished || resolve->txtRef == nullptr || error != kDNSServiceErr_NoError || !(flags & kDNSServiceFlagsAdd)) {
+void DnssdBackend::OnTxt(const std::shared_ptr<DnssdResolve> &resolve, DNSServiceFlags flags, DNSServiceErrorType error, const std::string &data) {
+  if (resolve->finished || resolve->txtRef == nullptr || error != kDNSServiceErr_NoError || !(flags & kDNSServiceFlagsAdd)) {
     return;
   }
-  resolve->txt = DecodeTxt(data, length);
+  resolve->txt = DecodeTxt(data.data(), static_cast<uint16_t>(data.size()));
   ScheduleEmit(resolve);
 }
 
@@ -707,7 +738,7 @@ void DnssdBackend::ResolveService(
       reject(UnknownInterface(options.networkInterface));
       return;
     }
-    single->backend = &self;
+    single->owner = self.weak_from_this();
     single->self = single;
     single->single = true;
     single->name = name;
@@ -757,7 +788,7 @@ void DnssdBackend::Publish(
     }
 
     auto publication = std::make_shared<DnssdPublication>();
-    publication->backend = &self;
+    publication->owner = self.weak_from_this();
     publication->self = publication;
     publication->name = name;
     publication->regtype = "_" + type + "._" + protocol;
@@ -792,9 +823,8 @@ void DnssdBackend::Publish(
   });
 }
 
-void DnssdBackend::OnRegister(DnssdPublication *publicationPointer, DNSServiceFlags flags, DNSServiceErrorType error, const char *name) {
-  auto publication = publicationPointer->self.lock();
-  if (!publication || publication->ref == nullptr) {
+void DnssdBackend::OnRegister(const std::shared_ptr<DnssdPublication> &publication, DNSServiceFlags flags, DNSServiceErrorType error, const std::optional<std::string> &name) {
+  if (publication->ref == nullptr) {
     return;
   }
   if (error != kDNSServiceErr_NoError) {
@@ -818,7 +848,7 @@ void DnssdBackend::OnRegister(DnssdPublication *publicationPointer, DNSServiceFl
   }
 
   // The name can differ from the requested one when it was already taken
-  std::string registeredName = name ? name : publication->name;
+  std::string registeredName = name ? *name : publication->name;
   auto previous = published_.find(publication->name);
   if (previous != published_.end() && previous->second == publication) {
     published_.erase(previous);

@@ -80,6 +80,7 @@ typedef struct
 	{
 	mDNS_DirectOP_Dispose        *disposefn;
 	DNSServiceRef                aQuery;
+	DNSServiceRef                aaaaQuery;	// react-native-zeroconf: IPv6 addresses too
 	DNSServiceGetAddrInfoReply   callback;
   	void                         *context;
 	} mDNS_DirectOP_GetAddrInfo;
@@ -198,8 +199,9 @@ mDNSlocal void RegCallback(mDNS *const m, ServiceRecordSet *const sr, mStatus re
 
 	if (result == mStatus_NoError)
 		{
+		// react-native-zeroconf: kDNSServiceFlagsAdd marks a registration, as with Apple's implementation
 		if (x->callback)
-			x->callback((DNSServiceRef)x, 0, result, namestr, typestr, domstr, x->context);
+			x->callback((DNSServiceRef)x, kDNSServiceFlagsAdd, result, namestr, typestr, domstr, x->context);
 		}
 	else if (result == mStatus_NameConflict)
 		{
@@ -739,6 +741,7 @@ static void DNSServiceGetAddrInfoDispose(mDNS_DirectOP *op)
 	{
 	mDNS_DirectOP_GetAddrInfo *x = (mDNS_DirectOP_GetAddrInfo*)op;
 	if (x->aQuery) DNSServiceRefDeallocate(x->aQuery);
+	if (x->aaaaQuery) DNSServiceRefDeallocate(x->aaaaQuery);
 	mDNSPlatformMemFree(x);
 	}
 
@@ -757,16 +760,27 @@ static void DNSSD_API DNSServiceGetAddrInfoResponse(
 	{
 	mDNS_DirectOP_GetAddrInfo *		x = (mDNS_DirectOP_GetAddrInfo*)inContext;
 	struct sockaddr_in				sa4;
+	struct sockaddr_in6				sa6;
+	const struct sockaddr *			sa = (const struct sockaddr *) &sa4;
 
 	mDNSPlatformMemZero(&sa4, sizeof(sa4));
-	if (inErrorCode == kDNSServiceErr_NoError && inRRType == kDNSServiceType_A)
+	mDNSPlatformMemZero(&sa6, sizeof(sa6));
+	if (inErrorCode == kDNSServiceErr_NoError && inRRType == kDNSServiceType_A && inRDLen == 4)
 		{
 		sa4.sin_family = AF_INET;
 		mDNSPlatformMemCopy(&sa4.sin_addr.s_addr, inRData, 4);
 		}
+	else if (inErrorCode == kDNSServiceErr_NoError && inRRType == kDNSServiceType_AAAA && inRDLen == 16)
+		{
+		// react-native-zeroconf: AAAA answers become IPv6 addresses, as with Apple's implementation
+		sa6.sin6_family = AF_INET6;
+		mDNSPlatformMemCopy(&sa6.sin6_addr, inRData, 16);
+		sa6.sin6_scope_id = inInterfaceIndex;
+		sa = (const struct sockaddr *) &sa6;
+		}
 	
 	x->callback((DNSServiceRef)x, inFlags, inInterfaceIndex, inErrorCode, inFullName, 
-		(const struct sockaddr *) &sa4, inTTL, x->context);
+		sa, inTTL, x->context);
 	}
 
 DNSServiceErrorType DNSSD_API DNSServiceGetAddrInfo(
@@ -791,14 +805,25 @@ DNSServiceErrorType DNSSD_API DNSServiceGetAddrInfo(
 	x->callback  = inCallback;
 	x->context   = inContext;
 	x->aQuery    = mDNSNULL;
+	x->aaaaQuery = mDNSNULL;
 	
 	// Start the query.
 	// (It would probably be more efficient to code this using mDNS_StartQuery directly,
 	// instead of wrapping DNSServiceQueryRecord, which then unnecessarily allocates
 	// more memory and then just calls through to mDNS_StartQuery. -- SC June 2010)
-	err = DNSServiceQueryRecord(&x->aQuery, inFlags, inInterfaceIndex, inHostName, kDNSServiceType_A, 
-		kDNSServiceClass_IN, DNSServiceGetAddrInfoResponse, x);
-	if (err) { DNSServiceGetAddrInfoDispose((mDNS_DirectOP*)x); errormsg = "DNSServiceQueryRecord"; goto fail; }
+	// react-native-zeroconf: an A query for IPv4 and an AAAA query for IPv6, both without a protocol
+	if (!inProtocol || (inProtocol & kDNSServiceProtocol_IPv4))
+		{
+		err = DNSServiceQueryRecord(&x->aQuery, inFlags, inInterfaceIndex, inHostName, kDNSServiceType_A, 
+			kDNSServiceClass_IN, DNSServiceGetAddrInfoResponse, x);
+		if (err) { DNSServiceGetAddrInfoDispose((mDNS_DirectOP*)x); errormsg = "DNSServiceQueryRecord"; goto fail; }
+		}
+	if (!inProtocol || (inProtocol & kDNSServiceProtocol_IPv6))
+		{
+		err = DNSServiceQueryRecord(&x->aaaaQuery, inFlags, inInterfaceIndex, inHostName, kDNSServiceType_AAAA, 
+			kDNSServiceClass_IN, DNSServiceGetAddrInfoResponse, x);
+		if (err) { DNSServiceGetAddrInfoDispose((mDNS_DirectOP*)x); errormsg = "DNSServiceQueryRecord"; goto fail; }
+		}
 	
 	*outRef = (DNSServiceRef)x;
 	return(mStatus_NoError);

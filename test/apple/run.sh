@@ -9,7 +9,7 @@ BUILD="$(mktemp -d)"
 trap 'rm -rf "$BUILD"' EXIT
 
 xcrun clang++ -std=c++20 -g -fsanitize=address -Wall -Wextra \
-  cpp/Backend.cpp cpp/dnssd/DnssdBackend.cpp cpp/apple/DispatchExecutor.cpp test/apple/harness.cpp \
+  cpp/Backend.cpp cpp/dnssd/DnssdBackend.cpp cpp/apple/DispatchExecutor.cpp test/native/harness.cpp \
   -o "$BUILD/harness"
 xcrun clang++ -std=c++20 -g -fobjc-arc -fsanitize=address -Wall -Wextra -framework Foundation -framework Network \
   cpp/Backend.cpp cpp/apple/LocalNetworkAccess.mm test/apple/local-network-access.mm \

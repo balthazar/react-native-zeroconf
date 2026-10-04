@@ -1,0 +1,2 @@
+# Upstream mDNSResponder: the interface list read once at start (mDNSUNP.c) is never freed
+leak:get_ifi_info_linuxv6
