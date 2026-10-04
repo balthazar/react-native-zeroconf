@@ -36,7 +36,7 @@ Call `checkLocalNetworkAccess()`. If it returns `'denied'`, ask the user to enab
 
 ### iOS: error message mentioning `-72008` (0.15 and older)
 
-This is the 0.15 equivalent of `-65555`: the service type is missing from `NSBonjourServices`. 0.16 reports it as `domain: 'DNSSD'`, `code: -65555` (see [Migration Guide](Migration-Guide#structured-errors)).
+This is the 0.15 equivalent of `-65555`: the service type is missing from `NSBonjourServices`. 0.16 reports it as `domain: 'DNSSD'`, `code: -65555` (see [Migrating to 0.16](Migrating-to-0.16#structured-errors)).
 
 ### `found` but never `resolved`, or `TIMEOUT` errors
 
