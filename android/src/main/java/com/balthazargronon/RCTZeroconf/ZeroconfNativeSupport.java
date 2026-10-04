@@ -47,7 +47,7 @@ public final class ZeroconfNativeSupport {
     }
 
     // The application, without a ReactContext: the C++ module has none
-    private static Context application() {
+    static Context application() {
         try {
             @SuppressLint("PrivateApi")
             Class<?> activityThread = Class.forName("android.app.ActivityThread");

@@ -1,5 +1,6 @@
 // The C++ module on Android, constructed by React Native's autolinking (react-native.config.js):
-// the mDNSResponder embedded in the library for DNSSD, and the multicast lock of the Java side
+// Android's NsdManager for NSD (through the Java side), the mDNSResponder embedded in the library for
+// DNSSD, and the multicast lock
 #pragma once
 
 #include "../ZeroconfModule.h"

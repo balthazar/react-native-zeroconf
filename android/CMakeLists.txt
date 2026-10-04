@@ -1,5 +1,5 @@
 # The C++ module on Android, built into the app's libappmodules.so by React Native's autolinking
-# (react-native.config.js): the module, the dns_sd backend, and the mDNSResponder embedded for DNSSD
+# (react-native.config.js): the module, the NSD backend, the dns_sd backend and the mDNSResponder embedded for DNSSD
 cmake_minimum_required(VERSION 3.13)
 project(react-native-zeroconf)
 
@@ -45,6 +45,7 @@ add_library(react-native-zeroconf STATIC
   ${ROOT}/cpp/dnssd/DnssdBackend.cpp
   ${ROOT}/cpp/embedded/EmbeddedExecutor.cpp
   ${ROOT}/cpp/android/ZeroconfAndroidModule.cpp
+  ${ROOT}/cpp/android/NsdBackend.cpp
 )
 set_target_properties(react-native-zeroconf PROPERTIES
   CXX_STANDARD 20

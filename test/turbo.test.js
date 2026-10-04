@@ -176,3 +176,17 @@ test('checkLocalNetworkAccess resolves the status', async () => {
   await expect(new Zeroconf().checkLocalNetworkAccess({ type: 'http' })).resolves.toBe('granted')
   expect(calls.at(-1)).toEqual(['checkLocalNetworkAccess', '_http._tcp', 5])
 })
+
+test('on Android, NSD calls go to the C++ module with their implType', () => {
+  RN.Platform.OS = 'android'
+  new Zeroconf().scan({ type: 'ipp' })
+  const [method, , ...args] = calls.at(-1)
+  expect([method, ...args]).toEqual(['scan', 'ipp', 'tcp', 'local.', 'NSD', { resolveTimeout: 5 }])
+})
+
+test('on Android, a denied Local Network permission is requested', async () => {
+  RN.Platform.OS = 'android'
+  results.checkLocalNetworkAccess = { status: 'denied' }
+  RN.setNativeResult('PermissionsAndroid.request', 'granted')
+  await expect(new Zeroconf().checkLocalNetworkAccess()).resolves.toBe('granted')
+})

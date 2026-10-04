@@ -1,8 +1,5 @@
 package com.balthazargronon.RCTZeroconf;
 
-import com.facebook.react.bridge.ReadableArray;
-import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.ReadableType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,30 +21,27 @@ public class ZeroconfOptions {
     /** Scan: seconds to resolve each service, retried once before a TIMEOUT error */
     public double resolveTimeoutSeconds = 5;
 
-    public static ZeroconfOptions from(@Nullable ReadableMap map) {
-        ZeroconfOptions options = new ZeroconfOptions();
-        if (map == null) {
-            return options;
-        }
-        options.subtype = subtypeLabel(getString(map, "subtype"));
-        if (map.hasKey("subtypes") && map.getType("subtypes") == ReadableType.Array) {
-            ReadableArray subtypes = map.getArray("subtypes");
-            for (int i = 0; i < subtypes.size(); i++) {
-                String label = subtypes.getType(i) == ReadableType.String ? subtypeLabel(subtypes.getString(i)) : null;
+    /**
+     * @param timeout resolveService's timeout in seconds, ignored unless positive
+     * @param resolveTimeout scans' resolve timeout in seconds, ignored unless positive
+     */
+    public ZeroconfOptions(@Nullable String subtype, @Nullable String[] subtypes, @Nullable String networkInterface, double timeout, double resolveTimeout) {
+        this.subtype = subtypeLabel(subtype);
+        if (subtypes != null) {
+            for (String candidate : subtypes) {
+                String label = subtypeLabel(candidate);
                 if (label != null) {
-                    options.subtypes.add(label);
+                    this.subtypes.add(label);
                 }
             }
         }
-        String networkInterface = getString(map, "networkInterface");
-        options.networkInterface = networkInterface == null || networkInterface.isEmpty() ? null : networkInterface;
-        if (map.hasKey("timeout") && map.getType("timeout") == ReadableType.Number && map.getDouble("timeout") > 0) {
-            options.timeoutSeconds = map.getDouble("timeout");
+        this.networkInterface = networkInterface == null || networkInterface.isEmpty() ? null : networkInterface;
+        if (timeout > 0) {
+            this.timeoutSeconds = timeout;
         }
-        if (map.hasKey("resolveTimeout") && map.getType("resolveTimeout") == ReadableType.Number && map.getDouble("resolveTimeout") > 0) {
-            options.resolveTimeoutSeconds = map.getDouble("resolveTimeout");
+        if (resolveTimeout > 0) {
+            this.resolveTimeoutSeconds = resolveTimeout;
         }
-        return options;
     }
 
     /**
@@ -59,11 +53,6 @@ public class ZeroconfOptions {
             type.append(',').append(subtype);
         }
         return type.toString();
-    }
-
-    @Nullable
-    private static String getString(ReadableMap map, String key) {
-        return map.hasKey(key) && map.getType(key) == ReadableType.String ? map.getString(key) : null;
     }
 
     // "printer" or "_printer" -> "_printer"
