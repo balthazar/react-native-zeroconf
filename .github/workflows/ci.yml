@@ -197,14 +197,27 @@ jobs:
           # The binary itself rather than open, for its output in this log
           APP=$(find build/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
           "$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Contents/Info.plist")" > "$RUNNER_TEMP/app.log" 2>&1 &
+          # macOS asks for the Local Network permission on the app's first mDNS call: allow it
+          sleep 15
+          screencapture -x "$RUNNER_TEMP/prompt.png" || true
+          for _ in 1 2 3 4 5 6; do
+            osascript -e 'tell application "System Events" to tell process "UserNotificationCenter" to click button "Allow" of window 1' && break
+            sleep 5
+          done || true
           python "$GITHUB_WORKSPACE/test/app/check-app.py"
       - name: Show the app's output
         if: failure()
         working-directory: ${{ runner.temp }}
         run: |
+          screencapture -x after.png || true
           tail -80 app.log || true
           for report in ~/Library/Logs/DiagnosticReports/ZeroconfMac*; do [ -f "$report" ] && head -80 "$report"; done || true
           log show --last 10m --style compact --predicate 'process == "ZeroconfMac" OR eventMessage CONTAINS[c] "ZeroconfMac"' | tail -60 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-screens
+          path: ${{ runner.temp }}/*.png
 
   tvos:
     name: tvOS app (simulator self-test)
