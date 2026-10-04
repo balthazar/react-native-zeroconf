@@ -61,6 +61,16 @@ test\windows\run.cmd  # Windows: the Windows implementation (windows/RNZeroconf/
 
 CI runs these on every pull request, and builds the example app for Android and iOS against the packed library. On Windows it also runs a second mDNS stack (`test/windows/peer.py`, python-zeroconf) for the harness to discover, and builds and launches a react-native-windows app running `test/windows/App.tsx` against it.
 
+The Android module's instrumented tests (`android/src/androidTest`) drive the embedded mDNSResponder (`implType: 'DNSSD'`) from several threads on a device or emulator, through the example app's Gradle project. They are not run in CI; run them for changes to the module's native code or to `com.github.druk.dnssd`:
+
+```bash
+cd example && npm ci && npx expo prebuild --platform android --no-install
+adb shell setprop debug.checkjni 1   # JNI misuse then aborts with a clear message
+cd android && ./gradlew :react-native-zeroconf:connectedDebugAndroidTest
+```
+
+A failure is often the test process crashing: look for the tombstone with `adb logcat -b crash`.
+
 For changes to native code, also test on devices:
 
 - The Android emulator only sees services published inside it: publish test services from the app, or use a real device to discover real ones ([Android Emulator](Android-Emulator)).

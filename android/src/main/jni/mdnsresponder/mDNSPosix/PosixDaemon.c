@@ -51,6 +51,7 @@ extern int daemon(int, int);
 
 #include "mDNSEmbeddedAPI.h"
 #include "mDNSPosix.h"
+#include "DNSCommon.h"				// mDNS_Lock / mDNS_Unlock, for Reconfigure()
 #include "mDNSUNP.h"		// For daemon()
 #include "uds_daemon.h"
 #include "PlatformCommon.h"
@@ -67,7 +68,7 @@ static domainname DynDNSHostname;
 static CacheEntity gRRCache[RR_CACHE_SIZE];
 static mDNS_PlatformSupport PlatformStorage;
 
-int stopNow = 0;
+volatile sig_atomic_t stopNow = 0;	// Set from another thread by stopLoop()
 
 mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 	{
@@ -101,8 +102,10 @@ static void Reconfigure(mDNS *m)
 	mDNSAddr DynDNSIP;
 	const mDNSAddr dummy = { mDNSAddrType_IPv4, { { { 1, 1, 1, 1 } } } };;
 	mDNS_SetPrimaryInterfaceInfo(m, NULL, NULL, NULL);
+	mDNS_Lock(m);	// mDNS_AddDNSServer() expects the lock to be held
 	if (ParseDNSServers(m, uDNS_SERVERS_FILE) < 0)
 		LogMsg("Unable to parse DNS server list. Unicast DNS-SD unavailable");
+	mDNS_Unlock(m);
 	ReadDDNSSettingsFromConfFile(m, CONFIG_FILE, &DynDNSHostname, &DynDNSZone, NULL);
 	mDNSPlatformSourceAddrForDest(&DynDNSIP, &dummy);
 	if (DynDNSHostname.c[0]) mDNS_AddDynDNSHostName(m, &DynDNSHostname, NULL, NULL);
@@ -263,7 +266,9 @@ int loop(){
 	mStatus					err;
 	Reconfigure(&mDNSStorage);
 
+	mDNSPosixEmbeddedLoopStarting();
 	err = MainLoop(&mDNSStorage);
+	mDNSPosixEmbeddedLoopStopping();
  
 	LogMsg("%s stopping", mDNSResponderVersionString);
 
@@ -279,6 +284,19 @@ int loop(){
 void stopLoop()
 {
 	stopNow = 1;
+	mDNSPosixEmbeddedWakeLoop();	// It may be sleeping in select() until its next timer
+}
+
+// For JNISupport.c: hold the core lock around work on an operation's data structures
+// that must not interleave with the event loop thread (callbacks run on that thread).
+void lockCore()
+{
+	mDNSPlatformLock(&mDNSStorage);
+}
+
+void unlockCore()
+{
+	mDNSPlatformUnlock(&mDNSStorage);
 }
 #endif
 

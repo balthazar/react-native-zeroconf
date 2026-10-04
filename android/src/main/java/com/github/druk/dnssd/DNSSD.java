@@ -106,6 +106,37 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
         this.serviceTimeout = serviceTimeout;
     }
 
+    // The embedded responder can answer before the call that starts an operation has returned, from its
+    // own thread or from inside the call. The operation is assigned under the monitor of its array while
+    // that call runs, and the callbacks posted to the main thread take the monitor first, so they wait for
+    // the call to return. If it threw, there is no operation and the callback is dropped.
+
+    private interface Start<T> {
+        T start() throws DNSSDException;
+    }
+
+    private interface OperationCallback<T> {
+        void run(T operation);
+    }
+
+    private static <T> void start(T[] operation, Start<T> start) throws DNSSDException {
+        synchronized (operation) {
+            operation[0] = start.start();
+        }
+    }
+
+    private <T> void postWith(final T[] operation, final OperationCallback<T> callback) {
+        handler.post(() -> {
+            T started;
+            synchronized (operation) {
+                started = operation[0];
+            }
+            if (started != null) {
+                callback.run(started);
+            }
+        });
+    }
+
     /** Browse for instances of a service.<P>
 
      Note: browsing consumes network bandwidth. Call {@link InternalDNSSDService#stop} when you have finished browsing.<P>
@@ -139,13 +170,13 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
     public DNSSDService browse(int flags, int ifIndex, String regType, String domain, final BrowseListener listener) throws DNSSDException {
         onServiceStarting();
         final InternalDNSSDService[] services = new InternalDNSSDService[1];
-        services[0] = new InternalDNSSDService(this, InternalDNSSD.browse(flags, ifIndex, regType, domain, new InternalBrowseListener() {
+        start(services, () -> new InternalDNSSDService(this, InternalDNSSD.browse(flags, ifIndex, regType, domain, new InternalBrowseListener() {
             @Override
             public void serviceFound(final DNSSDService browser, final int flags, final int ifIndex, final byte[] serviceName, final byte[] regType, final byte[] domain) {
                 final String serviceNameStr = new String(serviceName, UTF_8);
                 final String regTypeStr = new String(regType, UTF_8);
                 final String domainStr = new String(domain, UTF_8);
-                handler.post(() -> listener.serviceFound(services[0], flags, ifIndex, serviceNameStr, regTypeStr, domainStr));
+                postWith(services, operation -> listener.serviceFound(operation, flags, ifIndex, serviceNameStr, regTypeStr, domainStr));
             }
 
             @Override
@@ -153,14 +184,14 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
                 final String serviceNameStr = new String(serviceName, UTF_8);
                 final String regTypeStr = new String(regType, UTF_8);
                 final String domainStr = new String(domain, UTF_8);
-                handler.post(() -> listener.serviceLost(services[0], flags, ifIndex, serviceNameStr, regTypeStr, domainStr));
+                postWith(services, operation -> listener.serviceLost(operation, flags, ifIndex, serviceNameStr, regTypeStr, domainStr));
             }
 
             @Override
             public void operationFailed(final DNSSDService service, final int errorCode) {
-                handler.post(() -> listener.operationFailed(services[0], errorCode));
+                postWith(services, operation -> listener.operationFailed(operation, errorCode));
             }
-        }));
+        })));
         return services[0];
 
     }
@@ -229,28 +260,28 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
 
         final Runnable timeoutRunnable = () -> services[0].stop();
 
-        services[0] = new InternalDNSSDService(this, InternalDNSSD.resolve(flags, ifIndex, serviceName, regType, domain, new InternalResolveListener() {
+        start(services, () -> new InternalDNSSDService(this, InternalDNSSD.resolve(flags, ifIndex, serviceName, regType, domain, new InternalResolveListener() {
             @Override
             public void serviceResolved(final DNSSDService resolver, final int flags, final int ifIndex, byte[] fullName, byte[] hostName, final int port, TXTRecord txtRecord) {
                 final String fullNameStr =  new String(fullName, UTF_8);
                 final String hostNameStr =  new String(hostName, UTF_8);
                 final Map<String, String> record = parseTXTRecords(txtRecord);
                 handler.removeCallbacks(timeoutRunnable);
-                handler.post(() -> {
-                    listener.serviceResolved(services[0], flags, ifIndex, fullNameStr, hostNameStr, port, record);
-                    services[0].stop();
+                postWith(services, operation -> {
+                    listener.serviceResolved(operation, flags, ifIndex, fullNameStr, hostNameStr, port, record);
+                    operation.stop();
                 });
             }
 
             @Override
             public void operationFailed(final DNSSDService service, final int errorCode) {
                 handler.removeCallbacks(timeoutRunnable);
-                handler.post(() -> {
-                    listener.operationFailed(services[0], errorCode);
-                    services[0].stop();
+                postWith(services, operation -> {
+                    listener.operationFailed(operation, errorCode);
+                    operation.stop();
                 });
             }
-        }));
+        })));
 
         handler.postDelayed(timeoutRunnable, serviceTimeout);
         return services[0];
@@ -313,7 +344,7 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
                                       final RegisterListener listener) throws DNSSDException {
         onServiceStarting();
         final DNSSDRegistration[] services = new DNSSDRegistration[1];
-        services[0] = new InternalDNSSDRegistration(this, InternalDNSSD.register(flags, ifIndex, serviceName, regType, domain, host, port, txtRecord,
+        start(services, () -> new InternalDNSSDRegistration(this, InternalDNSSD.register(flags, ifIndex, serviceName, regType, domain, host, port, txtRecord,
                 new InternalRegisterListener() {
 
             @Override
@@ -321,14 +352,14 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
                 final String serviceNameStr =  new String(serviceName, UTF_8);
                 final String regTypeStr = new String(regType, UTF_8);
                 final String domainStr = new String(domain, UTF_8);
-                handler.post(() -> listener.serviceRegistered(services[0], flags, serviceNameStr, regTypeStr, domainStr));
+                postWith(services, operation -> listener.serviceRegistered(operation, flags, serviceNameStr, regTypeStr, domainStr));
             }
 
             @Override
             public void operationFailed(DNSSDService service, final int errorCode) {
-                handler.post(() -> listener.operationFailed(services[0], errorCode));
+                postWith(services, operation -> listener.operationFailed(operation, errorCode));
             }
-        }));
+        })));
         return services[0];
     }
 
@@ -447,15 +478,15 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
 
         final Runnable timeoutRunnable = () -> services[0].stop();
 
-        services[0] = new InternalDNSSDService(this, InternalDNSSD.queryRecord(flags, ifIndex, serviceName, rrtype, rrclass, new InternalQueryListener() {
+        start(services, () -> new InternalDNSSDService(this, InternalDNSSD.queryRecord(flags, ifIndex, serviceName, rrtype, rrclass, new InternalQueryListener() {
             @Override
             public void queryAnswered(DNSSDService query, final int flags, final int ifIndex, byte[] fullName, final int rrtype, final int rrclass, byte[] rdata, final int ttl) {
                 final String fullNameStr = new String(fullName, UTF_8);
                 handler.removeCallbacks(timeoutRunnable);
-                handler.post(() -> {
-                    listener.queryAnswered(services[0], flags, ifIndex, fullNameStr, rrtype, rrclass, rdata, ttl);
+                postWith(services, operation -> {
+                    listener.queryAnswered(operation, flags, ifIndex, fullNameStr, rrtype, rrclass, rdata, ttl);
                     if (autoStop) {
-                        services[0].stop();
+                        operation.stop();
                     }
                 });
             }
@@ -463,12 +494,12 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
             @Override
             public void operationFailed(DNSSDService service, final int errorCode) {
                 handler.removeCallbacks(timeoutRunnable);
-                handler.post(() -> {
-                    listener.operationFailed(services[0], errorCode);
-                    services[0].stop();
+                postWith(services, operation -> {
+                    listener.operationFailed(operation, errorCode);
+                    operation.stop();
                 });
             }
-        }));
+        })));
 
         if (autoStop) {
             handler.postDelayed(timeoutRunnable, serviceTimeout);
@@ -503,24 +534,24 @@ public abstract class DNSSD implements InternalDNSSDService.DnssdServiceListener
     public DNSSDService enumerateDomains(int flags, int ifIndex, final DomainListener listener) throws DNSSDException {
         onServiceStarting();
         final DNSSDService[] services = new DNSSDService[1];
-        services[0] = new InternalDNSSDService(this, InternalDNSSD.enumerateDomains(flags, ifIndex, new InternalDomainListener() {
+        start(services, () -> new InternalDNSSDService(this, InternalDNSSD.enumerateDomains(flags, ifIndex, new InternalDomainListener() {
             @Override
             public void domainFound(DNSSDService domainEnum, final int flags, final int ifIndex, byte[] domain) {
                 final String domainStr = new String(domain, UTF_8);
-                handler.post(() -> listener.domainFound(services[0], flags, ifIndex, domainStr));
+                postWith(services, operation -> listener.domainFound(operation, flags, ifIndex, domainStr));
             }
 
             @Override
             public void domainLost(DNSSDService domainEnum, final int flags, final int ifIndex, byte[] domain) {
                 final String domainStr = new String(domain, UTF_8);
-                handler.post(() -> listener.domainLost(services[0], flags, ifIndex, domainStr));
+                postWith(services, operation -> listener.domainLost(operation, flags, ifIndex, domainStr));
             }
 
             @Override
             public void operationFailed(final DNSSDService service, final int errorCode) {
-                handler.post(() -> listener.operationFailed(services[0], errorCode));
+                postWith(services, operation -> listener.operationFailed(operation, errorCode));
             }
-        }));
+        })));
         return services[0];
     }
 
