@@ -13,7 +13,7 @@
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 
-namespace rnzeroconf {
+namespace rnzeroconf::win {
 
 using After = std::vector<std::function<void()>>;
 
@@ -1092,4 +1092,4 @@ void Zeroconf::UnpublishAll() {
   }
 }
 
-} // namespace rnzeroconf
+} // namespace rnzeroconf::win

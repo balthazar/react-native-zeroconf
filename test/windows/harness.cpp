@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-using namespace rnzeroconf;
+using namespace rnzeroconf::win;
 
 namespace {
 

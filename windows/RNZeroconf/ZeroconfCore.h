@@ -31,7 +31,7 @@
 #include <utility>
 #include <vector>
 
-namespace rnzeroconf {
+namespace rnzeroconf::win {
 
 using TxtPairs = std::vector<std::pair<std::wstring, std::wstring>>;
 
@@ -164,4 +164,4 @@ std::wstring Widen(const std::string &value);
 std::string Narrow(const std::wstring &value);
 std::wstring DescribeStatus(DWORD status);
 
-} // namespace rnzeroconf
+} // namespace rnzeroconf::win

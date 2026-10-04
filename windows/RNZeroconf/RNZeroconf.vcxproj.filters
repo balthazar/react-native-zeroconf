@@ -21,9 +21,6 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RNZeroconf.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ZeroconfCore.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -32,9 +29,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="RNZeroconf.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ZeroconfCore.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

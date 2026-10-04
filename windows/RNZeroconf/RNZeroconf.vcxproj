@@ -83,6 +83,8 @@
       <AdditionalUsingDirectories>$(WindowsSDK_WindowsMetadata);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
       <AdditionalIncludeDirectories>
         $(MSBuildThisFileDirectory);
+        $(MSBuildThisFileDirectory)..\..\cpp;
+        $(MSBuildThisFileDirectory)..\..\android\generated\jni\react\renderer\components\RNZeroconfSpec;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
     </ClCompile>
@@ -105,8 +107,9 @@
   </ItemDefinitionGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemGroup>
-    <ClInclude Include="RNZeroconf.h" />
     <ClInclude Include="ZeroconfCore.h" />
+    <ClInclude Include="WindowsBackend.h" />
+    <ClInclude Include="ZeroconfWindowsModule.h" />
     <ClInclude Include="ReactPackageProvider.h">
       <DependentUpon>ReactPackageProvider.idl</DependentUpon>
     </ClInclude>
@@ -115,7 +118,19 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="RNZeroconf.cpp" />
+    <!-- The C++ module shared with iOS and Android, built from codegen's spec (android/generated) -->
+    <ClCompile Include="..\..\cpp\Backend.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\..\cpp\ZeroconfModule.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ZeroconfWindowsModule.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="WindowsBackend.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <!-- The DNS-SD core has no React Native dependency, it is also built by test/windows/run.cmd -->
     <ClCompile Include="ZeroconfCore.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
