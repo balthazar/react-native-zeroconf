@@ -24,10 +24,11 @@ describe('publishService', () => {
     expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'c', 82, [{ key: '2', value: 'x' }, { key: '1', value: 'y' }], 'NSD', {}])
   })
 
-  test('still takes the deprecated positional form', () => {
-    RN.Platform.OS = 'android'
-    new Zeroconf().publishService('http', 'tcp', undefined, 'b', 81)
-    expect(RN.lastCall()).toEqual(['registerService', 'http', 'tcp', 'local.', 'b', 81, [], 'NSD', {}])
+  test('rejects the positional form removed in 1.0', () => {
+    expect(() => new Zeroconf().publishService('http', 'tcp', undefined, 'b', 81)).toThrow(
+      /publishService\(\) takes an options object since 1.0/,
+    )
+    expect(RN.callsNamed('registerService')).toEqual([])
   })
 
   test('resolves with the published service, possibly renamed', async () => {

@@ -14,9 +14,9 @@ describe('scan on iOS', () => {
     expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'printer', 'tcp', 'local.', 'NSD', { resolveTimeout: 15 }])
   })
 
-  test('still takes the deprecated positional form', () => {
-    new Zeroconf().scan('ssh', 'udp')
-    expect(RN.lastCallWithoutScanId()).toEqual(['scan', 'ssh', 'udp', 'local.', 'NSD', { resolveTimeout: 5 }])
+  test('rejects the positional form removed in 1.0', () => {
+    expect(() => new Zeroconf().scan('ssh', 'udp')).toThrow(/scan\(\) takes an options object since 1.0/)
+    expect(RN.callsNamed('scan')).toEqual([])
   })
 
   test('stop passes the scan id', () => {

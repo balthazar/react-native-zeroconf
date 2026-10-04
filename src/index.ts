@@ -62,8 +62,15 @@ const withDefaults = <D extends object, O extends object>(defaults: D, options: 
   return merged as D & O
 }
 
-const isOptionsObject = (value: unknown): value is object =>
-  value !== null && typeof value === 'object'
+// The positional forms of scan() and publishService() were removed in 1.0: a clear error for JavaScript
+// callers, TypeScript already rejects them
+const removedPositionalForm = (options: unknown, method: string, replacement: string) => {
+  if (typeof options === 'string') {
+    throw new TypeError(
+      `react-native-zeroconf: ${method}() takes an options object since 1.0, use ${replacement}`,
+    )
+  }
+}
 
 // Options passed to native code, without the undefined ones
 const nativeOptions = (options: Record<string, unknown>) =>
@@ -348,21 +355,9 @@ class Zeroconf extends EventEmitter {
   /**
    * Scan for services, defaults to `_http._tcp.` on the `local.` domain
    */
-  scan(options?: ScanOptions): void
-  /** @deprecated Use `scan({ type, protocol, domain, implType })` */
-  scan(type?: string, protocol?: string, domain?: string, implType?: ImplType): void
-  scan(
-    options?: ScanOptions | string,
-    protocolArg?: string,
-    domainArg?: string,
-    implTypeArg?: ImplType,
-  ): void {
-    this._startScan(
-      isOptionsObject(options)
-        ? options
-        : { type: options, protocol: protocolArg, domain: domainArg, implType: implTypeArg },
-      false,
-    )
+  scan(options: ScanOptions = {}): void {
+    removedPositionalForm(options, 'scan', 'scan({ type, protocol, domain, implType })')
+    this._startScan(options, false)
   }
 
   private _startScan(options: ScanOptions, scanningTypes: boolean): void {
@@ -431,41 +426,14 @@ class Zeroconf extends EventEmitter {
    * Publish a service. Resolves with the published service once it is advertised, its name can differ
    * from the requested one when that name is already taken. Rejects with a `ZeroconfError`.
    */
-  publishService(options: PublishOptions): Promise<PublishedService>
-  /** @deprecated Use `publishService({ type, protocol, domain, name, port, txt, implType })` */
-  publishService(
-    type: string,
-    protocol: string,
-    domain: string | undefined,
-    name: string,
-    port: number,
-    txt?: TxtRecord,
-    implType?: ImplType,
-  ): Promise<PublishedService>
-  publishService(
-    options: PublishOptions | string,
-    protocolArg?: string,
-    domainArg?: string,
-    nameArg?: string,
-    portArg?: number,
-    txtArg?: TxtRecord,
-    implTypeArg?: ImplType,
-  ): Promise<PublishedService> {
+  publishService(options: PublishOptions): Promise<PublishedService> {
+    removedPositionalForm(
+      options,
+      'publishService',
+      'publishService({ type, protocol, domain, name, port, txt, implType })',
+    )
     const { type, protocol, domain, name, port, txt, implType, subtypes, networkInterface } =
-      withDefaults(
-        PUBLISH_DEFAULTS,
-        isOptionsObject(options)
-          ? options
-          : ({
-              type: options,
-              protocol: protocolArg,
-              domain: domainArg,
-              name: nameArg,
-              port: portArg,
-              txt: txtArg,
-              implType: implTypeArg,
-            } as PublishOptions),
-      )
+      withDefaults(PUBLISH_DEFAULTS, options)
     const native = nativeModule()
     const txtRecord = toTxtPairs(txt)
     const options_ = nativeOptions({ subtypes, networkInterface })
