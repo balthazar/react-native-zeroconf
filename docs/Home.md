@@ -12,6 +12,8 @@ zeroconf.scan({ type: 'http' })
 
 > **Documentation for 0.17.** Upgrading from an earlier version? Read the [Migration Guide](Migration-Guide).
 
+> **1.0 release candidate:** one C++ native module on every platform, for React Native 0.82 and later (New Architecture, Expo SDK 55 and later). Try it with `npm install react-native-zeroconf@next`, see [what changes from 0.17](https://github.com/balthazar/react-native-zeroconf/blob/1.0/docs/Migration-Guide.md#017-to-10). These docs cover 0.17, which stays the default and keeps getting bug fixes.
+
 ## Start here
 
 | If you want to... | Read |

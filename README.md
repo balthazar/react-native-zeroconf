@@ -21,6 +21,8 @@ yarn add react-native-zeroconf
 cd ios && pod install
 ```
 
+> **1.0 release candidate:** one C++ native module on every platform, for React Native 0.82 and later (New Architecture, Expo SDK 55 and later). Try it with `npm install react-native-zeroconf@next`, see [what changes from 0.17](https://github.com/balthazar/react-native-zeroconf/blob/1.0/docs/Migration-Guide.md#017-to-10). The documentation covers 0.17, which stays the default and keeps getting bug fixes.
+
 On iOS, declare the service types you use in `NSBonjourServices`, see [Permissions and Setup](https://zeroconf.balthazar.dev/Permissions-and-Setup). Expo works with development builds, see [Installation with Expo](https://zeroconf.balthazar.dev/Installation-Expo).
 
 ## Usage

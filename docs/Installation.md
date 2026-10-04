@@ -6,6 +6,8 @@ yarn add react-native-zeroconf
 npm install react-native-zeroconf
 ```
 
+> **1.0 release candidate:** one C++ native module on every platform, for React Native 0.82 and later (New Architecture, Expo SDK 55 and later). Try it with `npm install react-native-zeroconf@next`, see [what changes from 0.17](https://github.com/balthazar/react-native-zeroconf/blob/1.0/docs/Migration-Guide.md#017-to-10). These docs cover 0.17, which stays the default and keeps getting bug fixes.
+
 The library contains native code and is autolinked by React Native (0.60 and later), there is nothing to link by hand. Rebuild the app after installing it: a JavaScript reload is not enough after adding a native module.
 
 ## Your platform
