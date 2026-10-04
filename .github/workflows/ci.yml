@@ -194,8 +194,17 @@ jobs:
         working-directory: ${{ runner.temp }}/ZeroconfMac/macos
         run: |
           python "$GITHUB_WORKSPACE/test/app/peer.py" &
-          open "$(find build/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)"
+          # The binary itself rather than open, for its output in this log
+          APP=$(find build/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
+          "$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Info.plist")" > "$RUNNER_TEMP/app.log" 2>&1 &
           python "$GITHUB_WORKSPACE/test/app/check-app.py"
+      - name: Show the app's output
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: |
+          tail -80 app.log || true
+          ls -t ~/Library/Logs/DiagnosticReports | head -5 || true
+          log show --last 10m --style compact --predicate 'process == "ZeroconfMac" OR eventMessage CONTAINS[c] "ZeroconfMac"' | tail -60 || true
 
   tvos:
     name: tvOS app (simulator self-test)
@@ -215,6 +224,8 @@ jobs:
         run: |
           npx -y @react-native-community/cli@20 init ZeroconfTV --template @react-native-tvos/template-tv@0.83.0-0 --skip-install --skip-git-init --pm npm
           cd ZeroconfTV
+          # The template's 0.83.0 does not build with Xcode 26, the latest 0.83 patch does
+          npm pkg set dependencies.react-native=npm:react-native-tvos@0.83.10-1
           npm install
           npm install --legacy-peer-deps "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
           cp "$GITHUB_WORKSPACE/test/app/App.tsx" App.tsx
