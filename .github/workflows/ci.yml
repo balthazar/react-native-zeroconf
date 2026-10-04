@@ -147,3 +147,105 @@ jobs:
           xcrun simctl install "$SIMULATOR" "$APP"
           xcrun simctl launch "$SIMULATOR" "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"
           python "$GITHUB_WORKSPACE/test/app/check-app.py"
+
+  # macOS and tvOS run the iOS self-test (test/app) in apps made from the react-native-macos and
+  # react-native-tvos templates, against the same peer
+  macos:
+    name: macOS app (self-test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Pack the library
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Create a react-native-macos app with the packed library and the self-test
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx -y @react-native-community/cli@20 init ZeroconfMac --version 0.83.10 --skip-install --skip-git-init --pm npm
+          cd ZeroconfMac
+          npm install
+          npx -y react-native-macos-init@2
+          npm install --legacy-peer-deps "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
+          cp "$GITHUB_WORKSPACE/test/app/App.tsx" App.tsx
+          python3 "$GITHUB_WORKSPACE/test/app/apple-app.py" macos/ZeroconfMac-macOS
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: cocoapods-macos-${{ hashFiles('test/app/**') }}
+          restore-keys: cocoapods-macos-
+      - name: Build
+        working-directory: ${{ runner.temp }}/ZeroconfMac/macos
+        run: |
+          pod install
+          xcodebuild -workspace ZeroconfMac.xcworkspace -scheme ZeroconfMac-macOS -configuration Release \
+            -derivedDataPath build CODE_SIGN_IDENTITY=- build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/xcodebuild.log"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the self-test
+        run: pip install zeroconf
+      - name: Run the self-test app and check its result
+        working-directory: ${{ runner.temp }}/ZeroconfMac/macos
+        run: |
+          python "$GITHUB_WORKSPACE/test/app/peer.py" &
+          open "$(find build/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)"
+          python "$GITHUB_WORKSPACE/test/app/check-app.py"
+
+  tvos:
+    name: tvOS app (simulator self-test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Pack the library
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+          npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Create a react-native-tvos app with the packed library and the self-test
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx -y @react-native-community/cli@20 init ZeroconfTV --template @react-native-tvos/template-tv@0.83.0-0 --skip-install --skip-git-init --pm npm
+          cd ZeroconfTV
+          npm install
+          npm install --legacy-peer-deps "$RUNNER_TEMP"/react-native-zeroconf-*.tgz
+          cp "$GITHUB_WORKSPACE/test/app/App.tsx" App.tsx
+          python3 "$GITHUB_WORKSPACE/test/app/apple-app.py" ios/ZeroconfTV
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: cocoapods-tvos-${{ hashFiles('test/app/**') }}
+          restore-keys: cocoapods-tvos-
+      - name: Build for a simulator
+        working-directory: ${{ runner.temp }}/ZeroconfTV/ios
+        run: |
+          pod install
+          SIMULATOR=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k, v in d.items() if 'tvOS' in k for x in v if x['name'].startswith('Apple TV')))")
+          echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
+          xcodebuild -workspace ZeroconfTV.xcworkspace -scheme ZeroconfTV -configuration Release \
+            -sdk appletvsimulator -destination "id=$SIMULATOR" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/xcodebuild.log" || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -30; tail -30 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/xcodebuild.log"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install a second mDNS stack for the self-test
+        run: pip install zeroconf
+      - name: Run the self-test app and check its result
+        working-directory: ${{ runner.temp }}/ZeroconfTV/ios
+        run: |
+          python "$GITHUB_WORKSPACE/test/app/peer.py" &
+          xcrun simctl boot "$SIMULATOR"
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          APP=$(find build/Build/Products/Release-appletvsimulator -maxdepth 1 -name "*.app" | head -1)
+          xcrun simctl install "$SIMULATOR" "$APP"
+          xcrun simctl launch "$SIMULATOR" "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"
+          python "$GITHUB_WORKSPACE/test/app/check-app.py"

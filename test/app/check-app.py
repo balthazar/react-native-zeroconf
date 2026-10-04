@@ -1,4 +1,4 @@
-"""Waits for the result service published by test/windows/App.tsx and exits 0 if the self-test passed."""
+"""Waits for the result service published by test/app/App.tsx and exits 0 if the self-test passed."""
 import sys
 import time
 
