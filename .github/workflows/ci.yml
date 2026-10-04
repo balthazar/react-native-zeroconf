@@ -196,14 +196,14 @@ jobs:
           python "$GITHUB_WORKSPACE/test/app/peer.py" &
           # The binary itself rather than open, for its output in this log
           APP=$(find build/Build/Products/Release -maxdepth 1 -name "*.app" | head -1)
-          "$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Info.plist")" > "$RUNNER_TEMP/app.log" 2>&1 &
+          "$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Contents/Info.plist")" > "$RUNNER_TEMP/app.log" 2>&1 &
           python "$GITHUB_WORKSPACE/test/app/check-app.py"
       - name: Show the app's output
         if: failure()
         working-directory: ${{ runner.temp }}
         run: |
           tail -80 app.log || true
-          ls -t ~/Library/Logs/DiagnosticReports | head -5 || true
+          for report in ~/Library/Logs/DiagnosticReports/ZeroconfMac*; do [ -f "$report" ] && head -80 "$report"; done || true
           log show --last 10m --style compact --predicate 'process == "ZeroconfMac" OR eventMessage CONTAINS[c] "ZeroconfMac"' | tail -60 || true
 
   tvos:

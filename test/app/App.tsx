@@ -43,7 +43,7 @@ export default function App() {
 
     const run = async () => {
       // Every platform runs the C++ module
-      log(TurboModuleRegistry.get('Zeroconf') != null, 'C++ module', `registered on ${Platform.OS}`)
+      log(TurboModuleRegistry.get('Zeroconf') != null, 'C++ module', `registered on ${Platform.isTV ? 'tvos' : Platform.OS}`)
 
       // Scan: found and resolved, through events
       try {
