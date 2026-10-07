@@ -65,6 +65,7 @@
     "!windows/**/Generated Files",
     "ios",
     "react-native-zeroconf.podspec",
+    "Package.swift",
     "NOTICE"
   ],
   "keywords": [
