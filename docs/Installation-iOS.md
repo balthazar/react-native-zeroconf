@@ -10,6 +10,10 @@ Then rebuild the app (`yarn ios` or from Xcode). A JavaScript reload is not enou
 
 Before scanning, declare your service types in `NSBonjourServices` and add `NSLocalNetworkUsageDescription`, see [Permissions and Setup](Permissions-and-Setup#ios). Discovery fails on iOS 14+ without them.
 
+## Swift Package Manager
+
+React Native 0.87 and later can autolink with Swift Package Manager instead of CocoaPods. The package ships a `Package.swift` for it, so nothing else is needed: run `npx react-native spm update` after installing and rebuild. iOS 15 or later.
+
 ## macOS (react-native-macos)
 
 ```bash
