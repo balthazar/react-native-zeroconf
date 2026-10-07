@@ -24,3 +24,9 @@ From 0.16 to 0.17. Upgrading across several versions? Follow the [Migration Guid
 ### 0.17.2 and 0.17.3
 
 Fixes only, no action needed: on Android 13 and earlier a resolve that never answers no longer blocks the later ones (0.17.2), and Android `DNSSD` scans no longer crash the app (0.17.3). See the [releases](https://github.com/balthazar/react-native-zeroconf/releases).
+
+### 0.17.4
+
+| Change | Action needed? |
+| --- | --- |
+| iOS: a `Package.swift` for the [Swift Package Manager](Installation-iOS#swift-package-manager) autolinking of React Native 0.87 and later | None, CocoaPods still uses the podspec |
