@@ -12,8 +12,19 @@
 #import <dns_sd.h>
 #import <net/if.h>
 
-// dns_sd callbacks are delivered on the main queue, and refs must be deallocated on it
-#define RNZ_QUEUE dispatch_get_main_queue()
+// Creating a dns_sd ref is a synchronous round trip to mDNSResponder, so everything runs on a private
+// serial queue instead of the main one. Callbacks are delivered on it, and refs must be deallocated on it.
+static dispatch_queue_t RNZQueue(void)
+{
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        queue = dispatch_queue_create("com.balthazargronon.rnzeroconf", DISPATCH_QUEUE_SERIAL);
+    });
+    return queue;
+}
+
+#define RNZ_QUEUE RNZQueue()
 
 #pragma mark - State
 
@@ -166,7 +177,7 @@ RCT_EXPORT_MODULE()
 
 + (BOOL)requiresMainQueueSetup
 {
-    return YES;
+    return NO;
 }
 
 - (instancetype) init
