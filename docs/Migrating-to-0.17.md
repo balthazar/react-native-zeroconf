@@ -30,3 +30,9 @@ Fixes only, no action needed: on Android 13 and earlier a resolve that never ans
 | Change | Action needed? |
 | --- | --- |
 | iOS: a `Package.swift` for the [Swift Package Manager](Installation-iOS#swift-package-manager) autolinking of React Native 0.87 and later | None, CocoaPods still uses the podspec |
+
+### 0.17.5
+
+| Change | Action needed? |
+| --- | --- |
+| iOS: scanning, resolving and publishing run on a private serial queue, a slow `mDNSResponder` no longer blocks the main thread | None |
