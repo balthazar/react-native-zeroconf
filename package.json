@@ -107,6 +107,9 @@
     "react-test-renderer": "18.2.0",
     "typescript": "^5.4.0"
   },
+  "swiftpmConfig": {
+    "name": "ReactNativeZeroconf"
+  },
   "babel": {
     "presets": [
       [
