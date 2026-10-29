@@ -38,3 +38,9 @@ Fixes only, no action needed: on Android 13 and earlier a resolve that never ans
 | iOS: scanning, resolving and publishing run on a private serial queue, a slow `mDNSResponder` no longer blocks the main thread | None |
 
 0.17.6 is 0.17.5 without build files that were published by mistake, use it instead of 0.17.5.
+
+### 0.17.7
+
+| Change | Action needed? |
+| --- | --- |
+| iOS: the [Swift Package Manager](Installation-iOS#swift-package-manager) autolinking of React Native 0.88 finds the package, 0.17.4 to 0.17.6 failed at package resolution there | With React Native 0.88 and SwiftPM, run `npx react-native spm update` after upgrading and rebuild |
