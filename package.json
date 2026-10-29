@@ -165,5 +165,8 @@
       "javaPackageName": "com.balthazargronon.RCTZeroconf"
     },
     "includesGeneratedCode": true
+  },
+  "swiftpmConfig": {
+    "name": "ReactNativeZeroconf"
   }
 }
